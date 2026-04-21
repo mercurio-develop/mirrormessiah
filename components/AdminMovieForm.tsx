@@ -309,6 +309,7 @@ export default function AdminMovieForm({ movie }: AdminMovieFormProps) {
                   src={posterUrl}
                   alt="Preview"
                   fill
+                  unoptimized
                   className="object-cover transition-transform duration-1000 group-hover:scale-105"
                   onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder.svg'; }}
                 />

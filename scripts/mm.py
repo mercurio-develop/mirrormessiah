@@ -108,8 +108,13 @@ def parse_folder_name(name: str) -> dict:
             if re.match(r'\d{3,4}p|2160p|4K|UHD|1080|720', token, re.I):
                 quality = token
                 break
+    # Strip release group noise from title (REPACK, DUBBED, EXTENDED, REMUX, BLURAY etc.)
+    title = re.sub(
+        r'\s+(REPACK|DUBBED|EXTENDED|REMUX|BLURAY|PROPER|UNRATED|DC|THEATRICAL).*$',
+        '', m.group('title').strip(), flags=re.IGNORECASE
+    ).strip()
     return {
-        'title': m.group('title').strip(),
+        'title': title,
         'year': int(m.group('year')),
         'quality': quality,
     }
@@ -281,7 +286,7 @@ def ingest_path(db: sqlite3.Connection, path: Path, library_id: int, auto_scrape
 
     # Check if already in DB by title+year+quality
     existing = db.execute(
-        'SELECT id FROM movies WHERE title=? AND COALESCE(year,0)=COALESCE(?,0)',
+        'SELECT id FROM movies WHERE LOWER(title)=LOWER(?) AND COALESCE(year,0)=COALESCE(?,0)',
         (meta['title'], meta['year']),
     ).fetchone()
     if existing:
@@ -394,6 +399,43 @@ def cmd_scrape(args):
     print(f'\nDone. ok={ok}  not_found={not_found}  errors={errors}')
 
 
+def cmd_clean_files(args):
+    """Remove duplicate file rows, 4K file links, and orphaned file entries."""
+    db = open_db()
+    removed = 0
+
+    # 1. Remove 4K/UHD file links (keep the movie row, just unlink the file)
+    rows = db.execute("SELECT id, path FROM files WHERE path LIKE '%2160p%' OR path LIKE '%4K%' OR path LIKE '%UHD%'").fetchall()
+    for row in rows:
+        db.execute('DELETE FROM files WHERE id=?', (row[0],))
+        print(f'  unlinked 4K: {Path(row[1]).name}')
+        removed += 1
+
+    # 2. Remove duplicate file rows (same movie_id + path, keep lowest id)
+    dupe_rows = db.execute('''
+        SELECT id FROM files WHERE id NOT IN (
+            SELECT MIN(id) FROM files GROUP BY movie_id, path
+        )
+    ''').fetchall()
+    for row in dupe_rows:
+        db.execute('DELETE FROM files WHERE id=?', (row[0],))
+        removed += 1
+    if dupe_rows:
+        print(f'  removed {len(dupe_rows)} duplicate file rows')
+
+    # 3. Remove file rows pointing to missing paths
+    all_files = db.execute('SELECT id, path FROM files').fetchall()
+    missing = [(id, p) for id, p in all_files if not Path(p).exists()]
+    for id, p in missing:
+        db.execute('DELETE FROM files WHERE id=?', (id,))
+        print(f'  removed missing: {Path(p).name}')
+        removed += 1
+
+    db.commit()
+    db.close()
+    print(f'\nDone. {removed} file rows removed.')
+
+
 def cmd_status(args):
     db = open_db()
     stats = {
@@ -436,16 +478,20 @@ def main():
     p_scrape.add_argument('--force',   action='store_true', help='Re-scrape all movies')
     p_scrape.add_argument('--dry-run', action='store_true', help='Preview only, no writes')
 
+    # clean-files
+    sub.add_parser('clean-files', help='Remove duplicate file rows, 4K links, missing paths')
+
     # status
     sub.add_parser('status', help='Show DB statistics')
 
     args = parser.parse_args()
 
     dispatch = {
-        'sync':   cmd_sync,
-        'ingest': cmd_ingest,
-        'scrape': cmd_scrape,
-        'status': cmd_status,
+        'sync':        cmd_sync,
+        'ingest':      cmd_ingest,
+        'scrape':      cmd_scrape,
+        'clean-files': cmd_clean_files,
+        'status':      cmd_status,
     }
     dispatch[args.command](args)
 

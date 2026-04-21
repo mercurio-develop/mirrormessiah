@@ -52,12 +52,21 @@ export const DELETE = withAdminAuth(async (request: Request) => {
     const filesDeleted: string[] = [];
     const fileErrors: string[] = [];
 
+    // Collect all file paths used by movies NOT being deleted — never delete shared files
+    const sharedPaths = new Set<string>(
+      (db.prepare(`
+        SELECT DISTINCT f.path FROM files f
+        WHERE f.movie_id NOT IN (${ids.map(() => '?').join(',')})
+      `).all(...ids) as { path: string }[]).map(r => r.path)
+    );
+
     const deleteMovie = db.transaction((id: number) => {
       if (deleteFiles) {
         const files = db.prepare('SELECT path FROM files WHERE movie_id = ?').all(id) as { path: string }[];
         const subtitleFiles = db.prepare('SELECT path FROM subtitles WHERE movie_id = ?').all(id) as { path: string }[];
 
         for (const f of [...files, ...subtitleFiles]) {
+          if (sharedPaths.has(f.path)) continue; // file used by another movie — DB-only delete
           try {
             if (fs.existsSync(f.path)) {
               fs.unlinkSync(f.path);
