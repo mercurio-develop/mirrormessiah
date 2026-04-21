@@ -31,7 +31,7 @@ export const POST = withAdminAuth(async (
     
     // Get library ID from the directory
     const movieDir = path.dirname(filePath);
-    const library = db.prepare('SELECT id FROM libraries WHERE ? LIKE root_path || "%" LIMIT 1').get(filePath) as { id: number } | undefined;
+    const library = db.prepare('SELECT id FROM libraries WHERE ? LIKE /*turbopackIgnore: true*/ root_path || "%" LIMIT 1').get(filePath) as { id: number } | undefined;
     
     if (!library) {
         return NextResponse.json({ error: 'File is not within any registered library' }, { status: 400 });

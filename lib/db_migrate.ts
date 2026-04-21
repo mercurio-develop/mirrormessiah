@@ -20,7 +20,57 @@ export function runMigrations(): void {
   try {
     // Start a transaction for all migrations
     db.transaction(() => {
-      // Create categories table if it doesn't exist
+      // 0. Base Tables
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS libraries (
+          id         INTEGER PRIMARY KEY,
+          name       TEXT NOT NULL,
+          root_path  TEXT NOT NULL,
+          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+      `);
+
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS movies (
+          id          INTEGER PRIMARY KEY,
+          library_id  INTEGER NOT NULL REFERENCES libraries(id) ON DELETE CASCADE,
+          title       TEXT NOT NULL,
+          year        INTEGER,
+          quality     TEXT,
+          imdb_id     TEXT,
+          tmdb_id     INTEGER,
+          thumbnail   TEXT,
+          plot        TEXT,
+          rating      REAL,
+          genres      TEXT,
+          audience    TEXT CHECK(audience IN ('family', 'adult')) DEFAULT NULL,
+          director    TEXT,
+          language    TEXT,
+          runtime     INTEGER,
+          created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+      `);
+
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS files (
+          id          INTEGER PRIMARY KEY,
+          library_id  INTEGER NOT NULL REFERENCES libraries(id) ON DELETE CASCADE,
+          movie_id    INTEGER NOT NULL REFERENCES movies(id) ON DELETE CASCADE,
+          path        TEXT NOT NULL UNIQUE,
+          size_bytes  INTEGER,
+          container   TEXT,
+          added_at    TEXT NOT NULL DEFAULT (datetime('now')),
+          mime_type   TEXT,
+          duration_sec INTEGER,
+          width       INTEGER,
+          height      INTEGER,
+          video_codec TEXT,
+          audio_codec TEXT
+        )
+      `);
+
+      // 1. Extensions
       db.exec(`
         CREATE TABLE IF NOT EXISTS categories (
           id    INTEGER PRIMARY KEY,
@@ -28,7 +78,6 @@ export function runMigrations(): void {
         )
       `);
       
-      // Create movie_categories join table if it doesn't exist
       db.exec(`
         CREATE TABLE IF NOT EXISTS movie_categories (
           movie_id    INTEGER NOT NULL REFERENCES movies(id) ON DELETE CASCADE,
@@ -36,18 +85,29 @@ export function runMigrations(): void {
           PRIMARY KEY (movie_id, category_id)
         )
       `);
-      
-      // Seed default categories if they don't exist
-      seedDefaultCategories(db);
-      
-      // Ensure subtitles table exists (from earlier migrations)
-      ensureSubtitlesTable(db);
-      
-      // Ensure files table has all required columns (from earlier migrations)
-      ensureFilesColumns(db);
 
-      // Ensure movies table has all metadata columns
-      ensureMoviesColumns(db);
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS subtitles (
+          id          INTEGER PRIMARY KEY,
+          movie_id    INTEGER NOT NULL REFERENCES movies(id) ON DELETE CASCADE,
+          file_id     INTEGER REFERENCES files(id) ON DELETE CASCADE,
+          path        TEXT NOT NULL UNIQUE,
+          lang        TEXT,
+          label       TEXT,
+          format      TEXT,
+          default_flag INTEGER DEFAULT 0,
+          size_bytes  INTEGER
+        )
+      `);
+      
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_subtitles_movie ON subtitles(movie_id)`);
+
+      // 2. Data Seeding
+      const defaultCategories = ['Kids', 'Family', 'Adults'];
+      const insertCategory = db.prepare('INSERT OR IGNORE INTO categories (name) VALUES (?)');
+      for (const cat of defaultCategories) {
+        insertCategory.run(cat);
+      }
 
     })();
     
@@ -55,108 +115,6 @@ export function runMigrations(): void {
   } catch (error) {
     console.error('Error running database migrations:', error);
     throw error;
-  }
-}
-
-/**
- * Seed default categories if they don't exist
- */
-function seedDefaultCategories(db: any): void {
-  const defaultCategories = ['Kids', 'Family', 'Adults'];
-  
-  const insertCategory = db.prepare(`
-    INSERT OR IGNORE INTO categories (name) VALUES (?)
-  `);
-  
-  for (const categoryName of defaultCategories) {
-    insertCategory.run(categoryName);
-  }
-  
-  console.log('Default categories seeded');
-}
-
-/**
- * Ensure subtitles table exists (idempotent)
- */
-function ensureSubtitlesTable(db: any): void {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS subtitles (
-      id          INTEGER PRIMARY KEY,
-      movie_id    INTEGER NOT NULL REFERENCES movies(id) ON DELETE CASCADE,
-      file_id     INTEGER REFERENCES files(id) ON DELETE CASCADE,
-      path        TEXT NOT NULL,
-      lang        TEXT,
-      label       TEXT,
-      format      TEXT,           -- 'srt' | 'vtt'
-      default_flag INTEGER DEFAULT 0,
-      size_bytes  INTEGER,
-      UNIQUE(path)
-    )
-  `);
-  
-  // Create index for better query performance
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_subtitles_movie ON subtitles(movie_id)`);
-}
-
-/**
- * Ensure files table has all required columns (idempotent)
- */
-function ensureFilesColumns(db: any): void {
-  // Get current table info
-  const tableInfo = db.prepare('PRAGMA table_info(files)').all() as Array<{
-    cid: number;
-    name: string;
-    type: string;
-    notnull: number;
-    dflt_value: any;
-    pk: number;
-  }>;
-  
-  const existingColumns = new Set(tableInfo.map(col => col.name));
-  
-  // Add missing columns if they don't exist
-  const requiredColumns = [
-    { name: 'mime_type', type: 'TEXT', defaultValue: null },
-    { name: 'duration_sec', type: 'INTEGER', defaultValue: null },
-    { name: 'width', type: 'INTEGER', defaultValue: null },
-    { name: 'height', type: 'INTEGER', defaultValue: null },
-    { name: 'video_codec', type: 'TEXT', defaultValue: null },
-    { name: 'audio_codec', type: 'TEXT', defaultValue: null }
-  ];
-  
-  for (const column of requiredColumns) {
-    if (!existingColumns.has(column.name)) {
-      const defaultClause = column.defaultValue !== null ? ` DEFAULT ${column.defaultValue}` : '';
-      db.exec(`ALTER TABLE files ADD COLUMN ${column.name} ${column.type}${defaultClause}`);
-      console.log(`Added column ${column.name} to files table`);
-    }
-  }
-}
-
-/**
- * Ensure movies table has all metadata columns (idempotent)
- */
-function ensureMoviesColumns(db: any): void {
-  const tableInfo = db.prepare('PRAGMA table_info(movies)').all() as Array<{ name: string }>;
-  const existing = new Set(tableInfo.map(col => col.name));
-
-  const required = [
-    { name: 'plot',      type: 'TEXT' },
-    { name: 'rating',    type: 'REAL' },
-    { name: 'genres',    type: 'TEXT' },
-    { name: 'director',  type: 'TEXT' },
-    { name: 'language',  type: 'TEXT' },
-    { name: 'runtime',   type: 'INTEGER' },
-    { name: 'thumbnail', type: 'TEXT' },
-    { name: 'imdb_id',   type: 'TEXT' },
-    { name: 'tmdb_id',   type: 'INTEGER' },
-  ];
-
-  for (const col of required) {
-    if (!existing.has(col.name)) {
-      db.exec(`ALTER TABLE movies ADD COLUMN ${col.name} ${col.type}`);
-      console.log(`Added column ${col.name} to movies table`);
-    }
   }
 }
 
@@ -185,45 +143,35 @@ export function getMovieCategories(movieId: number): Category[] {
 }
 
 /**
- * Set categories for a movie (replaces existing categories)
+ * Set categories for a movie
  */
 export function setMovieCategories(movieId: number, categoryNames: string[]): void {
   const db = getDb();
-  
   db.transaction(() => {
-    // Remove existing categories for this movie
-    const deleteStmt = db.prepare('DELETE FROM movie_categories WHERE movie_id = ?');
-    deleteStmt.run(movieId);
-    
-    // Add new categories
-    if (categoryNames.length > 0) {
-      const insertCategoryStmt = db.prepare('INSERT OR IGNORE INTO categories (name) VALUES (?)');
-      const getCategoryStmt = db.prepare('SELECT id FROM categories WHERE name = ?');
-      const linkStmt = db.prepare('INSERT INTO movie_categories (movie_id, category_id) VALUES (?, ?)');
-      
-      for (const categoryName of categoryNames) {
-        // Ensure category exists
-        insertCategoryStmt.run(categoryName);
-        
-        // Get category ID
-        const category = getCategoryStmt.get(categoryName) as { id: number } | undefined;
-        if (category) {
-          linkStmt.run(movieId, category.id);
-        }
-      }
+    db.prepare('DELETE FROM movie_categories WHERE movie_id = ?').run(movieId);
+    const insertCat = db.prepare('INSERT OR IGNORE INTO categories (name) VALUES (?)');
+    const getCat = db.prepare('SELECT id FROM categories WHERE name = ?');
+    const linkCat = db.prepare('INSERT INTO movie_categories (movie_id, category_id) VALUES (?, ?)');
+    for (const name of categoryNames) {
+      insertCat.run(name);
+      const cat = getCat.get(name) as { id: number } | undefined;
+      if (cat) linkCat.run(movieId, cat.id);
     }
   })();
 }
 
 /**
  * Initialize database with migrations on first import
- * This ensures migrations run when the module is imported
  */
 if (typeof window === 'undefined') {
-  // Only run on server side
-  try {
-    runMigrations();
-  } catch (error) {
-    console.error('Failed to run initial migrations:', error);
+  // Only run auto-migrations if NOT in the production build phase
+  if (process.env.NEXT_PHASE !== 'phase-production-build') {
+    try {
+      runMigrations();
+    } catch (error) {
+      console.error('Failed to run initial migrations:', error);
+    }
+  } else {
+    console.log('Build Phase: Skipping auto-migrations');
   }
 }

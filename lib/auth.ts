@@ -13,8 +13,8 @@ export class AuthError extends Error {
  * IMPORTANT: Admin features are restricted to development mode only.
  */
 export async function requireAdminKey(request: Request): Promise<void> {
-  // 0. Restrict to Local Development
-  if (process.env.NODE_ENV === 'production') {
+  // 0. Restrict to Local Development (but allow during build)
+  if (process.env.NODE_ENV === 'production' && process.env.NEXT_PHASE !== 'phase-production-build') {
     throw new AuthError('Administrative tools are restricted to local development only', 403);
   }
 
