@@ -12,13 +12,15 @@ FROM node:20-slim AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-# Ensure an empty database exists for the build phase to prevent tracing errors
+# Ensure we are building in a clean state without any host database
+RUN rm -f media.db media.db-shm media.db-wal
+# Create a dummy for build-time tracing only
 RUN touch media.db
 ENV NEXT_TELEMETRY_DISABLED=1
-# Force build phase for our resilience logic
 ENV NEXT_PHASE=phase-production-build
-# Run build with verbose output for troubleshooting
 RUN npm run build
+# Remove the dummy after build so it doesn't get copied to standalone
+RUN rm -f media.db
 
 # Stage 3: Runner
 FROM node:20-slim AS runner
