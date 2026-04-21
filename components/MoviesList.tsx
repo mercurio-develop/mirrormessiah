@@ -1,83 +1,132 @@
 'use client';
 
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { MovieWithFile } from '@/lib/types';
-import { Search, Play, Edit, Loader2, Calendar, Hash, Activity, Film } from 'lucide-react';
+import { b64urlEncode } from '@/lib/b64url';
+import { Search, Play, Edit, Loader2, Calendar, Hash, Activity, Film, X } from 'lucide-react';
 
 interface MoviesListProps {
   initialMovies: MovieWithFile[];
 }
 
-const ITEMS_PER_LOAD = 24;
+const ITEMS_PER_LOAD = 50;
 
 const getPosterUrl = (thumbnail: string | null | undefined): string => {
   if (!thumbnail) return '/placeholder.svg';
   if (thumbnail.startsWith('http')) return thumbnail;
-  const cleanPath = thumbnail.replace(/\/+/g, '/');
-  return "/api/images?path=" + encodeURIComponent(cleanPath) + "&public=true";
+  return "/api/images?path=" + b64urlEncode(thumbnail);
 };
 
 export default function MoviesList({ initialMovies }: MoviesListProps) {
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [movies, setMovies] = useState<MovieWithFile[]>(initialMovies);
   const [loading, setLoading] = useState(false);
-  const [hasMore, setHasMore] = useState(initialMovies.length >= ITEMS_PER_LOAD);
+  const [hasMore, setHasMore] = useState(initialMovies.length >= 24);
+  const [totalCount, setTotalCount] = useState(initialMovies.length);
 
-  const loadMoreMovies = useCallback(async () => {
-    if (loading || !hasMore) return;
+  const loadingRef = useRef(false);
+  const offsetRef = useRef(initialMovies.length);
+
+  const fetchMovies = useCallback(async (search = '', reset = false) => {
+    if (loadingRef.current) return;
+
+    loadingRef.current = true;
     setLoading(true);
+
     try {
-      const res = await fetch("/api/movies?offset=" + movies.length + "&limit=" + ITEMS_PER_LOAD);
+      const currentOffset = reset ? 0 : offsetRef.current;
+      let url = `/api/movies?offset=${currentOffset}&limit=${ITEMS_PER_LOAD}`;
+      if (search) url += "&q=" + encodeURIComponent(search);
+      
+      const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
-        if (data.movies.length < ITEMS_PER_LOAD) setHasMore(false);
-        setMovies(prev => {
-          const existingIds = new Set(prev.map((m: MovieWithFile) => m.id));
-          const uniqueNewMovies = data.movies.filter((m: MovieWithFile) => !existingIds.has(m.id));
-          return [...prev, ...uniqueNewMovies];
-        });
+        const newMovies = data.movies || [];
+        setTotalCount(data.total || 0);
+        
+        if (reset) {
+          setMovies(newMovies);
+          offsetRef.current = newMovies.length;
+        } else {
+          setMovies(prev => {
+            const existingIds = new Set(prev.map((m: MovieWithFile) => m.id));
+            const uniqueNewMovies = newMovies.filter((m: MovieWithFile) => !existingIds.has(m.id));
+            return [...prev, ...uniqueNewMovies];
+          });
+          offsetRef.current += newMovies.length;
+        }
+        
+        setHasMore(newMovies.length >= ITEMS_PER_LOAD);
       }
+    } catch (err) {
+      console.error('Registry_Fetch_Failure:', err);
     } finally {
       setLoading(false);
+      loadingRef.current = false;
     }
-  }, [loading, hasMore, movies.length]);
+  }, []);
 
+  // Handle Search Debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Trigger fetch on search change
+  useEffect(() => {
+    fetchMovies(debouncedSearch, true);
+  }, [debouncedSearch, fetchMovies]);
+
+  // Infinite Scroll
   useEffect(() => {
     const handleScroll = () => {
+      if (loadingRef.current || !hasMore) return;
       const { scrollTop, scrollHeight, clientHeight } = document.documentElement;
-      if (scrollTop + clientHeight >= scrollHeight - 800) loadMoreMovies();
+      if (scrollTop + clientHeight >= scrollHeight - 800) {
+        fetchMovies(debouncedSearch);
+      }
     };
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
-  }, [loadMoreMovies]);
+  }, [fetchMovies, hasMore, debouncedSearch]);
 
-  const filteredMovies = useMemo(() => {
-    const term = searchTerm.toLowerCase();
-    return movies.filter((m: MovieWithFile) => 
-      m.title.toLowerCase().includes(term) || 
-      m.year?.toString().includes(term)
-    );
-  }, [movies, searchTerm]);
+  const clearSearch = () => setSearchTerm('');
 
   return (
     <div className="space-y-8 font-sans">
-      <div className="relative group max-w-xl">
-        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-muted-foreground group-focus-within:text-primary transition-colors">
-          <Search className="h-4 w-4" />
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div className="relative group max-w-xl flex-1">
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-muted-foreground group-focus-within:text-primary transition-colors">
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+            </div>
+            <input
+            type="text"
+            placeholder="Search registry by title, director, year..."
+            className="w-full h-12 bg-muted/50 border border-border pl-12 pr-12 text-sm font-medium focus:border-primary/50 focus:ring-4 focus:ring-primary/5 transition-all outline-none rounded-xl"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            {searchTerm && (
+                <button 
+                    onClick={clearSearch}
+                    className="absolute inset-y-0 right-0 pr-4 flex items-center text-muted-foreground hover:text-foreground transition-colors"
+                >
+                    <X className="h-4 w-4" />
+                </button>
+            )}
         </div>
-        <input
-          type="text"
-          placeholder="Filter collection by title or year..."
-          className="w-full h-12 bg-muted/50 border border-border pl-12 pr-6 text-sm font-medium focus:border-primary/50 focus:ring-4 focus:ring-primary/5 transition-all outline-none rounded-xl"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
+        <div className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/40 px-2">
+            Displaying {movies.length} of {totalCount} Entities
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-        {filteredMovies.map((movie) => (
+        {movies.map((movie) => (
           <div key={movie.id} className="bg-muted/20 border border-border/50 p-4 flex gap-5 group hover:bg-muted/40 hover:border-border transition-all duration-300 rounded-2xl">
             <div className="w-20 shrink-0 relative aspect-poster bg-muted rounded-lg overflow-hidden shadow-md">
                <Image
