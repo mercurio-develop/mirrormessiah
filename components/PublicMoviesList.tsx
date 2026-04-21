@@ -102,12 +102,20 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
     }
   }, []);
 
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  // Debounce search term only
   useEffect(() => {
     const timer = setTimeout(() => {
-      fetchMovies(searchTerm, selectedQuality, selectedYear, selectedAudience, sort, true);
-    }, 500);
+      setDebouncedSearch(searchTerm);
+    }, 300);
     return () => clearTimeout(timer);
-  }, [searchTerm, selectedQuality, selectedYear, selectedAudience, sort, fetchMovies]);
+  }, [searchTerm]);
+
+  // Fetch movies when any filter (including debounced search) changes
+  useEffect(() => {
+    fetchMovies(debouncedSearch, selectedQuality, selectedYear, selectedAudience, sort, true);
+  }, [debouncedSearch, selectedQuality, selectedYear, selectedAudience, sort, fetchMovies]);
 
   const handleScroll = useCallback(() => {
     if (loadingRef.current || !hasMore) return;
@@ -117,9 +125,9 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
     const clientHeight = document.documentElement.clientHeight;
 
     if (scrollTop + clientHeight >= scrollHeight - 800) {
-      fetchMovies(searchTerm, selectedQuality, selectedYear, selectedAudience, sort);
+      fetchMovies(debouncedSearch, selectedQuality, selectedYear, selectedAudience, sort);
     }
-  }, [fetchMovies, hasMore, searchTerm, selectedQuality, selectedYear, selectedAudience, sort]);
+  }, [fetchMovies, hasMore, debouncedSearch, selectedQuality, selectedYear, selectedAudience, sort]);
 
   useEffect(() => {
     window.addEventListener('scroll', handleScroll);
@@ -141,7 +149,7 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="relative flex-1 max-w-2xl group">
              <div className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground transition-colors group-focus-within:text-primary">
-                <Search className="h-full w-full" />
+                {loading ? <Loader2 className="h-full w-full animate-spin" /> : <Search className="h-full w-full" />}
              </div>
              <input
                 type="text"
@@ -259,6 +267,7 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
                     src={getPosterUrl(movie.thumbnail)}
                     alt={movie.title}
                     fill
+                    unoptimized
                     sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 15vw"
                     className="object-cover transition-transform duration-700 group-hover:scale-110"
                     onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder.svg'; }}

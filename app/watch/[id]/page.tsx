@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import MediaPlayer from '@/components/MediaPlayer';
 import HeroBackdrop from '@/components/HeroBackdrop';
-import { ChevronLeft, Star, Calendar, Hash, Clock, Info, Activity, Globe, User } from 'lucide-react';
+import { ChevronLeft, Star, Calendar, Hash, Clock, Info, Activity, Globe, User, Edit } from 'lucide-react';
 import { getMovie } from '@/features/movie/queries/get-movie';
 import { getMoviePlayback } from '@/features/movie/queries/get-movie-playback';
 import Image from 'next/image';

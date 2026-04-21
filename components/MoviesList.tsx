@@ -84,6 +84,7 @@ export default function MoviesList({ initialMovies }: MoviesListProps) {
                   src={getPosterUrl(movie.thumbnail)}
                   alt={movie.title}
                   fill
+                  unoptimized
                   className="object-cover transition-transform duration-500 group-hover:scale-110"
                   sizes="80px"
                   onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder.svg'; }}

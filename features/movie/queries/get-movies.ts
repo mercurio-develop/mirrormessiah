@@ -22,8 +22,17 @@ export function getMovies(options: {
   `;
 
   if (q) {
-    whereConditions.push('LOWER(m.title) LIKE LOWER(?)');
-    params.push(`%${q}%`);
+    const searchTerms = q.trim().split(/\s+/);
+    searchTerms.forEach(term => {
+      whereConditions.push(`(
+        LOWER(m.title) LIKE LOWER(?) OR 
+        LOWER(m.genres) LIKE LOWER(?) OR 
+        LOWER(m.director) LIKE LOWER(?) OR
+        LOWER(m.plot) LIKE LOWER(?)
+      )`);
+      const likeTerm = `%${term}%`;
+      params.push(likeTerm, likeTerm, likeTerm, likeTerm);
+    });
   }
 
   if (genre) {
