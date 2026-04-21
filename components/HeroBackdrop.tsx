@@ -13,6 +13,7 @@ export default function HeroBackdrop({ src, alt }: HeroBackdropProps) {
       src={src}
       alt={alt}
       fill
+      unoptimized
       className="object-cover opacity-20 blur-3xl scale-125"
       priority
       onError={(e) => { (e.target as any).style.opacity = '0'; }}

@@ -9,6 +9,7 @@ export default async function proxy(request: NextRequest) {
   if (
     path === '/login' ||
     path === '/api/auth' || 
+    path.startsWith('/api/images') ||
     path.startsWith('/_next') ||
     path === '/favicon.ico' ||
     path === '/placeholder.svg'
@@ -41,6 +42,7 @@ export default async function proxy(request: NextRequest) {
 
     return NextResponse.next();
   } catch (error) {
+    console.error('Session_Validation_Failure:', error);
     const response = NextResponse.redirect(new URL('/login', request.url));
     response.cookies.delete('mm_gate_token');
     response.cookies.delete('mm_admin_token');
@@ -50,6 +52,6 @@ export default async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!api/auth|login|_next/static|_next/image|favicon.ico|placeholder.svg).*)',
+    '/((?!api/auth|api/images|login|_next/static|_next/image|favicon.ico|placeholder.svg).*)',
   ],
 };

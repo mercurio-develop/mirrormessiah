@@ -48,7 +48,7 @@ export default function MediaPlayer({
       const player = videojs(videoElement, {
         controls: true,
         responsive: true,
-        fluid: true,
+        fill: true,
         playbackRates: [0.5, 1, 1.25, 1.5, 2],
         html5: {
           vhs: {
@@ -102,10 +102,8 @@ export default function MediaPlayer({
   }, [src, mimeType]);
 
   return (
-    <div className={'flex flex-col h-full ' + className}>
-      <div className="flex-1 relative bg-background flex items-center justify-center min-h-0">
-        <div ref={videoRef} className="w-full h-full" />
-      </div>
+    <div className={'relative w-full h-full ' + className}>
+      <div ref={videoRef} className="absolute inset-0" />
     </div>
   );
 }
