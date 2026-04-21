@@ -22,7 +22,10 @@ export async function GET(request: NextRequest) {
     }
 
     if (!fs.existsSync(filePath)) {
-      return NextResponse.redirect(new URL('/placeholder.svg', request.url));
+      const placeholder = '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="450" viewBox="0 0 300 450"><rect width="300" height="450" fill="#1a1a1a"/><text x="150" y="230" text-anchor="middle" fill="#444" font-size="14" font-family="sans-serif">No Poster</text></svg>';
+      return new NextResponse(placeholder, {
+        headers: { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=3600' },
+      });
     }
 
     const mimeType = lookup(filePath) || 'image/jpeg';

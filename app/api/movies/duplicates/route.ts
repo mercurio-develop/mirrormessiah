@@ -15,7 +15,7 @@ const NORMALIZE = `
   )
 `;
 
-export async function GET(request: NextRequest) {
+export const GET = withAdminAuth(async (request: Request) => {
   try {
     const db = getDb();
 

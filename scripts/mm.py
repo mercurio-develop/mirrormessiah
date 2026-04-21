@@ -266,12 +266,18 @@ def ingest_path(db: sqlite3.Connection, path: Path, library_id: int, auto_scrape
         print(f'  No video files found in {folder.name}')
         return False
 
-    meta = parse_folder_name(folder.name)
+    # Skip folders that don't follow "Title (Year)" naming — prevents ingesting
+    # TV shows, loose files dirs, or the media root itself
+    if not FOLDER_RE.match(folder.name):
+        print(f'  Skipping (no year): {folder.name}')
+        return False
 
     # Skip 4K/2160p folders
     if SKIP_QUALITY.search(folder.name):
         print(f'  Skipping 4K: {folder.name}')
         return False
+
+    meta = parse_folder_name(folder.name)
 
     # Check if already in DB by title+year+quality
     existing = db.execute(
