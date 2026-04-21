@@ -1,5 +1,6 @@
 import { getDb } from '@/lib/db';
-import { b64urlEncode, getMimeType } from '@/lib/pathenc';
+import { getMimeType } from '@/lib/pathenc';
+import { b64urlEncode } from '@/lib/b64url';
 
 export function getMoviePlayback(id: number) {
   const db = getDb();
