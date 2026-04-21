@@ -303,8 +303,8 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
                       </span>
                     )}
                     {(movie as any).has_subtitles === 1 && (
-                      <span className="bg-primary/20 backdrop-blur-md text-primary text-[9px] font-black px-2 py-0.5 rounded-sm uppercase tracking-tighter border border-primary/30 flex items-center gap-1 shadow-lg">
-                        <Sparkles className="h-2.5 w-2.5 fill-current" />
+                      <span className="bg-primary/10 backdrop-blur-md text-primary text-[8px] font-extrabold px-1.5 py-0.5 rounded-sm uppercase tracking-widest border border-primary/20 flex items-center gap-1 shadow-sm">
+                        <Sparkles className="h-2 w-2 fill-current" />
                         CC
                       </span>
                     )}
