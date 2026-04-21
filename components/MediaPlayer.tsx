@@ -37,8 +37,7 @@ export default function MediaPlayer({
       const videoElement = document.createElement('video');
       videoElement.classList.add('video-js', 'vjs-default-skin', 'vjs-big-play-centered', 'vjs-show-big-play-button-on-pause');
       
-      // Critical for subtitles to work
-      videoElement.setAttribute('crossorigin', 'anonymous');
+      // No crossorigin attribute needed for same-origin requests
       videoElement.setAttribute('playsinline', 'true');
 
       videoRef.current.appendChild(videoElement);
@@ -54,7 +53,6 @@ export default function MediaPlayer({
           },
           nativeAudioTracks: false,
           nativeVideoTracks: false,
-          withCredentials: true
         }
       });
 
