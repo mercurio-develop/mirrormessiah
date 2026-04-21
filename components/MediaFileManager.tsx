@@ -1,7 +1,21 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Video, ScanSearch, Plus, Trash2, Loader2, AlertCircle, CheckCircle2, Search, Link as LinkIcon, X, FileVideo, HardDrive } from 'lucide-react';
+import {
+  Video,
+  ScanSearch,
+  Plus,
+  Trash2,
+  Loader2,
+  AlertCircle,
+  CheckCircle2,
+  Search,
+  Link as LinkIcon,
+  X,
+  FileVideo,
+  HardDrive,
+  Folder
+} from 'lucide-react';
 import FileBrowser from './FileBrowser';
 
 interface MediaFile {

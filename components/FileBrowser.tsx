@@ -83,6 +83,7 @@ export default function FileBrowser({ movieId, isOpen, mode, onClose, onSelect, 
 
   const handleItemClick = (item: Item) => {
     if (item.isDirectory) {
+      setSelectedPath(null); // Clear file selection when navigating
       fetchDirectory(item.path);
     } else {
       setSelectedPath(item.path);
