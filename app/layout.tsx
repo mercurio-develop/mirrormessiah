@@ -5,8 +5,8 @@ import { AdminProvider } from '@/contexts/AdminContext'
 import Navbar from '@/components/Navbar'
 
 export const metadata: Metadata = {
-  title: 'MirrorMessiah - Sector Registry',
-  description: 'Shadow Veil Sector Registry and Streaming Terminal',
+  title: 'MirrorMessiah | Premium Media Registry',
+  description: 'A private high-fidelity media collection for the ultimate viewing experience.',
 }
 
 export default function RootLayout({
@@ -20,7 +20,7 @@ export default function RootLayout({
         <ThemeProvider>
           <AdminProvider>
             <Navbar />
-            <main className="min-h-screen">
+            <main className="min-h-screen pt-20">
               {children}
             </main>
           </AdminProvider>

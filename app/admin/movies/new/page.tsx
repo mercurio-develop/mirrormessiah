@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ChevronLeft, Save, Film, Tag, Globe, Info, Loader2 } from 'lucide-react';
+import { ChevronLeft, Save, Film, Tag, Globe, Info, Loader2, Sparkles, User, Clock, ChevronDown } from 'lucide-react';
 
 interface Category {
   id: number;
@@ -26,6 +26,7 @@ export default function NewMoviePage() {
     director: '',
     language: 'English',
     runtime: '',
+    audience: '',
     categories: [] as string[],
   });
 
@@ -38,7 +39,7 @@ export default function NewMoviePage() {
           setCategories(data.categories);
         }
       } catch (error) {
-        console.error('Data acquisition failure:', error);
+        console.error('Category_Fetch_Failure:', error);
       }
     };
     fetchData();
@@ -80,7 +81,7 @@ export default function NewMoviePage() {
         router.refresh();
       } else {
         const error = await response.json();
-        alert("REJECTION: " + (error.error || 'Uplink failed'));
+        alert("Registration Failed: " + (error.error || 'Server error'));
       }
     } catch (error) {
       console.error('Sync failure:', error);
@@ -90,130 +91,164 @@ export default function NewMoviePage() {
   };
 
   return (
-    <div className="flex flex-col gap-12 font-mono pb-32">
-      <div className="flex flex-col gap-4 border-l-4 border-primary pl-6 py-2">
-        <Link href="/admin/movies" className="text-primary hover:text-white text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-2 mb-2 transition-colors">
-          <ChevronLeft className="h-3 w-3" /> Back_to_Registry
+    <div className="flex flex-col gap-10 font-sans pb-32">
+      <div className="flex flex-col gap-4 border-l-4 border-primary pl-6 py-1">
+        <Link href="/admin/movies" className="text-primary hover:text-primary/80 text-xs font-bold uppercase tracking-widest flex items-center gap-2 mb-2 transition-colors">
+          <ChevronLeft className="h-4 w-4" /> Back to Registry
         </Link>
-        <h1 className="text-4xl font-black uppercase italic tracking-tighter text-white leading-none">Initialize_Entity</h1>
-        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.4em]">Sector: Registry_Uplink // Access_Level: Restricted</p>
+        <h1 className="text-4xl font-extrabold tracking-tight text-foreground leading-none uppercase italic">Register Movie</h1>
+        <p className="text-xs font-bold text-muted-foreground uppercase tracking-[0.2em] opacity-60">System Registry // New Entry</p>
       </div>
 
-      <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-12 gap-12">
+      <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-12 gap-10">
         <div className="lg:col-span-8 space-y-8">
           {/* Identity Section */}
-          <div className="p-8 bg-black/40 border border-white/5 space-y-6">
-            <h3 className="text-[10px] font-black uppercase tracking-[0.4em] text-primary flex items-center gap-2">
-              <Film className="h-3 w-3" /> Core_Identity
-            </h3>
-            <div className="space-y-4">
-              <div className="space-y-1">
-                <label className="text-[8px] font-black uppercase tracking-widest text-white/20">Title_Archive *</label>
+          <div className="p-8 bg-card border border-border rounded-2xl space-y-8 shadow-sm">
+            <div className="flex items-center gap-3 pb-2 border-b border-border/50">
+               <Film className="h-5 w-5 text-primary" />
+               <h3 className="text-lg font-bold text-foreground">Basic Information</h3>
+            </div>
+            
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest ml-1">Movie Title *</label>
                 <input
                   name="title"
                   value={formData.title}
                   onChange={handleInputChange}
                   required
-                  placeholder="ARCHIVE_NAME_OR_CODE"
-                  className="w-full h-14 bg-black/60 border border-white/5 px-6 text-sm font-bold uppercase tracking-widest focus:border-primary transition-all text-white placeholder:text-white/5"
+                  placeholder="Enter the full movie title..."
+                  className="w-full h-14 bg-background border border-border rounded-xl px-6 text-base font-semibold focus:border-primary transition-all text-foreground outline-none focus:ring-4 focus:ring-primary/5"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[8px] font-black uppercase tracking-widest text-white/20">Temporal_Year</label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest ml-1">Release Year</label>
                   <input
                     name="year"
                     type="number"
                     value={formData.year}
                     onChange={handleInputChange}
-                    className="w-full h-12 bg-black/60 border border-white/5 px-4 text-xs text-white focus:border-primary transition-all"
+                    placeholder="YYYY"
+                    className="w-full h-12 bg-background border border-border rounded-xl px-5 text-sm font-semibold text-foreground focus:border-primary outline-none transition-all"
                   />
                 </div>
-                <div className="space-y-1">
-                  <label className="text-[8px] font-black uppercase tracking-widest text-white/20">Signal_Res</label>
-                  <select
-                    name="quality"
-                    value={formData.quality}
-                    onChange={handleInputChange}
-                    className="w-full h-12 bg-black/60 border border-white/5 px-4 text-xs text-white focus:border-primary transition-all"
-                  >
-                    <option value="1080p">1080P_FULL_HD</option>
-                    <option value="720p">720P_HD</option>
-                    <option value="4K">2160P_4K</option>
-                  </select>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest ml-1">Target Audience</label>
+                  <div className="relative">
+                    <select
+                      name="audience"
+                      value={formData.audience}
+                      onChange={handleInputChange}
+                      className="w-full h-12 bg-background border border-border rounded-xl px-4 text-sm font-semibold text-foreground focus:border-primary outline-none transition-all appearance-none"
+                    >
+                      <option value="">Standard</option>
+                      <option value="family">Family</option>
+                      <option value="adult">Adult</option>
+                    </select>
+                    <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40 pointer-events-none" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest ml-1">Resolution</label>
+                  <div className="relative">
+                    <select
+                      name="quality"
+                      value={formData.quality}
+                      onChange={handleInputChange}
+                      className="w-full h-12 bg-background border border-border rounded-xl px-4 text-sm font-semibold text-foreground focus:border-primary outline-none transition-all appearance-none"
+                    >
+                      <option value="1080p">1080p Full HD</option>
+                      <option value="720p">720p HD</option>
+                      <option value="4K">2160p 4K</option>
+                    </select>
+                    <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40 pointer-events-none" />
+                  </div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Spatial Section */}
-          <div className="p-8 bg-black/40 border border-white/5 space-y-6">
-            <h3 className="text-[10px] font-black uppercase tracking-[0.4em] text-primary flex items-center gap-2">
-              <Globe className="h-3 w-3" /> Spatial_Metadata
-            </h3>
-            <div className="grid grid-cols-2 gap-6">
-              <div className="space-y-1">
-                <label className="text-[8px] font-black uppercase tracking-widest text-white/20">Director_Entity</label>
-                <input
-                  name="director"
-                  value={formData.director}
-                  onChange={handleInputChange}
-                  className="w-full h-12 bg-black/60 border border-white/5 px-4 text-xs text-white focus:border-primary transition-all"
-                />
+          {/* Metadata Section */}
+          <div className="p-8 bg-card border border-border rounded-2xl space-y-8 shadow-sm">
+            <div className="flex items-center gap-3 pb-2 border-b border-border/50">
+               <Globe className="h-5 w-5 text-primary" />
+               <h3 className="text-lg font-bold text-foreground">Extended Metadata</h3>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest ml-1">Director</label>
+                <div className="relative">
+                  <User className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40" />
+                  <input
+                    name="director"
+                    value={formData.director}
+                    onChange={handleInputChange}
+                    className="w-full h-12 bg-background border border-border rounded-xl pl-12 pr-4 text-sm font-semibold text-foreground focus:border-primary outline-none transition-all"
+                  />
+                </div>
               </div>
-              <div className="space-y-1">
-                <label className="text-[8px] font-black uppercase tracking-widest text-white/20">Language_Stream</label>
-                <input
-                  name="language"
-                  value={formData.language}
-                  onChange={handleInputChange}
-                  className="w-full h-12 bg-black/60 border border-white/5 px-4 text-xs text-white focus:border-primary transition-all"
-                />
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest ml-1">Language</label>
+                <div className="relative">
+                  <Globe className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40" />
+                  <input
+                    name="language"
+                    value={formData.language}
+                    onChange={handleInputChange}
+                    className="w-full h-12 bg-background border border-border rounded-xl pl-12 pr-4 text-sm font-semibold text-foreground focus:border-primary outline-none transition-all"
+                  />
+                </div>
               </div>
-              <div className="space-y-1">
-                <label className="text-[8px] font-black uppercase tracking-widest text-white/20">Runtime_Minutes</label>
-                <input
-                  name="runtime"
-                  type="number"
-                  value={formData.runtime}
-                  onChange={handleInputChange}
-                  className="w-full h-12 bg-black/60 border border-white/5 px-4 text-xs text-white focus:border-primary transition-all"
-                />
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest ml-1">Runtime (min)</label>
+                <div className="relative">
+                   <Clock className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40" />
+                   <input
+                    name="runtime"
+                    type="number"
+                    value={formData.runtime}
+                    onChange={handleInputChange}
+                    className="w-full h-12 bg-background border border-border rounded-xl pl-12 pr-4 text-sm font-semibold text-foreground focus:border-primary outline-none transition-all"
+                  />
+                </div>
               </div>
-              <div className="space-y-1">
-                <label className="text-[8px] font-black uppercase tracking-widest text-white/20">IMDB_ID</label>
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest ml-1">IMDB Identifier</label>
                 <input
                   name="imdb_id"
                   value={formData.imdb_id}
                   onChange={handleInputChange}
                   placeholder="tt0000000"
-                  className="w-full h-12 bg-black/60 border border-white/5 px-4 text-xs text-white focus:border-primary transition-all"
+                  className="w-full h-12 bg-background border border-border rounded-xl px-5 text-sm font-semibold text-foreground focus:border-primary outline-none transition-all"
                 />
               </div>
             </div>
           </div>
 
           {/* Plot Section */}
-          <div className="p-8 bg-black/40 border border-white/5 space-y-6">
-            <h3 className="text-[10px] font-black uppercase tracking-[0.4em] text-primary flex items-center gap-2">
-              <Info className="h-3 w-3" /> Intelligence_Briefing
-            </h3>
+          <div className="p-8 bg-card border border-border rounded-2xl space-y-8 shadow-sm">
+            <div className="flex items-center gap-3 pb-2 border-b border-border/50">
+               <Info className="h-5 w-5 text-primary" />
+               <h3 className="text-lg font-bold text-foreground">Synopsis</h3>
+            </div>
             <textarea
               name="plot"
               rows={6}
               value={formData.plot}
               onChange={handleInputChange}
-              className="w-full bg-black/60 border border-white/5 p-6 text-xs leading-relaxed text-white/60 focus:border-primary transition-all font-sans"
+              placeholder="Provide a brief overview of the movie content..."
+              className="w-full bg-background border border-border rounded-xl p-6 text-sm font-medium leading-relaxed text-foreground/80 focus:border-primary outline-none transition-all"
             />
           </div>
         </div>
 
         <div className="lg:col-span-4 space-y-8">
           {/* Classification Sidebar */}
-          <div className="terminal-border p-8 bg-zinc-950/50 backdrop-blur-xl border-white/5 space-y-6">
-            <div className="flex items-center gap-3">
-              <Tag className="h-4 w-4 text-primary" />
-              <h3 className="text-[10px] font-black uppercase tracking-[0.4em] text-white">Classification</h3>
+          <div className="p-8 bg-card border border-border rounded-2xl space-y-6 shadow-xl">
+            <div className="flex items-center gap-3 border-b border-border/50 pb-4">
+              <Tag className="h-5 w-5 text-primary" />
+              <h3 className="text-sm font-bold text-foreground uppercase tracking-widest">Categories</h3>
             </div>
             <div className="grid grid-cols-1 gap-3 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
               {categories.map((cat) => (
@@ -222,9 +257,9 @@ export default function NewMoviePage() {
                     type="checkbox"
                     checked={formData.categories.includes(cat.name)}
                     onChange={(e) => handleCategoryChange(cat.name, e.target.checked)}
-                    className="w-4 h-4 rounded-none border border-white/20 bg-black/40 checked:bg-primary transition-all cursor-pointer"
+                    className="w-5 h-5 rounded-lg border border-border bg-background checked:bg-primary transition-all cursor-pointer"
                   />
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-white/40 group-hover:text-white transition-colors">{cat.name}</span>
+                  <span className="text-sm font-semibold text-muted-foreground group-hover:text-foreground transition-colors">{cat.name}</span>
                 </label>
               ))}
             </div>
@@ -233,10 +268,16 @@ export default function NewMoviePage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full h-16 bg-primary text-primary-foreground font-black uppercase tracking-[0.3em] text-xs hover:bg-primary/90 transition-all shadow-[0_0_30px_rgba(139,92,246,0.3)] flex items-center justify-center gap-3 group disabled:opacity-50"
+            className="w-full h-16 bg-primary text-primary-foreground font-extrabold uppercase tracking-widest text-sm hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-primary/20 flex items-center justify-center gap-3 group disabled:opacity-50 rounded-2xl"
           >
-            {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <><Save className="h-4 w-4" /> Finalize_Uplink</>}
+            {loading ? <Loader2 className="h-6 w-6 animate-spin" /> : <><Save className="h-6 w-6" /> Save Movie</>}
           </button>
+
+          <div className="p-6 bg-muted/20 border border-border rounded-2xl text-center">
+             <p className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-widest">
+                New Database Index
+             </p>
+          </div>
         </div>
       </form>
     </div>

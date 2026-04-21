@@ -33,7 +33,11 @@ export default function MoviesList({ initialMovies }: MoviesListProps) {
       if (res.ok) {
         const data = await res.json();
         if (data.movies.length < ITEMS_PER_LOAD) setHasMore(false);
-        setMovies(prev => [...prev, ...data.movies]);
+        setMovies(prev => {
+          const existingIds = new Set(prev.map(m => m.id));
+          const uniqueNewMovies = data.movies.filter((m: any) => !existingIds.has(m.id));
+          return [...prev, ...uniqueNewMovies];
+        });
       }
     } finally {
       setLoading(false);
@@ -65,7 +69,7 @@ export default function MoviesList({ initialMovies }: MoviesListProps) {
         </div>
         <input
           type="text"
-          placeholder="Filter registry by title or year..."
+          placeholder="Filter collection by title or year..."
           className="w-full h-12 bg-muted/50 border border-border pl-12 pr-6 text-sm font-medium focus:border-primary/50 focus:ring-4 focus:ring-primary/5 transition-all outline-none rounded-xl"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
@@ -90,7 +94,7 @@ export default function MoviesList({ initialMovies }: MoviesListProps) {
               <div className="space-y-1">
                 <div className="flex justify-between items-center text-[10px] font-bold text-muted-foreground/50 uppercase tracking-wider">
                    <span className="font-mono">ID: {movie.id}</span>
-                   <span className="flex items-center gap-1 text-primary/60"><Activity className="h-2.5 w-2.5" /> Active</span>
+                   <span className="flex items-center gap-1 text-primary/60"><Activity className="h-2.5 w-2.5" /> Registry Linked</span>
                 </div>
                 <h3 className="text-sm font-bold text-foreground truncate group-hover:text-primary transition-colors">
                   {movie.title}

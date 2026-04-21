@@ -1,23 +1,47 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter, usePathname } from 'next/navigation';
-import { LogOut, Film, Shield, Terminal, LayoutGrid } from 'lucide-react';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import { LogOut, Film, Shield, Terminal, LayoutGrid, Sparkles } from 'lucide-react';
 import { useAdmin } from '@/contexts/AdminContext';
 import ThemeToggle from './ThemeToggle';
 
 export default function Navbar() {
   const router = useRouter();
   const pathname = usePathname();
-  const { isAdmin, logout } = useAdmin();
+  const searchParams = useSearchParams();
+  const { isAdmin, isDevelopment, logout, logoutAdmin } = useAdmin();
+
+  const isFamilyMode = searchParams.get('audience') === 'family';
 
   if (pathname === '/login') return null;
+
+  const toggleFamilyMode = () => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (isFamilyMode) {
+      params.delete('audience');
+    } else {
+      params.set('audience', 'family');
+    }
+    const targetPath = pathname === '/' ? '' : '/';
+    router.push(`${targetPath}?${params.toString()}`);
+  };
+
+  const handleAdminToggle = async () => {
+    if (isAdmin) {
+      await logoutAdmin();
+      if (pathname.startsWith('/admin')) {
+        router.push('/');
+      }
+    } else {
+      router.push('/admin');
+    }
+  };
 
   const handleLogout = async () => {
     try {
       await logout();
-      router.push('/');
-      router.refresh();
+      router.push('/login');
     } catch (error) {
       console.error('Sign_Out_Failure:', error);
     }
@@ -40,17 +64,17 @@ export default function Navbar() {
           <div className="hidden md:flex items-center gap-8">
             <Link 
               href="/" 
-              className={`text-sm font-semibold transition-colors hover:text-primary ${pathname === '/' ? 'text-primary' : 'text-muted-foreground'}`}
+              className={`text-sm font-semibold transition-colors hover:text-primary ${pathname === '/' && !isFamilyMode ? 'text-primary' : 'text-muted-foreground'}`}
             >
               Browse
             </Link>
-            <Link 
-              href="/?audience=family" 
-              className={`text-sm font-bold transition-all px-4 py-1.5 rounded-full border flex items-center gap-2 ${pathname === '/' && typeof window !== 'undefined' && window.location.search.includes('audience=family') ? 'bg-green-600 border-green-500 text-white shadow-[0_0_15px_rgba(22,163,74,0.4)]' : 'bg-green-600/10 border-green-600/20 text-green-500 hover:bg-green-600/20'}`}
+            <button 
+              onClick={toggleFamilyMode}
+              className={`text-sm font-bold transition-all px-4 py-1.5 rounded-full border flex items-center gap-2 ${isFamilyMode ? 'bg-green-600 border-green-500 text-white shadow-[0_0_15px_rgba(22,163,74,0.4)]' : 'bg-green-600/10 border-green-600/20 text-green-500 hover:bg-green-600/20'}`}
             >
-              <Sparkles className="w-4 h-4" /> Family Mode
-            </Link>
-            {isAdmin && (
+              <Sparkles className="w-4 h-4" /> {isFamilyMode ? 'Family Active' : 'Family Mode'}
+            </button>
+            {isAdmin && isDevelopment && (
                <Link 
                 href="/admin" 
                 className={`text-sm font-semibold transition-colors hover:text-primary ${pathname.startsWith('/admin') ? 'text-primary' : 'text-muted-foreground'}`}
@@ -63,19 +87,18 @@ export default function Navbar() {
 
         <div className="flex items-center gap-4 sm:gap-6">
           <div className="flex items-center gap-2">
-            {isAdmin ? (
-               <div className="flex items-center gap-2 px-3 py-1 bg-primary/10 border border-primary/20 rounded-full">
-                  <Shield className="h-3.5 w-3.5 text-primary" />
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-primary">Admin_Active</span>
-               </div>
-            ) : (
-              <Link 
-                href="/admin" 
-                className="p-2 text-muted-foreground hover:text-foreground transition-all hover:bg-white/5 rounded-full"
-                title="Admin Access"
+            {isDevelopment && (
+               <button 
+                onClick={handleAdminToggle}
+                className={`flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider border rounded-full transition-all ${
+                    isAdmin 
+                    ? 'bg-primary/20 border-primary/50 text-primary shadow-[0_0_15px_rgba(56,189,248,0.2)]' 
+                    : 'bg-muted border-border text-muted-foreground hover:text-foreground hover:bg-accent'
+                }`}
               >
-                <Terminal className="h-5 w-5" />
-              </Link>
+                <Shield className="h-3.5 w-3.5" />
+                {isAdmin ? 'Admin Active' : 'Admin Mode'}
+              </button>
             )}
           </div>
           

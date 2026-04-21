@@ -20,5 +20,5 @@ The project is managed via the unified CLI at \`cli/messiah.py\`.
 - **Reset System**: \`python3 cli/messiah.py reset\`
 
 ## Environment
-- **ADMIN_KEY**: Managed via \`.env.local\`
+- **GATE_KEY**: Managed via \`.env.local\`
 - **Asset Proxy**: Serves linked posters directly from movie directories

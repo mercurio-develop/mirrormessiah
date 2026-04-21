@@ -45,7 +45,7 @@ Edit `.env.local`:
 
 ```bash
 # Required: Set a strong admin key
-ADMIN_KEY=your-secret-admin-key-here
+GATE_KEY=your-secret-admin-key-here
 
 # Optional: Set base URL (defaults to http://localhost:3000)
 NEXTAUTH_URL=http://localhost:3000

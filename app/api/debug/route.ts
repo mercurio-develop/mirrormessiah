@@ -14,7 +14,9 @@ export async function GET(request: NextRequest) {
       dbPath: (db as any).name,
       movieCount: movieCount.count,
       envStatus: {
+        GATE_KEY_DEFINED: !!process.env.GATE_KEY,
         ADMIN_KEY_DEFINED: !!process.env.ADMIN_KEY,
+        GATE_KEY_VALUE_HIDDEN: process.env.GATE_KEY ? process.env.GATE_KEY.substring(0, 2) + '...' : 'NONE',
         ADMIN_KEY_VALUE_HIDDEN: process.env.ADMIN_KEY ? process.env.ADMIN_KEY.substring(0, 2) + '...' : 'NONE',
         NODE_ENV: process.env.NODE_ENV
       }

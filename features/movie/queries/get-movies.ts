@@ -51,11 +51,11 @@ export function getMovies(options: {
   }
 
   if (sort === 'title_desc') {
-    movieQuery += ' ORDER BY m.title DESC';
+    movieQuery += ' ORDER BY m.title DESC, m.id DESC';
   } else if (sort === 'newest') {
     movieQuery += ' ORDER BY m.id DESC';
   } else {
-    movieQuery += ' ORDER BY m.title ASC';
+    movieQuery += ' ORDER BY m.title ASC, m.id ASC';
   }
   
   const totalQuery = `SELECT COUNT(*) as count FROM (${movieQuery})`;

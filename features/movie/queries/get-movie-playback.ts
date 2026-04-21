@@ -54,17 +54,31 @@ export function getMoviePlayback(id: number) {
   const actualMime = getMimeType(bestFile.path);
 
   const subtitles = db.prepare(`
-    SELECT path, lang, format FROM subtitles WHERE movie_id = ?
+    SELECT path, lang, label, format FROM subtitles WHERE movie_id = ?
   `).all(id) as any[];
+
+  // ISO 639-2 (3-letter) → ISO 639-1 (2-letter) for srclang
+  const langMap: Record<string, { code: string; label: string }> = {
+    eng: { code: 'en', label: 'English' },
+    spa: { code: 'es', label: 'Español' },
+    fre: { code: 'fr', label: 'Français' },
+    ger: { code: 'de', label: 'Deutsch' },
+    por: { code: 'pt', label: 'Português' },
+    ita: { code: 'it', label: 'Italiano' },
+    jpn: { code: 'ja', label: '日本語' },
+  };
 
   return {
     source: { type: "file", src: `/api/stream?path=${b64urlEncode(bestFile.path)}` },
     mimeType: actualMime,
-    subtitles: subtitles.map(s => ({
-      src: `/api/subtitle?path=${b64urlEncode(s.path)}`,
-      srclang: s.lang || 'en',
-      label: `${(s.lang || 'en').toUpperCase()}`
-    })),
+    subtitles: subtitles.map(s => {
+      const mapped = langMap[s.lang] ?? { code: s.lang || 'en', label: s.label || s.lang?.toUpperCase() || 'Subtitles' };
+      return {
+        src: `/api/subtitle?path=${b64urlEncode(s.path)}`,
+        srclang: mapped.code,
+        label: s.label || mapped.label,
+      };
+    }),
     movie: { id, title: movie.title }
   };
 }

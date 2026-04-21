@@ -8,8 +8,8 @@ services:
     user: "0"
     environment:
       - NODE_ENV=production
-      # This ADMIN_KEY must be set in your .env file
-      - ADMIN_KEY=${ADMIN_KEY:?ADMIN_KEY is not set. Please create a .env file.}
+      # This GATE_KEY must be set in your .env file
+      - GATE_KEY=${GATE_KEY:?GATE_KEY is not set. Please create a .env file.}
       - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3000}
       - DB_PATH=/app/database/media.db
     volumes:

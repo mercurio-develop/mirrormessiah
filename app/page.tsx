@@ -18,12 +18,8 @@ export default async function Home() {
             <h1 className="text-5xl font-black tracking-tighter uppercase italic text-foreground leading-none">
               Mirror<span className="text-primary">Messiah</span>
             </h1>
-            <p className="text-xs font-bold text-muted-foreground uppercase tracking-[0.3em] opacity-40">
-              Global Archives // Sector 01
-            </p>
           </div>
         </header>
-
         <Suspense fallback={<div className="px-6 text-muted-foreground animate-pulse font-bold">Synchronizing Archives...</div>}>
           <PublicMoviesList initialMovies={initialMovies} />
         </Suspense>

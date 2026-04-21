@@ -26,7 +26,7 @@ export default async function MoviesPage() {
           </div>
           <p className="text-sm text-muted-foreground font-medium flex items-center gap-2">
              <List className="h-4 w-4 opacity-40" />
-             Total load: <span className="text-foreground font-bold">{total} entries indexed</span>
+             Collection Size: <span className="text-foreground font-bold">{total} total movies</span>
           </p>
         </div>
 
@@ -34,7 +34,7 @@ export default async function MoviesPage() {
           href="/admin/movies/new"
           className="h-14 px-8 bg-primary text-primary-foreground text-sm font-bold rounded-2xl flex items-center gap-3 hover:scale-105 active:scale-95 transition-all shadow-xl shadow-primary/20"
         >
-          <Plus className="h-5 w-5" /> Initialize New Entity
+          <Plus className="h-5 w-5" /> Register New Movie
         </Link>
       </div>
 

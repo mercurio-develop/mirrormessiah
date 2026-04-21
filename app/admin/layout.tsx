@@ -21,14 +21,14 @@ export default function AdminLayout({
     
     const success = await login(password);
     if (!success) {
-      setError('ACCESS_DENIED: INVALID_CREDENTIALS');
+      setError('ACCESS DENIED: INVALID KEY');
     }
     setIsLoading(false);
   };
 
   if (!isAdmin) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[80vh] px-6 font-sans">
+      <div className="flex flex-col items-center justify-center min-h-[70vh] px-6 font-sans pt-20">
         <div className="w-full max-w-md space-y-12">
           <div className="text-center space-y-4">
             <div className="flex justify-center mb-6">
@@ -36,8 +36,8 @@ export default function AdminLayout({
                 <Lock className="h-10 w-10 text-primary group-hover:scale-110 transition-transform duration-500" />
               </div>
             </div>
-            <h1 className="text-4xl font-extrabold tracking-tight text-foreground uppercase italic">Gatekeeper</h1>
-            <p className="text-xs font-bold text-muted-foreground uppercase tracking-[0.3em] opacity-60">Administrative Authorization Required</p>
+            <h1 className="text-4xl font-extrabold tracking-tight text-foreground uppercase italic">Admin Access</h1>
+            <p className="text-xs font-bold text-muted-foreground uppercase tracking-[0.3em] opacity-60">Authentication Required for Management</p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-6">
@@ -46,7 +46,7 @@ export default function AdminLayout({
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter admin password..."
+                placeholder="Enter admin key..."
                 required
                 className="w-full h-16 bg-card border border-border rounded-2xl px-8 text-center text-sm font-bold tracking-[0.2em] text-foreground focus:outline-none focus:border-primary/50 transition-all shadow-2xl"
               />
@@ -67,15 +67,15 @@ export default function AdminLayout({
                 <Loader2 className="h-5 w-5 animate-spin" />
               ) : (
                 <>
-                  Unlock Access <ChevronRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
+                  Verify Access <ChevronRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
                 </>
               )}
             </button>
           </form>
           
-          <div className="pt-8 border-t border-border/50 text-center space-y-2">
-             <p className="text-[10px] text-muted-foreground/40 uppercase font-black tracking-widest flex items-center justify-center gap-2">
-                <ShieldCheck className="h-3 w-3" /> Encrypted Session Protocol
+          <div className="pt-8 border-t border-border/50 text-center">
+             <p className="text-[10px] text-muted-foreground/40 uppercase font-bold tracking-widest flex items-center justify-center gap-2">
+                <ShieldCheck className="h-3 w-3" /> Secure Management Session
              </p>
           </div>
         </div>
@@ -84,7 +84,7 @@ export default function AdminLayout({
   }
 
   return (
-    <div className="max-w-7xl mx-auto w-full px-6 py-12 pt-32">
+    <div className="max-w-7xl mx-auto w-full px-6 py-20">
       {children}
     </div>
   );
