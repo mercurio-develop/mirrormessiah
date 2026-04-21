@@ -5,18 +5,19 @@ export function getMovies(options: {
   genre?: string | null;
   quality?: string | null;
   year?: string | null;
+  audience?: 'family' | 'adult' | null;
   sort?: 'newest' | 'title_asc' | 'title_desc' | null;
   offset?: number;
   limit?: number;
 } = {}) {
-  const { q, genre, quality, year, sort, offset = 0, limit = 24 } = options;
+  const { q, genre, quality, year, audience, sort, offset = 0, limit = 24 } = options;
   const db = getDb();
   
   const params: any[] = [];
   const whereConditions: string[] = [];
 
   let movieQuery = `
-    SELECT m.id, m.title, m.year, m.quality, m.thumbnail, m.genres, m.rating
+    SELECT m.id, m.title, m.year, m.quality, m.thumbnail, m.genres, m.rating, m.audience
     FROM movies m
   `;
 
@@ -38,6 +39,11 @@ export function getMovies(options: {
   if (year) {
     whereConditions.push('m.year = ?');
     params.push(parseInt(year));
+  }
+
+  if (audience) {
+    whereConditions.push('m.audience = ?');
+    params.push(audience);
   }
 
   if (whereConditions.length > 0) {

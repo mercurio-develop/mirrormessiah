@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { MovieWithFile } from '@/lib/db';
-import { Search, Play, Edit, Loader2, Calendar, Hash, Activity } from 'lucide-react';
+import { Search, Play, Edit, Loader2, Calendar, Hash, Activity, Film } from 'lucide-react';
 
 interface MoviesListProps {
   initialMovies: MovieWithFile[];
@@ -58,61 +58,61 @@ export default function MoviesList({ initialMovies }: MoviesListProps) {
   }, [movies, searchTerm]);
 
   return (
-    <div className="space-y-12">
+    <div className="space-y-8 font-sans">
       <div className="relative group max-w-xl">
-        <div className="absolute inset-y-0 left-0 pl-6 flex items-center pointer-events-none text-primary/40">
+        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-muted-foreground group-focus-within:text-primary transition-colors">
           <Search className="h-4 w-4" />
         </div>
         <input
           type="text"
-          placeholder="SEARCH_REGISTRY_ENTITIES..."
-          className="w-full h-14 bg-card border border-border pl-14 pr-6 text-[11px] font-black uppercase tracking-widest focus:border-primary transition-all text-foreground placeholder:text-muted-foreground/30 rounded-md"
+          placeholder="Filter registry by title or year..."
+          className="w-full h-12 bg-muted/50 border border-border pl-12 pr-6 text-sm font-medium focus:border-primary/50 focus:ring-4 focus:ring-primary/5 transition-all outline-none rounded-xl"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-px bg-border border border-border rounded-lg overflow-hidden">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {filteredMovies.map((movie) => (
-          <div key={movie.id} className="bg-background p-6 flex gap-6 group hover:bg-accent transition-all">
-            <div className="w-24 shrink-0 relative aspect-poster border border-border bg-muted overflow-hidden rounded-sm">
+          <div key={movie.id} className="bg-muted/20 border border-border/50 p-4 flex gap-5 group hover:bg-muted/40 hover:border-border transition-all duration-300 rounded-2xl">
+            <div className="w-20 shrink-0 relative aspect-poster bg-muted rounded-lg overflow-hidden shadow-md">
                <Image
                   src={getPosterUrl(movie.thumbnail)}
                   alt={movie.title}
                   fill
-                  className="object-cover transition-all duration-700 group-hover:scale-105"
-                  sizes="100px"
+                  className="object-cover transition-transform duration-500 group-hover:scale-110"
+                  sizes="80px"
                   onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder.svg'; }}
                 />
             </div>
             
-            <div className="flex-1 flex flex-col justify-between min-w-0">
+            <div className="flex-1 flex flex-col justify-between min-w-0 py-1">
               <div className="space-y-1">
-                <div className="flex justify-between items-center text-[10px] font-black text-primary/40 uppercase tracking-tight">
-                   <span>ID: 0x{movie.id.toString(16).toUpperCase()}</span>
-                   <span className="flex items-center gap-1"><Activity className="h-2.5 w-2.5" /> ONLINE</span>
+                <div className="flex justify-between items-center text-[10px] font-bold text-muted-foreground/50 uppercase tracking-wider">
+                   <span className="font-mono">ID: {movie.id}</span>
+                   <span className="flex items-center gap-1 text-primary/60"><Activity className="h-2.5 w-2.5" /> Active</span>
                 </div>
-                <h3 className="text-base font-black text-foreground uppercase italic truncate">
+                <h3 className="text-sm font-bold text-foreground truncate group-hover:text-primary transition-colors">
                   {movie.title}
                 </h3>
-                <div className="flex gap-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-                  <span className="flex items-center gap-1"><Calendar className="h-3 w-3" /> {movie.year || '3000'}</span>
-                  <span className="flex items-center gap-1"><Hash className="h-3 w-3" /> {movie.quality || 'FHD'}</span>
+                <div className="flex gap-4 text-[11px] font-semibold text-muted-foreground/60">
+                  <span className="flex items-center gap-1"><Calendar className="h-3 w-3" /> {movie.year || 'N/A'}</span>
+                  <span className="flex items-center gap-1 font-mono uppercase tracking-tighter"><Hash className="h-3 w-3" /> {movie.quality || 'HDR'}</span>
                 </div>
               </div>
 
-              <div className="flex gap-2 pt-4">
+              <div className="flex gap-2 pt-3">
                 <Link
                   href={"/watch/" + movie.id}
-                  className="px-4 py-2 bg-muted border border-border text-[10px] font-black uppercase text-foreground hover:bg-accent hover:border-primary/50 transition-all flex items-center gap-2 rounded-sm"
+                  className="flex-1 px-3 py-1.5 bg-muted border border-border hover:border-white/20 text-[10px] font-bold uppercase tracking-widest text-foreground hover:bg-white/5 transition-all flex items-center justify-center gap-2 rounded-lg"
                 >
-                  <Play className="h-3 w-3" /> Preview
+                  <Play className="h-2.5 w-2.5 fill-current" /> Play
                 </Link>
                 <Link
                   href={"/admin/movies/" + movie.id}
-                  className="px-4 py-2 bg-primary/10 border border-primary/20 text-[10px] font-black uppercase text-primary hover:bg-primary hover:text-primary-foreground transition-all flex items-center gap-2 rounded-sm"
+                  className="flex-1 px-3 py-1.5 bg-primary/10 border border-primary/20 text-[10px] font-bold uppercase tracking-widest text-primary hover:bg-primary hover:text-primary-foreground transition-all flex items-center justify-center gap-2 rounded-lg"
                 >
-                  <Edit className="h-3 w-3" /> Edit_Node
+                  <Edit className="h-2.5 w-2.5" /> Edit
                 </Link>
               </div>
             </div>

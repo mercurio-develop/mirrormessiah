@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useAdmin } from '@/contexts/AdminContext';
-import { Lock, ChevronRight, Loader2 } from 'lucide-react';
+import { Lock, ChevronRight, Loader2, ShieldCheck } from 'lucide-react';
 
 export default function AdminLayout({
   children,
@@ -21,39 +21,39 @@ export default function AdminLayout({
     
     const success = await login(password);
     if (!success) {
-      setError('ACCESS_DENIED: INVALID_KEY_SIGNAL');
+      setError('ACCESS_DENIED: INVALID_CREDENTIALS');
     }
     setIsLoading(false);
   };
 
   if (!isAdmin) {
     return (
-      <div className="flex flex-col items-center justify-center py-24 px-6 font-mono">
+      <div className="flex flex-col items-center justify-center min-h-[80vh] px-6 font-sans">
         <div className="w-full max-w-md space-y-12">
           <div className="text-center space-y-4">
             <div className="flex justify-center mb-6">
-              <div className="p-4 border border-primary/20 bg-primary/5 rounded-lg">
-                <Lock className="h-8 w-8 text-primary" />
+              <div className="p-5 bg-primary/10 border border-primary/20 rounded-3xl group">
+                <Lock className="h-10 w-10 text-primary group-hover:scale-110 transition-transform duration-500" />
               </div>
             </div>
-            <h1 className="text-3xl font-black uppercase italic tracking-tighter text-foreground">Identity_Protocol</h1>
-            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.4em]">Administrative Access Required</p>
+            <h1 className="text-4xl font-extrabold tracking-tight text-foreground uppercase italic">Gatekeeper</h1>
+            <p className="text-xs font-bold text-muted-foreground uppercase tracking-[0.3em] opacity-60">Administrative Authorization Required</p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-6">
-            <div className="relative group">
+            <div className="relative">
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="ENTER_GATE_KEY"
+                placeholder="Enter admin password..."
                 required
-                className="w-full h-14 bg-card border border-border rounded-md px-6 text-center text-[11px] font-black uppercase tracking-[0.3em] text-foreground focus:outline-none focus:border-primary/50 transition-all shadow-xl"
+                className="w-full h-16 bg-card border border-border rounded-2xl px-8 text-center text-sm font-bold tracking-[0.2em] text-foreground focus:outline-none focus:border-primary/50 transition-all shadow-2xl"
               />
             </div>
 
             {error && (
-              <p className="text-destructive text-[10px] font-black uppercase tracking-widest text-center animate-flicker">
+              <p className="text-destructive text-xs font-bold uppercase tracking-widest text-center">
                 {error}
               </p>
             )}
@@ -61,28 +61,30 @@ export default function AdminLayout({
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full h-14 bg-primary text-primary-foreground font-black uppercase tracking-[0.3em] text-[10px] hover:bg-primary/90 transition-all flex items-center justify-center gap-3 group disabled:opacity-50 rounded-md shadow-lg shadow-primary/20"
+              className="w-full h-16 bg-primary text-primary-foreground font-extrabold uppercase tracking-widest text-sm hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-3 group disabled:opacity-50 rounded-2xl shadow-xl shadow-primary/20"
             >
               {isLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 className="h-5 w-5 animate-spin" />
               ) : (
                 <>
-                  Verify_Access <ChevronRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                  Unlock Access <ChevronRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
                 </>
               )}
             </button>
           </form>
           
-          <p className="text-center text-[9px] text-muted-foreground/40 uppercase tracking-[0.2em]">
-            Unauthorized access attempts are logged_
-          </p>
+          <div className="pt-8 border-t border-border/50 text-center space-y-2">
+             <p className="text-[10px] text-muted-foreground/40 uppercase font-black tracking-widest flex items-center justify-center gap-2">
+                <ShieldCheck className="h-3 w-3" /> Encrypted Session Protocol
+             </p>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-7xl mx-auto w-full px-6 py-12">
+    <div className="max-w-7xl mx-auto w-full px-6 py-12 pt-32">
       {children}
     </div>
   );

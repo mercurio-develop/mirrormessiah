@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
-import { LogOut, Film, Shield, Terminal, ShieldAlert } from 'lucide-react';
+import { LogOut, Film, Shield, Terminal, LayoutGrid } from 'lucide-react';
 import { useAdmin } from '@/contexts/AdminContext';
 import ThemeToggle from './ThemeToggle';
 
@@ -19,58 +19,81 @@ export default function Navbar() {
       router.push('/');
       router.refresh();
     } catch (error) {
-      console.error('Logout failed:', error);
+      console.error('Sign_Out_Failure:', error);
     }
   };
 
   return (
-    <nav className="bg-background/80 backdrop-blur-md border-b border-border py-3 px-6 sticky top-0 z-[100] flex justify-between items-center font-mono transition-colors">
-      <div className="flex items-center gap-8">
-        <Link href="/" className="flex items-center gap-3 group">
-          <div className="w-9 h-9 bg-primary/10 border border-primary/20 rounded-md flex items-center justify-center group-hover:bg-primary group-hover:text-primary-foreground transition-all">
-            <Film className="w-5 h-5" />
-          </div>
-          <span className="text-base font-black uppercase italic tracking-tighter text-foreground">
-            Mirror<span className="text-primary">Messiah</span>
-          </span>
-        </Link>
-        
-        <Link 
-          href="/admin" 
-          className={`flex items-center gap-2 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest border rounded-md transition-all ${
-            isAdmin 
-              ? 'bg-primary/20 border-primary/50 text-primary' 
-              : 'bg-muted border-border text-muted-foreground hover:text-foreground hover:bg-accent'
-          }`}
-        >
-          {isAdmin ? <Shield className="h-3.5 w-3.5" /> : <Terminal className="h-3.5 w-3.5" />}
-          {isAdmin ? 'System_Authorized' : 'Terminal_Access'}
-        </Link>
-      </div>
+    <nav className="fixed top-0 left-0 right-0 z-[100] transition-all duration-500 glass-effect">
+      <div className="max-w-7xl mx-auto px-6 h-20 flex justify-between items-center">
+        <div className="flex items-center gap-10">
+          <Link href="/" className="flex items-center gap-2 group transition-transform active:scale-95">
+             <div className="relative">
+                <Film className="w-8 h-8 text-primary group-hover:scale-110 transition-transform duration-500" />
+                <div className="absolute inset-0 bg-primary/20 blur-xl scale-150 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
+             </div>
+            <span className="text-2xl font-bold tracking-tighter text-foreground uppercase">
+              Mirror<span className="text-primary">Messiah</span>
+            </span>
+          </Link>
 
-      <div className="flex items-center gap-4 sm:gap-6">
-        {isAdmin && (
-          <>
+          <div className="hidden md:flex items-center gap-8">
             <Link 
-              href="/admin/movies/new" 
-              className="text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:text-primary transition-all flex items-center gap-2 group"
+              href="/" 
+              className={`text-sm font-semibold transition-colors hover:text-primary ${pathname === '/' ? 'text-primary' : 'text-muted-foreground'}`}
             >
-              <Shield className="w-4 h-4 group-hover:text-primary transition-colors" /> <span className="hidden md:inline">Register_Entity</span>
+              Browse
             </Link>
-          </>
-        )}
-        
-        <div className="h-4 w-[1px] bg-border mx-1" />
-        
-        <ThemeToggle />
-        
-        <button 
-          onClick={handleLogout}
-          className="text-[11px] font-black uppercase tracking-widest text-muted-foreground hover:text-destructive transition-all flex items-center gap-2 group"
-          aria-label="Logout"
-        >
-          <LogOut className="w-4 h-4 group-hover:text-destructive transition-colors" /> <span className="hidden sm:inline">Terminate_Session</span>
-        </button>
+            <Link 
+              href="/?audience=family" 
+              className={`text-sm font-bold transition-all px-4 py-1.5 rounded-full border flex items-center gap-2 ${pathname === '/' && typeof window !== 'undefined' && window.location.search.includes('audience=family') ? 'bg-green-600 border-green-500 text-white shadow-[0_0_15px_rgba(22,163,74,0.4)]' : 'bg-green-600/10 border-green-600/20 text-green-500 hover:bg-green-600/20'}`}
+            >
+              <Sparkles className="w-4 h-4" /> Family Mode
+            </Link>
+            {isAdmin && (
+               <Link 
+                href="/admin" 
+                className={`text-sm font-semibold transition-colors hover:text-primary ${pathname.startsWith('/admin') ? 'text-primary' : 'text-muted-foreground'}`}
+              >
+                Dashboard
+              </Link>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-4 sm:gap-6">
+          <div className="flex items-center gap-2">
+            {isAdmin ? (
+               <div className="flex items-center gap-2 px-3 py-1 bg-primary/10 border border-primary/20 rounded-full">
+                  <Shield className="h-3.5 w-3.5 text-primary" />
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-primary">Admin_Active</span>
+               </div>
+            ) : (
+              <Link 
+                href="/admin" 
+                className="p-2 text-muted-foreground hover:text-foreground transition-all hover:bg-white/5 rounded-full"
+                title="Admin Access"
+              >
+                <Terminal className="h-5 w-5" />
+              </Link>
+            )}
+          </div>
+          
+          <div className="h-6 w-px bg-border/50 mx-2" />
+          
+          <ThemeToggle />
+          
+          <button 
+            onClick={handleLogout}
+            className="flex items-center gap-2 pl-2 pr-1 text-sm font-semibold text-muted-foreground hover:text-destructive transition-all group"
+            aria-label="Logout"
+          >
+            <span className="hidden sm:inline group-hover:translate-x-0.5 transition-transform">Sign Out</span>
+            <div className="p-2 rounded-full group-hover:bg-destructive/10 transition-colors">
+              <LogOut className="w-5 h-5" />
+            </div>
+          </button>
+        </div>
       </div>
     </nav>
   );

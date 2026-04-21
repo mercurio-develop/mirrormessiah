@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import MediaPlayer from '@/components/MediaPlayer';
 import HeroBackdrop from '@/components/HeroBackdrop';
-import { ChevronLeft, Star, Calendar, Hash, Clock, Info, Activity } from 'lucide-react';
+import { ChevronLeft, Star, Calendar, Hash, Clock, Info, Activity, Globe, User } from 'lucide-react';
 import { getMovie } from '@/features/movie/queries/get-movie';
 import { getMoviePlayback } from '@/features/movie/queries/get-movie-playback';
 import Image from 'next/image';
@@ -30,22 +30,35 @@ export default async function WatchPage({ params }: WatchPageProps) {
   const posterUrl = getPosterUrl(movie.thumbnail);
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white font-sans selection:bg-primary selection:text-white">
+    <div className="min-h-screen bg-background text-foreground font-sans selection:bg-primary selection:text-white">
+      {/* Immersive Background */}
       {posterUrl && (
-        <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
+        <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none opacity-40">
           <HeroBackdrop src={posterUrl} alt={movie.title} />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/80 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-background via-background/90 to-transparent" />
         </div>
       )}
 
-      <div className="relative z-10 flex flex-col">
-        <section className="w-full bg-black shadow-2xl border-b border-white/5">
-          <div className="aspect-video w-full max-h-[85vh] mx-auto bg-black relative">
+      <div className="relative z-10 flex flex-col pt-20">
+        {/* Navigation / Back Button */}
+        <div className="max-w-7xl mx-auto w-full px-6 py-6">
+          <Link 
+            href="/" 
+            className="inline-flex items-center gap-2 text-muted-foreground hover:text-primary transition-all group"
+          >
+            <ChevronLeft className="h-5 w-5 group-hover:-translate-x-1 transition-transform" />
+            <span className="text-sm font-bold">Back to Movies</span>
+          </Link>
+        </div>
+
+        {/* Player Section */}
+        <section className="w-full max-w-7xl mx-auto px-6 mb-12">
+          <div className="aspect-video w-full bg-black rounded-2xl overflow-hidden shadow-[0_30px_100px_rgba(0,0,0,0.8)] border border-white/5 relative">
             {!movieData ? (
-              <div className="w-full h-full flex flex-col items-center justify-center text-center p-12 bg-[#0a0a0a]">
+              <div className="w-full h-full flex flex-col items-center justify-center text-center p-12 bg-muted/10">
                 <Activity className="h-16 w-16 text-destructive mb-6 animate-pulse" />
-                <h2 className="text-3xl font-black uppercase italic tracking-tighter text-destructive">Signal_Lost</h2>
-                <p className="text-white/40 text-sm mt-2 uppercase tracking-widest">Compliant media stream not detected_</p>
+                <h2 className="text-3xl font-bold tracking-tight">Stream Unavailable</h2>
+                <p className="text-muted-foreground text-sm mt-2 max-w-xs">The requested media format is not supported or the file is missing.</p>
               </div>
             ) : (
               <MediaPlayer
@@ -59,81 +72,95 @@ export default async function WatchPage({ params }: WatchPageProps) {
           </div>
         </section>
 
-        <div className="max-w-7xl mx-auto w-full px-6 md:px-12 py-6 flex justify-between items-center">
-          <Link 
-            href="/" 
-            className="flex items-center gap-2 text-white/40 hover:text-primary transition-all group py-2"
-          >
-            <ChevronLeft className="h-5 w-5 group-hover:-translate-x-1 transition-transform" />
-            <span className="text-xs font-black uppercase tracking-widest italic">Return_to_Registry</span>
-          </Link>
-          <Link 
-            href={"/admin/movies/" + movie.id} 
-            className="text-[10px] font-black text-white/20 uppercase tracking-widest hover:text-white transition-all"
-          >
-            Edit_Registry_Entry
-          </Link>
-        </div>
-
-        <main className="container max-w-7xl mx-auto px-6 md:px-12 pb-32 pt-8">
+        {/* Content Details */}
+        <main className="max-w-7xl mx-auto w-full px-6 pb-32">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-16">
             <div className="lg:col-span-8 space-y-12">
+              {/* Header Info */}
               <div className="space-y-6">
-                <h1 className="text-5xl md:text-7xl font-bold tracking-tight text-foreground leading-tight drop-shadow-[0_0_30px_rgba(139,92,246,0.15)]">
+                <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight leading-[1.1]">
                   {movie.title}
                 </h1>
-                <div className="flex flex-wrap gap-4 pt-2">
-                  <div className="flex items-center gap-2 px-3 py-1 bg-white/5 border border-white/10 rounded-md text-[11px] font-bold text-white/60">
-                    <Calendar className="h-3.5 w-3.5" /> {movie.year}
+                
+                <div className="flex flex-wrap items-center gap-6 pt-2">
+                  <div className="flex items-center gap-1.5 text-sm font-bold">
+                    <Star className="h-5 w-5 text-primary fill-primary" />
+                    <span>{movie.rating || '0.0'}</span>
                   </div>
-                  <div className="flex items-center gap-2 px-3 py-1 bg-white/5 border border-white/10 rounded-md text-[11px] font-bold text-white/60">
-                    <Clock className="h-3.5 w-3.5" /> {movie.runtime ? movie.runtime + 'm' : 'Unknown'}
-                  </div>
-                  <div className="flex items-center gap-2 px-3 py-1 bg-primary/10 border border-primary/30 rounded-md text-[11px] font-bold text-primary">
-                    <Star className="h-3.5 w-3.5 fill-primary/20" /> {movie.rating || '?.?'}
-                  </div>
-                  <div className="flex items-center gap-2 px-3 py-1 bg-white text-black rounded-md text-[11px] font-bold">
-                    <Hash className="h-3.5 w-3.5" /> {movie.quality || 'HDR'}
-                  </div>
+                  <div className="h-4 w-px bg-border/50" />
+                  <span className="text-sm font-bold text-muted-foreground">{movie.year}</span>
+                  <div className="h-4 w-px bg-border/50" />
+                  <span className="text-sm font-bold text-muted-foreground">{movie.runtime ? movie.runtime + ' min' : 'N/A'}</span>
+                  <div className="h-4 w-px bg-border/50" />
+                  <span className="px-2 py-0.5 border border-muted-foreground/30 rounded text-[10px] font-black uppercase tracking-tighter text-muted-foreground">
+                    {movie.quality || 'HDR'}
+                  </span>
+                  {movie.audience && (
+                    <>
+                      <div className="h-4 w-px bg-border/50" />
+                      <span className={`px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest text-white flex items-center gap-1.5 shadow-lg ${movie.audience === 'family' ? 'bg-green-600' : 'bg-red-600'}`}>
+                        <div className="w-1 h-1 rounded-full bg-white animate-pulse" />
+                        {movie.audience}
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
 
+              {/* Synopsis */}
               {movie.plot && (
-                <div className="space-y-6">
-                  <div className="flex items-center gap-3">
-                    <div className="h-[2px] w-8 bg-primary/40" />
-                    <h3 className="text-[10px] font-bold uppercase tracking-[0.3em] text-primary/60">Registry_Entry_Summary</h3>
-                  </div>
-                  <p className="text-lg md:text-xl leading-relaxed text-white/80 font-medium italic border-l-4 border-primary/20 pl-8">
+                <div className="space-y-4">
+                  <h3 className="text-xs font-black uppercase tracking-[0.2em] text-primary">Synopsis</h3>
+                  <p className="text-lg md:text-xl leading-relaxed text-foreground/90 font-medium italic max-w-3xl">
                     {movie.plot}
                   </p>
                 </div>
               )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-white/5 border border-white/5 rounded-xl overflow-hidden backdrop-blur-md">
-                <div className="p-8 bg-black/40 space-y-6">
-                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-primary flex items-center gap-2">
-                    <Info className="h-3.5 w-3.5" /> Identity_Parameters
+              {/* Secondary Details Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-8 border-t border-border/50">
+                <div className="space-y-6">
+                  <h4 className="text-xs font-black uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-2">
+                    <Info className="h-4 w-4" /> Production Details
                   </h4>
-                  <div className="space-y-4 text-xs font-bold">
-                     <div className="flex justify-between"><span className="text-white/20 font-medium">Director</span><span className="text-white/80">{movie.director || 'Anonymous'}</span></div>
-                     <div className="flex justify-between"><span className="text-white/20 font-medium">Language</span><span className="text-white/80">{movie.language || 'English'}</span></div>
-                     <div className="flex justify-between"><span className="text-white/20 font-medium">Genres</span><span className="text-primary/80">{movie.genres || 'Unassigned'}</span></div>
+                  <div className="space-y-4">
+                     <div className="flex flex-col gap-1">
+                        <span className="text-[10px] uppercase font-bold text-muted-foreground/40">Director</span>
+                        <span className="text-sm font-bold flex items-center gap-2"><User className="h-3.5 w-3.5 opacity-40" /> {movie.director || 'Unknown'}</span>
+                     </div>
+                     <div className="flex flex-col gap-1">
+                        <span className="text-[10px] uppercase font-bold text-muted-foreground/40">Language</span>
+                        <span className="text-sm font-bold flex items-center gap-2"><Globe className="h-3.5 w-3.5 opacity-40" /> {movie.language || 'English'}</span>
+                     </div>
+                     <div className="flex flex-col gap-1">
+                        <span className="text-[10px] uppercase font-bold text-muted-foreground/40">Genres</span>
+                        <span className="text-sm font-bold text-primary">{movie.genres || 'Miscellaneous'}</span>
+                     </div>
                   </div>
                 </div>
-                <div className="p-8 bg-black/40 space-y-6">
-                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-primary flex items-center gap-2">
-                    <Activity className="h-3.5 w-3.5" /> Uplink_Metrics
+
+                <div className="space-y-6">
+                  <h4 className="text-xs font-black uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-2">
+                    <Activity className="h-4 w-4" /> Technical Info
                   </h4>
-                  <div className="space-y-4 text-xs font-bold">
-                     <div className="flex justify-between"><span className="text-white/20 font-medium">IMDB_ID</span><span className="text-white/80 tabular-nums">{movie.imdb_id || 'N/A'}</span></div>
-                     <div className="flex justify-between"><span className="text-white/20 font-medium">TMDB_ID</span><span className="text-white/80 tabular-nums">{movie.tmdb_id || 'N/A'}</span></div>
-                     <div className="flex justify-between"><span className="text-white/20 font-medium">Protocol</span><span className="text-white/80">{movieData?.mimeType?.split('/')[1].toUpperCase() || 'RAW'}</span></div>
+                  <div className="space-y-4">
+                     <div className="flex flex-col gap-1">
+                        <span className="text-[10px] uppercase font-bold text-muted-foreground/40">Media Container</span>
+                        <span className="text-sm font-mono font-bold">{movieData?.mimeType?.toUpperCase() || 'UNKNOWN'}</span>
+                     </div>
+                     <div className="flex flex-col gap-1">
+                        <span className="text-[10px] uppercase font-bold text-muted-foreground/40">Database Identifiers</span>
+                        <div className="flex items-center gap-4 text-xs font-mono opacity-60">
+                           <span>IMDB: {movie.imdb_id || 'N/A'}</span>
+                           <span>TMDB: {movie.tmdb_id || 'N/A'}</span>
+                        </div>
+                     </div>
                   </div>
                 </div>
               </div>
             </div>
 
+            {/* Sidebar Poster */}
             <div className="lg:col-span-4 hidden lg:block">
               {posterUrl && (
                 <div className="sticky top-32">
@@ -144,7 +171,15 @@ export default async function WatchPage({ params }: WatchPageProps) {
                       fill
                       className="object-cover group-hover:scale-105 transition-transform duration-700"
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-60" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent opacity-60" />
+                  </div>
+                  <div className="mt-8">
+                     <Link 
+                        href={"/admin/movies/" + movie.id}
+                        className="flex items-center justify-center gap-2 w-full py-4 bg-muted hover:bg-muted/80 text-xs font-bold uppercase tracking-widest rounded-xl transition-all"
+                     >
+                        <Edit className="h-4 w-4" /> Edit Entry
+                     </Link>
                   </div>
                 </div>
               )}
@@ -159,11 +194,11 @@ export default async function WatchPage({ params }: WatchPageProps) {
 export async function generateMetadata({ params }: WatchPageProps) {
   const { id } = await params;
   const movieId = parseInt(id);
-  if (isNaN(movieId)) return { title: 'MirrorMessiah - Signal_Lost' };
+  if (isNaN(movieId)) return { title: 'MirrorMessiah - Unavailable' };
   const movie = getMovie(movieId);
-  if (!movie) return { title: 'MirrorMessiah - Signal_Lost' };
+  if (!movie) return { title: 'MirrorMessiah - Unavailable' };
   return {
-    title: movie.title + " // Archive_Entry",
-    description: movie.plot || "Accessing registry entry " + movieId,
+    title: movie.title + " | MirrorMessiah",
+    description: movie.plot || "View details for " + movie.title,
   };
 }
