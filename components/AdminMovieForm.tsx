@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { Movie } from '@/lib/types';
 import { b64urlEncode } from '@/lib/b64url';
-import { Save, Loader2, AlertCircle, Trash2, Globe, Info, Search, Film, Calendar, Star, Clock, Sparkles, ChevronDown } from 'lucide-react';
+import { Save, Loader2, AlertCircle, Trash2, Globe, Info, Search, Film, Calendar, Star, Clock, Sparkles, ChevronDown, Edit } from 'lucide-react';
 import FileBrowser from './FileBrowser';
 import SubtitleManager from './SubtitleManager';
 

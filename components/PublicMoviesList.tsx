@@ -6,7 +6,22 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { MovieWithFile } from '@/lib/types';
 import { b64urlEncode } from '@/lib/b64url';
-import { Search, Play, Edit, Loader2, Filter, X, ChevronDown, Monitor, ArrowDownAZ, ArrowUpAZ, Clock, Star, Info } from 'lucide-react';
+import {
+    Search,
+    Play,
+    Edit,
+    Loader2,
+    Filter,
+    X,
+    ChevronDown,
+    Monitor,
+    ArrowDownAZ,
+    ArrowUpAZ,
+    Clock,
+    Star,
+    Info,
+    Sparkles
+} from 'lucide-react';
 import { useAdmin } from '@/contexts/AdminContext';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -288,7 +303,8 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
                       </span>
                     )}
                     {(movie as any).has_subtitles === 1 && (
-                      <span className="bg-black/70 backdrop-blur-md text-white text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest shadow-xl border border-white/20">
+                      <span className="bg-primary/20 backdrop-blur-md text-primary text-[9px] font-black px-2 py-0.5 rounded-sm uppercase tracking-tighter border border-primary/30 flex items-center gap-1 shadow-lg">
+                        <Sparkles className="h-2.5 w-2.5 fill-current" />
                         CC
                       </span>
                     )}

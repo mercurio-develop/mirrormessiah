@@ -1,19 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { validateFilePath } from '@/lib/pathenc';
+import { validateFilePath, convertSrtToVtt } from '@/lib/pathenc';
 import { b64urlDecode } from '@/lib/b64url';
 import fs from 'fs';
-
-function srtToVtt(srt: string): string {
-  return 'WEBVTT\n\n' +
-    srt
-      .replace(/\r\n/g, '\n')
-      .replace(/\r/g, '\n')
-      // SRT uses commas for milliseconds; VTT uses dots
-      .replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2')
-      // Strip HTML tags not supported in VTT
-      .replace(/<font[^>]*>/gi, '').replace(/<\/font>/gi, '')
-      .trim();
-}
 
 export async function GET(request: NextRequest) {
   const path = request.nextUrl.searchParams.get('path');
@@ -33,7 +21,7 @@ export async function GET(request: NextRequest) {
 
   const raw = fs.readFileSync(filePath, 'utf-8');
   const isSrt = filePath.toLowerCase().endsWith('.srt');
-  const body = isSrt ? srtToVtt(raw) : raw;
+  const body = isSrt ? convertSrtToVtt(raw) : raw;
 
   return new NextResponse(body, {
     headers: {
