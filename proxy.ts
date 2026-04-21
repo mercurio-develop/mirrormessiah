@@ -5,11 +5,15 @@ import { jwtVerify } from 'jose';
 export default async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
 
-  // 1. Essential public routes (ONLY what is needed for the login screen)
+  // 1. Essential public routes
+  // We exclude stream, images, and subtitle from the middleware to avoid issues with range requests and CORS,
+  // but they have their own internal `requireGateKey` check for security.
   if (
     path === '/login' ||
     path === '/api/auth' || 
     path.startsWith('/api/images') ||
+    path.startsWith('/api/stream') ||
+    path.startsWith('/api/subtitle') ||
     path.startsWith('/_next') ||
     path === '/favicon.ico' ||
     path === '/placeholder.svg'
@@ -42,7 +46,6 @@ export default async function proxy(request: NextRequest) {
 
     return NextResponse.next();
   } catch (error) {
-    console.error('Session_Validation_Failure:', error);
     const response = NextResponse.redirect(new URL('/login', request.url));
     response.cookies.delete('mm_gate_token');
     response.cookies.delete('mm_admin_token');
@@ -52,6 +55,6 @@ export default async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!api/auth|api/images|login|_next/static|_next/image|favicon.ico|placeholder.svg).*)',
+    '/((?!api/auth|api/images|api/stream|api/subtitle|login|_next/static|_next/image|favicon.ico|placeholder.svg).*)',
   ],
 };

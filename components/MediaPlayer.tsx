@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import videojs from 'video.js';
 import 'video.js/dist/video-js.css';
+import TrackList = videojs.TrackList;
 
 interface SubtitleTrack {
   src: string;
@@ -36,6 +37,8 @@ export default function MediaPlayer({
     if (!playerRef.current && videoRef.current) {
       const videoElement = document.createElement('video');
       videoElement.classList.add('video-js', 'vjs-default-skin', 'vjs-big-play-centered', 'vjs-show-big-play-button-on-pause');
+      videoElement.setAttribute('crossorigin', 'anonymous');
+      videoElement.setAttribute('playsinline', 'true');
 
       videoElement.style.margin = 'auto';
       videoElement.style.top = '0';
@@ -101,7 +104,7 @@ export default function MediaPlayer({
       // Remove all existing remote text tracks
       const tracks = player.remoteTextTracks();
       for (let i = tracks.length - 1; i >= 0; i--) {
-        const track = tracks[i];
+        const track= tracks[i];
         player.removeRemoteTextTrack(track);
       }
 

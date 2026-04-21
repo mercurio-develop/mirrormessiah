@@ -4,11 +4,19 @@ import path from 'path';
 import { lookup } from 'mime-types';
 import { validateFilePath } from '@/lib/pathenc';
 import { b64urlDecode } from '@/lib/b64url';
+import { requireGateKey } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
+    // 1. Authenticate
+    try {
+      await requireGateKey(request);
+    } catch (error) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const pathParam = searchParams.get('path');
 
@@ -17,8 +25,6 @@ export async function GET(request: NextRequest) {
     }
 
     let filePath: string;
-    // Check if it's base64 encoded (starts with a-z, A-Z, 0-9, -, _)
-    // or if it's a direct path. We'll try to decode it if it looks like base64.
     try {
       if (!pathParam.startsWith('/') && !pathParam.startsWith('http')) {
         filePath = b64urlDecode(pathParam);
