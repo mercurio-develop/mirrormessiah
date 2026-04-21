@@ -38,7 +38,7 @@ export const GET = withAdminAuth(async (request: Request) => {
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-}
+});
 
 export const DELETE = withAdminAuth(async (request: Request) => {
   try {
