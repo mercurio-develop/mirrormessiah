@@ -23,6 +23,7 @@ import argparse
 import mimetypes
 import os
 import re
+import shutil
 import sqlite3
 import sys
 import time
@@ -58,6 +59,20 @@ SKIP_QUALITY = re.compile(r'2160p|4K|UHD', re.IGNORECASE)
 # ---------------------------------------------------------------------------
 # DB helpers
 # ---------------------------------------------------------------------------
+def backup_db(args) -> None:
+    if hasattr(args, 'no_backup') and args.no_backup:
+        return
+    if not Path(DB_PATH).exists():
+        return
+    
+    bak_path = Path(DB_PATH).with_suffix('.db.bak')
+    try:
+        shutil.copy2(DB_PATH, bak_path)
+        print(f'  [Backup] Registry snapshot created: {bak_path.name}')
+    except Exception as e:
+        print(f'  [Backup] WARNING: Failed to create snapshot: {e}')
+
+
 def open_db() -> sqlite3.Connection:
     if not Path(DB_PATH).exists():
         print(f'ERROR: DB not found: {DB_PATH}')
@@ -341,6 +356,7 @@ def cmd_sync(args):
         print(f'ERROR: Not a directory: {media_dir}')
         sys.exit(1)
 
+    backup_db(args)
     db = open_db()
     library_id = get_library_id(db)
 
@@ -366,6 +382,7 @@ def cmd_ingest(args):
         print(f'ERROR: Path not found: {path}')
         sys.exit(1)
 
+    backup_db(args)
     db = open_db()
     library_id = get_library_id(db)
     ingest_path(db, path, library_id, auto_scrape=not args.no_scrape)
@@ -373,6 +390,8 @@ def cmd_ingest(args):
 
 
 def cmd_scrape(args):
+    if not args.dry_run:
+        backup_db(args)
     db = open_db()
 
     if args.force:
@@ -401,6 +420,7 @@ def cmd_scrape(args):
 
 def cmd_clean_files(args):
     """Remove duplicate file rows, 4K file links, and orphaned file entries."""
+    backup_db(args)
     db = open_db()
     removed = 0
 
@@ -531,6 +551,7 @@ LANG_LABEL   = {'en': 'English', 'es': 'Español', 'fr': 'Français', 'de': 'Deu
 
 def cmd_fetch_subs(args):
     langs: list[str] = [l.strip() for l in args.langs.split(',')]
+    backup_db(args)
     db = open_db()
 
     if args.movie_id:
@@ -646,25 +667,30 @@ def main():
     p_sync = sub.add_parser('sync', help='Scan a directory and ingest new movies')
     p_sync.add_argument('dir', nargs='?', default=MEDIA_DIR, help=f'Path to media directory (default: {MEDIA_DIR})')
     p_sync.add_argument('--no-scrape', action='store_true', help='Skip TMDB scrape after ingest')
+    p_sync.add_argument('--no-backup', action='store_true', help='Skip database backup')
 
     # ingest
     p_ingest = sub.add_parser('ingest', help='Ingest a single movie folder or file')
     p_ingest.add_argument('path', nargs='?', default=MEDIA_DIR, help=f'Path to movie folder or video file (default: {MEDIA_DIR})')
     p_ingest.add_argument('--no-scrape', action='store_true', help='Skip TMDB scrape after ingest')
+    p_ingest.add_argument('--no-backup', action='store_true', help='Skip database backup')
 
     # scrape
     p_scrape = sub.add_parser('scrape', help='Scrape TMDB metadata for movies missing data')
     p_scrape.add_argument('--force',   action='store_true', help='Re-scrape all movies')
     p_scrape.add_argument('--dry-run', action='store_true', help='Preview only, no writes')
+    p_scrape.add_argument('--no-backup', action='store_true', help='Skip database backup')
 
     # fetch-subs
     p_fetch = sub.add_parser('fetch-subs', help='Download subtitles from OpenSubtitles')
     p_fetch.add_argument('--langs',     default='en,es', help='Comma-separated lang codes (default: en,es)')
     p_fetch.add_argument('--force',     action='store_true', help='Re-download even if already present')
     p_fetch.add_argument('--movie-id',  type=int, default=None, metavar='ID', help='Process a single movie by DB id')
+    p_fetch.add_argument('--no-backup', action='store_true', help='Skip database backup')
 
     # clean-files
-    sub.add_parser('clean-files', help='Remove duplicate file rows, 4K links, missing paths')
+    p_clean = sub.add_parser('clean-files', help='Remove duplicate file rows, 4K links, missing paths')
+    p_clean.add_argument('--no-backup', action='store_true', help='Skip database backup')
 
     # status
     sub.add_parser('status', help='Show DB statistics')
