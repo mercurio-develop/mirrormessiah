@@ -173,7 +173,7 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
              </div>
              <input
                 type="text"
-                placeholder="Search by title, director, year, or plot..."
+                placeholder="Search by title, director, year..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full h-12 bg-transparent pl-8 pr-6 text-lg font-semibold placeholder:text-muted-foreground/30 focus:outline-none border-b border-border focus:border-primary transition-all"

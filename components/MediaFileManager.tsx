@@ -17,6 +17,7 @@ export default function MediaFileManager({ movieId }: { movieId: number }) {
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
   const [isBrowserOpen, setIsBrowserOpen] = useState(false);
+  const [isDirBrowserOpen, setIsDirBrowserOpen] = useState(false);
   const [status, setStatus] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
   const [manualPath, setManualPath] = useState('');
   const [showManualInput, setShowManualInput] = useState(false);
@@ -156,6 +157,13 @@ export default function MediaFileManager({ movieId }: { movieId: number }) {
           >
             <LinkIcon className="h-3.5 w-3.5" /> Relink File
           </button>
+          <button
+            type="button"
+            onClick={() => setIsDirBrowserOpen(true)}
+            className="h-9 px-4 bg-zinc-800 text-white text-xs font-bold rounded-xl flex items-center gap-2 hover:bg-zinc-700 transition-all"
+          >
+            <Search className="h-3.5 w-3.5" /> Browse Folders
+          </button>
         </div>
       </div>
 
@@ -243,6 +251,19 @@ export default function MediaFileManager({ movieId }: { movieId: number }) {
         mode="videos"
         onClose={() => setIsBrowserOpen(false)}
         onSelect={handleRelink}
+      />
+
+      <FileBrowser
+        movieId={movieId}
+        isOpen={isDirBrowserOpen}
+        mode="videos"
+        onClose={() => setIsDirBrowserOpen(false)}
+        onSelect={() => {}} // Not used in this mode
+        onSelectDirectory={(dirPath) => {
+            setIsDirBrowserOpen(false);
+            setManualPath(dirPath);
+            setShowManualInput(true);
+        }}
       />
     </div>
   );
