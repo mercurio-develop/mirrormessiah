@@ -27,19 +27,39 @@ export async function GET(
     
     const db = getDb();
     
+    // 1. Try to find an existing file link
     const movieFile = db.prepare(`
-      SELECT f.path, m.title
-      FROM files f
-      JOIN movies m ON f.movie_id = m.id
-      WHERE f.movie_id = ?
+      SELECT f.path, m.library_id
+      FROM movies m
+      LEFT JOIN files f ON f.movie_id = m.id
+      WHERE m.id = ?
       LIMIT 1
-    `).get(movieId) as { path: string; title: string } | undefined;
+    `).get(movieId) as { path: string | null; library_id: number } | undefined;
     
     if (!movieFile) {
-      return NextResponse.json({ error: 'Movie directory not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Movie record not found' }, { status: 404 });
+    }
+
+    let movieDir: string | null = null;
+
+    if (movieFile.path) {
+        movieDir = path.dirname(movieFile.path);
+        if (!fs.existsSync(movieDir)) {
+            movieDir = null; // Directory vanished
+        }
+    }
+
+    // 2. If no file path or directory vanished, fallback to library root
+    if (!movieDir) {
+        const library = db.prepare('SELECT root_path FROM libraries WHERE id = ?').get(movieFile.library_id) as { root_path: string } | undefined;
+        if (library) {
+            movieDir = library.root_path;
+        }
     }
     
-    const movieDir = path.dirname(movieFile.path);
+    if (!movieDir) {
+      return NextResponse.json({ error: 'Sector location could not be determined' }, { status: 404 });
+    }
     
     if (!fs.existsSync(movieDir)) {
       return NextResponse.json({ files: [], message: 'Directory does not exist' });
