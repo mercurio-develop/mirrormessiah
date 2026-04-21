@@ -9,7 +9,7 @@ export default function AdminPage() {
     <div className="flex flex-col gap-12 font-sans">
       <div className="flex flex-col gap-4 border-l-4 border-primary pl-6 py-1">
         <h1 className="text-4xl font-extrabold tracking-tight text-foreground leading-none">System Dashboard</h1>
-        <p className="text-xs font-bold text-muted-foreground uppercase tracking-[0.2em] leading-none opacity-60">Management Console // Authorized Access</p>
+        <p className="text-xs font-bold text-muted-foreground uppercase tracking-[0.2em] leading-none opacity-60">Control Center // Overview</p>
       </div>
 
       {!adminKeyConfigured && (
@@ -20,7 +20,7 @@ export default function AdminPage() {
           <div className="flex-1 space-y-1">
             <h3 className="text-sm font-black uppercase tracking-widest text-destructive">Configuration Required</h3>
             <p className="text-sm text-muted-foreground font-medium">
-              The ADMIN_KEY is not configured. Some administrative features will be locked until the key is added to your environment variables.
+              The ADMIN_KEY is not configured. Dashboard access and management tools require this key to be set in your environment variables.
             </p>
           </div>
         </div>
@@ -99,15 +99,15 @@ export default function AdminPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           <div className="p-6 bg-card/50 border border-border rounded-2xl space-y-4">
-            <div className="text-[10px] font-black text-primary uppercase tracking-widest">Auth Protocol</div>
-            <p className="text-xs text-muted-foreground leading-relaxed font-medium">Update the <code className="text-foreground bg-muted px-1.5 py-0.5 font-bold rounded">ADMIN_KEY</code> in your environment variables to change the gate password.</p>
+            <div className="text-[10px] font-black text-primary uppercase tracking-widest">Authentication</div>
+            <p className="text-xs text-muted-foreground leading-relaxed font-medium">Update the <code className="text-foreground bg-muted px-1.5 py-0.5 font-bold rounded">GATE_KEY</code> for general entry and <code className="text-foreground bg-muted px-1.5 py-0.5 font-bold rounded">ADMIN_KEY</code> for administrative dashboard access.</p>
           </div>
           <div className="p-6 bg-card/50 border border-border rounded-2xl space-y-4">
-            <div className="text-[10px] font-black text-primary uppercase tracking-widest">Asset Sync</div>
+            <div className="text-[10px] font-black text-primary uppercase tracking-widest">Media Assets</div>
             <p className="text-xs text-muted-foreground leading-relaxed font-medium">Posters and backdrops are automatically linked during scanning. Manual sync is available via the CLI tools.</p>
           </div>
           <div className="p-6 bg-card/50 border border-border rounded-2xl space-y-4">
-            <div className="text-[10px] font-black text-primary uppercase tracking-widest">Registry CLI</div>
+            <div className="text-[10px] font-black text-primary uppercase tracking-widest">Command Line</div>
             <p className="text-xs text-muted-foreground leading-relaxed font-medium">Use the provided Python scripts for bulk metadata enrichment and deep library synchronization.</p>
           </div>
         </div>

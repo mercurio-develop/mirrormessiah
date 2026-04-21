@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (!fs.existsSync(filePath)) {
-      return NextResponse.json({ error: 'File not found' }, { status: 404 });
+      return NextResponse.redirect(new URL('/placeholder.svg', request.url));
     }
 
     const mimeType = lookup(filePath) || 'image/jpeg';

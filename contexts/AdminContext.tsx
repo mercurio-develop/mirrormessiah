@@ -7,6 +7,7 @@ interface AdminContextType {
   isDevelopment: boolean;
   login: (password: string) => Promise<boolean>;
   logout: () => Promise<void>;
+  logoutAdmin: () => Promise<void>;
   checkStatus: () => Promise<void>;
 }
 
@@ -29,11 +30,8 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    // Check if we are in development mode
     const isDev = process.env.NODE_ENV === 'development';
     setIsDevelopment(isDev);
-    
-    // Initial sync with server
     checkStatus();
   }, [checkStatus]);
 
@@ -46,7 +44,7 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (res.ok) {
-        setIsAdmin(true);
+        await checkStatus();
         return true;
       }
     } catch (err) {
@@ -64,8 +62,17 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const logoutAdmin = async () => {
+    try {
+      await fetch('/api/auth?mode=admin', { method: 'DELETE' });
+      setIsAdmin(false);
+    } catch (err) {
+      console.error('Admin_Termination_Failure:', err);
+    }
+  };
+
   return (
-    <AdminContext.Provider value={{ isAdmin, isDevelopment, login, logout, checkStatus }}>
+    <AdminContext.Provider value={{ isAdmin, isDevelopment, login, logout, logoutAdmin, checkStatus }}>
       {children}
     </AdminContext.Provider>
   );

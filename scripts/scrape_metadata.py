@@ -12,6 +12,7 @@ Requires: pip install requests python-dotenv
 
 import argparse
 import os
+import re
 import sqlite3
 import sys
 import time
@@ -37,13 +38,29 @@ def tmdb_get(endpoint: str, **params) -> dict:
     return r.json()
 
 
+def _clean_title(title: str) -> str:
+    """Strip punctuation that commonly differs between filenames and TMDB."""
+    return re.sub(r'[^\w\s]', ' ', title).strip()
+
+
 def search_movie(title: str, year: int | None) -> dict | None:
-    params = {'query': title}
-    if year:
-        params['year'] = year
-    data = tmdb_get('/search/movie', **params)
-    results = data.get('results', [])
-    return results[0] if results else None
+    strategies = [
+        {'query': title, 'year': year},           # exact title + year
+        {'query': title},                          # exact title, no year
+        {'query': _clean_title(title), 'year': year},  # cleaned + year
+        {'query': _clean_title(title)},            # cleaned, no year
+    ]
+    for params in strategies:
+        # Skip year=None entries that duplicate a prior attempt
+        if 'year' in params and not params['year']:
+            continue
+        filtered = {k: v for k, v in params.items() if v is not None}
+        data = tmdb_get('/search/movie', **filtered)
+        results = data.get('results', [])
+        if results:
+            return results[0]
+        time.sleep(DELAY)
+    return None
 
 
 def get_details(tmdb_id: int) -> dict:
