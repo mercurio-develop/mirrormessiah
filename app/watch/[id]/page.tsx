@@ -15,7 +15,7 @@ const getPosterUrl = (thumbnail: string | null | undefined): string | null => {
     if (!thumbnail) return null;
     if (thumbnail.startsWith('http')) return thumbnail;
     const cleanPath = thumbnail.replace(/\/+/g, '/');
-    return "/api/images?path=" + encodeURIComponent(cleanPath);
+    return "/api/images?path=" + encodeURIComponent(cleanPath) + "&public=true";
 };
 
 export default async function WatchPage({ params }: WatchPageProps) {
