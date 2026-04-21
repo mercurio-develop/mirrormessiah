@@ -34,27 +34,12 @@ export const POST = withAdminAuth(async (
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    const ext = path.extname(filePath).toLowerCase();
-    const movieDir = path.dirname(filePath);
-    const targetName = `poster${ext}`;
-    const targetPath = path.join(movieDir, targetName);
-
-    // If source is already the target, just update the DB
-    if (path.resolve(filePath) !== path.resolve(targetPath)) {
-        // Handle renaming/copying
-        if (fs.existsSync(targetPath)) {
-            // Backup or just delete old poster? Let's delete for cleanliness as requested
-            fs.unlinkSync(targetPath);
-        }
-        fs.copyFileSync(filePath, targetPath);
-    }
-
-    // Update DB
-    db.prepare("UPDATE movies SET thumbnail = ? WHERE id = ?").run(targetPath, movieId);
+    // Update DB to point directly to the selected file
+    db.prepare("UPDATE movies SET thumbnail = ? WHERE id = ?").run(filePath, movieId);
 
     return NextResponse.json({ 
         success: true, 
-        thumbnail: targetPath 
+        thumbnail: filePath 
     });
 
   } catch (error: any) {

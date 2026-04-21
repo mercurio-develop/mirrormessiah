@@ -34,7 +34,12 @@ const ITEMS_PER_LOAD = 24;
 const getPosterUrl = (thumbnail: string | null | undefined): string => {
   if (!thumbnail) return '/placeholder.svg';
   if (thumbnail.startsWith('http')) return thumbnail;
-  return "/api/images?path=" + b64urlEncode(thumbnail);
+  
+  const [basePath, query] = thumbnail.split('?');
+  let url = "/api/images?path=" + b64urlEncode(basePath);
+  if (query) url += "&" + query;
+  
+  return url;
 };
 
 export default function PublicMoviesList({ initialMovies }: PublicMoviesListProps) {
