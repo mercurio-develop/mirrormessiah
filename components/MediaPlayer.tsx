@@ -48,6 +48,18 @@ export default function MediaPlayer({
 
       videoRef.current.appendChild(videoElement);
 
+      // Add a native track element for the first subtitle to ensure it's available immediately
+      if (subtitles && subtitles.length > 0) {
+        const defaultSub = subtitles[0];
+        const trackElement = document.createElement('track');
+        trackElement.kind = 'captions';
+        trackElement.label = defaultSub.label || 'Default';
+        trackElement.srclang = defaultSub.srclang || 'en';
+        trackElement.src = defaultSub.src;
+        trackElement.default = true;
+        videoElement.appendChild(trackElement);
+      }
+
       const player = videojs(videoElement, {
         controls: true,
         responsive: true,
@@ -59,6 +71,7 @@ export default function MediaPlayer({
           },
           nativeAudioTracks: false,
           nativeVideoTracks: false,
+          withCredentials: true
         },
         sources: [{
           src: src,
@@ -104,29 +117,32 @@ export default function MediaPlayer({
       // Remove all existing remote text tracks
       const tracks = player.remoteTextTracks();
       for (let i = tracks.length - 1; i >= 0; i--) {
-        const track= tracks[i];
-        player.removeRemoteTextTrack(track);
+        const track = (tracks as any)[i];
+        if (track) {
+          player.removeRemoteTextTrack(track);
+        }
       }
+
 
       // Add new ones
       if (subtitles && subtitles.length > 0) {
-        subtitles.forEach((subtitle, index) => {
-          const track = player.addRemoteTextTrack({
-            kind: 'captions',
-            src: subtitle.src,
-            srclang: subtitle.srclang || 'en',
-            label: subtitle.label || 'Subtitles',
-            default: subtitle.default || (index === 0) // Default to first track if none specified
-          }, false);
-          
-          // Force showing the default track
-          if (subtitle.default || index === 0) {
-             // We need to wait for the track to be added to the DOM before setting mode
-             // but addRemoteTextTrack returns a TextTrack object we can use
-             if (track) {
-                track.mode = 'showing';
-             }
-          }
+        console.log(`[MediaPlayer] Adding ${subtitles.length} subtitle tracks`);
+        player.ready(() => {
+          subtitles.forEach((subtitle, index) => {
+            console.log(`[MediaPlayer] Adding track: ${subtitle.label} (${subtitle.src})`);
+            const track = player.addRemoteTextTrack({
+              kind: 'captions',
+              src: subtitle.src,
+              srclang: subtitle.srclang || 'en',
+              label: subtitle.label || 'Subtitles',
+              default: subtitle.default || (index === 0)
+            }, false);
+            
+            if (track) {
+              track.mode = (subtitle.default || index === 0) ? 'showing' : 'disabled';
+              console.log(`[MediaPlayer] Track ${index} mode set to: ${track.mode}`);
+            }
+          });
         });
       }
     }

@@ -26,12 +26,22 @@ export async function GET(request: NextRequest) {
     const isValid = await validateFilePath(filePath);
     if (!isValid) return new NextResponse('Access denied', { status: 403 });
 
-    if (!fs.existsSync(filePath)) return new NextResponse('Not found', { status: 404 });
+    if (!fs.existsSync(filePath)) {
+      console.error(`[SubtitleProxy] File not found: ${filePath}`);
+      return new NextResponse('Not found', { status: 404 });
+    }
 
-    const raw = fs.readFileSync(filePath, 'utf-8');
+    let raw = fs.readFileSync(filePath, 'utf-8');
+
+    // Strip BOM if present
+    if (raw.charCodeAt(0) === 0xFEFF) {
+      raw = raw.slice(1);
+    }
+
+    console.log(`[SubtitleProxy] Serving ${filePath} (${raw.length} chars)`);
+
     const isSrt = filePath.toLowerCase().endsWith('.srt');
     const body = isSrt ? convertSrtToVtt(raw) : raw;
-
     return new NextResponse(body, {
       headers: {
         'Content-Type': 'text/vtt; charset=utf-8',
