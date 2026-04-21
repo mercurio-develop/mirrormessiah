@@ -11,30 +11,26 @@ export function getDb(): Database.Database {
     const isProd = process.env.NODE_ENV === 'production';
     const isBuild = process.env.NEXT_PHASE === 'phase-production-build';
     
-    const defaultPath = path.join(/* turbopackIgnore: true */ process.cwd(), 'media.db');
+    const devPath = path.join(/* turbopackIgnore: true */ process.cwd(), 'media.db');
     const prodPath = '/app/data/media.db';
     
-    // In Production, strictly follow DB_PATH or /app/media.db
-    // In Dev, follow DB_PATH or the local root file
-    let dbPath = process.env.DB_PATH || (isProd ? prodPath : defaultPath);
+    // In production, we force the mounted path to ensure data synchronization
+    const dbPath = isProd ? prodPath : (process.env.DB_PATH || devPath);
 
-    // Build-phase resilience (keep this for Next.js compilation)
+    // Build-phase resilience
     if (isBuild) {
-        console.warn('Build Phase: Using temporary in-memory database.');
         return new Database(':memory:');
     }
 
-    // Runtime Check: If the file is missing, we need to know!
     if (!fs.existsSync(dbPath)) {
-        console.error(`[Database] CRITICAL ERROR: Database file not found at: ${dbPath}`);
-        console.error(`[Database] Available directory content: ${fs.readdirSync(path.dirname(dbPath)).join(', ')}`);
+        console.error(`[Database] ERROR: File not found at ${dbPath}`);
         
-        // Fallback to local root only if in dev
-        if (!isProd && fs.existsSync(defaultPath)) {
-            dbPath = defaultPath;
-        } else {
-            throw new Error(`Registry Connection Failure: File not found at ${dbPath}`);
+        // Fallback for dev only
+        if (!isProd && fs.existsSync(devPath)) {
+            return new Database(devPath);
         }
+        
+        throw new Error(`Registry Connection Failure: ${dbPath} not found.`);
     }
 
     try {
@@ -43,9 +39,9 @@ export function getDb(): Database.Database {
         db.pragma('journal_mode = WAL');
         
         const count = db.prepare('SELECT COUNT(*) as c FROM movies').get() as { c: number };
-        console.log(`[Database] CONNECTED TO: ${dbPath} | ENTITIES_FOUND: ${count.c}`);
+        console.log(`[Database] SYNC_ACTIVE: ${dbPath} | MOVIES: ${count.c}`);
     } catch (err: any) {
-        console.error(`[Database] CONNECTION_FAILURE: ${err.message}`);
+        console.error(`[Database] SYNC_FAILURE: ${err.message}`);
         throw err;
     }
   }
