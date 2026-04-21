@@ -304,25 +304,31 @@ def ingest_path(db: sqlite3.Connection, path: Path, library_id: int, auto_scrape
         'SELECT id FROM movies WHERE LOWER(title)=LOWER(?) AND COALESCE(year,0)=COALESCE(?,0)',
         (meta['title'], meta['year']),
     ).fetchone()
+    
+    newly_added = False
     if existing:
-        print(f'  Already in DB: {meta["title"]} ({meta["year"]})')
-        return False
-
-    # Insert movie row
-    cur = db.execute(
-        "INSERT INTO movies (title, year, quality) VALUES (?,?,?)",
-        (meta['title'], meta['year'], meta['quality']),
-    )
-    movie_id = cur.lastrowid
+        movie_id = existing['id']
+        print(f'  Found existing movie, updating file paths: {meta["title"]} ({meta["year"]})')
+    else:
+        # Insert movie row
+        cur = db.execute(
+            "INSERT INTO movies (title, year, quality) VALUES (?,?,?)",
+            (meta['title'], meta['year'], meta['quality']),
+        )
+        movie_id = cur.lastrowid
+        newly_added = True
 
     # Insert file rows
+    files_added = 0
     for vf in video_files:
         size = vf.stat().st_size
         container = vf.suffix.lstrip('.')
-        db.execute(
+        cur = db.execute(
             "INSERT OR IGNORE INTO files (library_id, movie_id, path, size_bytes, container) VALUES (?,?,?,?,?)",
             (library_id, movie_id, str(vf), size, container),
         )
+        if cur.rowcount > 0:
+            files_added += 1
 
     # Insert subtitle rows
     for sf in find_subtitle_files(folder):
@@ -334,17 +340,21 @@ def ingest_path(db: sqlite3.Connection, path: Path, library_id: int, auto_scrape
         )
 
     db.commit()
-    print(f'  + Ingested: {meta["title"]} ({meta["year"]}) [{meta["quality"]}] — {len(video_files)} file(s)')
+    if newly_added:
+        print(f'  + Ingested: {meta["title"]} ({meta["year"]}) [{meta["quality"]}] — {len(video_files)} file(s)')
+    elif files_added > 0:
+        print(f'  Relinked {files_added} file(s) for {meta["title"]} ({meta["year"]})')
+
 
     # Auto-scrape metadata — only for movies without existing data
-    if auto_scrape and API_KEY:
+    if auto_scrape and API_KEY and newly_added:
         movie_row = dict(db.execute('SELECT * FROM movies WHERE id=?', (movie_id,)).fetchone())
         if not movie_row.get('plot'):
             print(f'    Scraping TMDB…', end=' ', flush=True)
             result = scrape_one(db, movie_row)
             print(result)
 
-    return True
+    return newly_added
 
 
 # ---------------------------------------------------------------------------
@@ -420,40 +430,64 @@ def cmd_scrape(args):
 
 def cmd_clean_files(args):
     """Remove duplicate file rows, 4K file links, and orphaned file entries."""
-    backup_db(args)
+    if not getattr(args, 'report_only', False):
+        backup_db(args)
     db = open_db()
     removed = 0
+    reported = 0
 
-    # 1. Remove 4K/UHD/BLURAY file links (keep the movie row, just unlink the file)
-    rows = db.execute("SELECT id, path FROM files WHERE path LIKE '%2160p%' OR path LIKE '%4K%' OR path LIKE '%UHD%' OR path LIKE '%BLURAY%' OR path LIKE '%BDRIP%' OR path LIKE '%BRRIP%'").fetchall()
-    for row in rows:
-        db.execute('DELETE FROM files WHERE id=?', (row[0],))
-        print(f'  unlinked 4K: {Path(row[1]).name}')
-        removed += 1
+    # 1. Remove 4K/UHD file links (keep the movie row, just unlink the file)
+    rows = db.execute("SELECT id, path FROM files WHERE path LIKE '%2160p%' OR path LIKE '%4K%' OR path LIKE '%UHD%'").fetchall()
+    if rows:
+        print("\n--- Non-compliant files (4K/UHD) ---")
+        for row in rows:
+            if getattr(args, 'report_only', False):
+                print(f"  [REPORT] Would unlink: {Path(row['path']).name}")
+                reported += 1
+            else:
+                db.execute('DELETE FROM files WHERE id=?', (row['id'],))
+                print(f"  Unlinked: {Path(row['path']).name}")
+                removed += 1
 
     # 2. Remove duplicate file rows (same movie_id + path, keep lowest id)
     dupe_rows = db.execute('''
-        SELECT id FROM files WHERE id NOT IN (
+        SELECT id, path FROM files WHERE id NOT IN (
             SELECT MIN(id) FROM files GROUP BY movie_id, path
         )
     ''').fetchall()
-    for row in dupe_rows:
-        db.execute('DELETE FROM files WHERE id=?', (row[0],))
-        removed += 1
     if dupe_rows:
-        print(f'  removed {len(dupe_rows)} duplicate file rows')
+        print("\n--- Duplicate file entries ---")
+        for row in dupe_rows:
+            if getattr(args, 'report_only', False):
+                print(f"  [REPORT] Would remove duplicate entry for: {Path(row['path']).name}")
+                reported += 1
+            else:
+                db.execute('DELETE FROM files WHERE id=?', (row['id'],))
+                removed += 1
+        if not getattr(args, 'report_only', False) and dupe_rows:
+            print(f"  Removed {len(dupe_rows)} duplicate file rows")
 
     # 3. Remove file rows pointing to missing paths
     all_files = db.execute('SELECT id, path FROM files').fetchall()
-    missing = [(id, p) for id, p in all_files if not Path(p).exists()]
-    for id, p in missing:
-        db.execute('DELETE FROM files WHERE id=?', (id,))
-        print(f'  removed missing: {Path(p).name}')
-        removed += 1
-
-    db.commit()
+    missing = [(f['id'], f['path']) for f in all_files if not Path(f['path']).exists()]
+    if missing:
+        print("\n--- Missing file paths ---")
+        for id, p in missing:
+            if getattr(args, 'report_only', False):
+                print(f"  [REPORT] Missing file: {p}")
+                reported += 1
+            else:
+                db.execute('DELETE FROM files WHERE id=?', (id,))
+                print(f"  Removed missing file record: {Path(p).name}")
+                removed += 1
+    
+    if not getattr(args, 'report_only', False):
+        db.commit()
+        print(f'\nDone. {removed} file rows removed.')
+    else:
+        print(f'\nReport finished. {reported} issues found. Run without --report-only to fix.')
+        
     db.close()
-    print(f'\nDone. {removed} file rows removed.')
 
 
 def cmd_status(args):
@@ -473,16 +507,26 @@ def cmd_status(args):
     print()
 
 
+def cmd_relink(args):
+    path = Path(args.path)
+    if not path.exists():
+        print(f'ERROR: Path not found: {path}')
+        sys.exit(1)
+
+    backup_db(args)
+    db = open_db()
+    library_id = get_library_id(db)
+    ingest_path(db, path, library_id, auto_scrape=not args.no_scrape)
+    db.close()
+
+
 # ---------------------------------------------------------------------------
 # OpenSubtitles helpers
 # ---------------------------------------------------------------------------
 OPENSUBS_BASE = 'https://api.opensubtitles.com/api/v1'
 OPENSUBS_KEY  = os.getenv('OPENSUBS_API_KEY', '')
 OPENSUBS_UA   = 'MirrorMessiah v1.0'
-
 _opensubs_token: str | None = None
-
-
 def opensubs_login() -> str:
     global _opensubs_token
     if _opensubs_token:
@@ -502,16 +546,12 @@ def opensubs_login() -> str:
     r.raise_for_status()
     _opensubs_token = r.json()['token']
     return _opensubs_token
-
-
 def _opensubs_headers(token: str) -> dict:
     return {
         'Api-Key': OPENSUBS_KEY,
         'Authorization': f'Bearer {token}',
         'User-Agent': OPENSUBS_UA,
     }
-
-
 def opensubs_search(imdb_id: str, lang: str, token: str) -> list[dict]:
     """Search subtitles by IMDB ID and language code (e.g. 'en', 'es')."""
     # OpenSubtitles uses numeric IMDB ID without 'tt' prefix
@@ -528,8 +568,6 @@ def opensubs_search(imdb_id: str, lang: str, token: str) -> list[dict]:
         return []
     r.raise_for_status()
     return r.json().get('data', [])
-
-
 def opensubs_get_download_url(file_id: int, token: str) -> str | None:
     r = requests.post(
         f'{OPENSUBS_BASE}/download',
@@ -542,13 +580,9 @@ def opensubs_get_download_url(file_id: int, token: str) -> str | None:
         return None
     r.raise_for_status()
     return r.json().get('link')
-
-
 LANG3_FROM_2 = {'en': 'eng', 'es': 'spa', 'fr': 'fre', 'de': 'ger', 'pt': 'por', 'it': 'ita', 'ja': 'jpn'}
 LANG_LABEL   = {'en': 'English', 'es': 'Español', 'fr': 'Français', 'de': 'Deutsch',
                 'pt': 'Português', 'it': 'Italiano', 'ja': '日本語'}
-
-
 def cmd_fetch_subs(args):
     langs: list[str] = [l.strip() for l in args.langs.split(',')]
     backup_db(args)
@@ -651,8 +685,6 @@ def cmd_fetch_subs(args):
 
     db.close()
     print(f'\nDone. {total_added} subtitle(s) added.')
-
-
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
@@ -675,6 +707,12 @@ def main():
     p_ingest.add_argument('--no-scrape', action='store_true', help='Skip TMDB scrape after ingest')
     p_ingest.add_argument('--no-backup', action='store_true', help='Skip database backup')
 
+    # relink
+    p_relink = sub.add_parser('relink', help='Re-link files for an existing movie entry')
+    p_relink.add_argument('path', help='Path to the movie folder or video file to re-link')
+    p_relink.add_argument('--no-scrape', action='store_true', help='Skip TMDB scrape if a new movie is created')
+    p_relink.add_argument('--no-backup', action='store_true', help='Skip database backup')
+    
     # scrape
     p_scrape = sub.add_parser('scrape', help='Scrape TMDB metadata for movies missing data')
     p_scrape.add_argument('--force',   action='store_true', help='Re-scrape all movies')
@@ -691,6 +729,7 @@ def main():
     # clean-files
     p_clean = sub.add_parser('clean-files', help='Remove duplicate file rows, 4K links, missing paths')
     p_clean.add_argument('--no-backup', action='store_true', help='Skip database backup')
+    p_clean.add_argument('--report-only', action='store_true', help='Only report issues, do not delete')
 
     # status
     sub.add_parser('status', help='Show DB statistics')
@@ -704,6 +743,7 @@ def main():
         'fetch-subs':  cmd_fetch_subs,
         'clean-files': cmd_clean_files,
         'status':      cmd_status,
+        'relink':      cmd_relink,
     }
     dispatch[args.command](args)
 
