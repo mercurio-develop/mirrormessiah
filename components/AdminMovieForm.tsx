@@ -4,8 +4,10 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { Movie } from '@/lib/db';
+import { b64urlEncode } from '@/lib/pathenc';
 import { Save, Loader2, AlertCircle, Trash2, Globe, Info, Search, Film, Calendar, Star, Clock, Sparkles, ChevronDown } from 'lucide-react';
 import FileBrowser from './FileBrowser';
+import SubtitleManager from './SubtitleManager';
 
 interface AdminMovieFormProps {
   movie: Movie;
@@ -14,8 +16,7 @@ interface AdminMovieFormProps {
 const getPosterUrl = (thumbnail: string | null | undefined): string => {
   if (!thumbnail) return '/placeholder.svg';
   if (thumbnail.startsWith('http')) return thumbnail;
-  const cleanPath = thumbnail.replace(/\/+/g, '/');
-  return "/api/images?path=" + encodeURIComponent(cleanPath) + "&public=true";
+  return "/api/images?path=" + b64urlEncode(thumbnail);
 };
 
 export default function AdminMovieForm({ movie }: AdminMovieFormProps) {
@@ -299,6 +300,9 @@ export default function AdminMovieForm({ movie }: AdminMovieFormProps) {
                 className="w-full bg-background border border-border rounded-xl p-6 text-sm font-medium leading-relaxed text-foreground/80 focus:border-primary transition-all outline-none"
               />
             </div>
+
+            {/* Subtitles */}
+            <SubtitleManager movieId={movie.id} />
           </div>
 
           {/* Sidebar */}

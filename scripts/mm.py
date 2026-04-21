@@ -454,6 +454,185 @@ def cmd_status(args):
 
 
 # ---------------------------------------------------------------------------
+# OpenSubtitles helpers
+# ---------------------------------------------------------------------------
+OPENSUBS_BASE = 'https://api.opensubtitles.com/api/v1'
+OPENSUBS_KEY  = os.getenv('OPENSUBS_API_KEY', '')
+OPENSUBS_UA   = 'MirrorMessiah v1.0'
+
+_opensubs_token: str | None = None
+
+
+def opensubs_login() -> str:
+    global _opensubs_token
+    if _opensubs_token:
+        return _opensubs_token
+    user = os.getenv('OPENSUBS_USERNAME', '')
+    pwd  = os.getenv('OPENSUBS_PASSWORD', '')
+    if not user or not pwd:
+        raise RuntimeError('OPENSUBS_USERNAME and OPENSUBS_PASSWORD must be set in .env')
+    if not OPENSUBS_KEY:
+        raise RuntimeError('OPENSUBS_API_KEY must be set in .env')
+    r = requests.post(
+        f'{OPENSUBS_BASE}/login',
+        json={'username': user, 'password': pwd},
+        headers={'Api-Key': OPENSUBS_KEY, 'User-Agent': OPENSUBS_UA, 'Content-Type': 'application/json'},
+        timeout=10,
+    )
+    r.raise_for_status()
+    _opensubs_token = r.json()['token']
+    return _opensubs_token
+
+
+def _opensubs_headers(token: str) -> dict:
+    return {
+        'Api-Key': OPENSUBS_KEY,
+        'Authorization': f'Bearer {token}',
+        'User-Agent': OPENSUBS_UA,
+    }
+
+
+def opensubs_search(imdb_id: str, lang: str, token: str) -> list[dict]:
+    """Search subtitles by IMDB ID and language code (e.g. 'en', 'es')."""
+    # OpenSubtitles uses numeric IMDB ID without 'tt' prefix
+    numeric_id = imdb_id.lstrip('t') if imdb_id else None
+    if not numeric_id:
+        return []
+    r = requests.get(
+        f'{OPENSUBS_BASE}/subtitles',
+        params={'imdb_id': numeric_id, 'languages': lang, 'type': 'movie', 'order_by': 'download_count'},
+        headers=_opensubs_headers(token),
+        timeout=10,
+    )
+    if r.status_code == 404:
+        return []
+    r.raise_for_status()
+    return r.json().get('data', [])
+
+
+def opensubs_get_download_url(file_id: int, token: str) -> str | None:
+    r = requests.post(
+        f'{OPENSUBS_BASE}/download',
+        json={'file_id': file_id},
+        headers={**_opensubs_headers(token), 'Content-Type': 'application/json'},
+        timeout=10,
+    )
+    if r.status_code == 406:
+        print('  ⚠ Download quota exceeded (free tier: 5/day)')
+        return None
+    r.raise_for_status()
+    return r.json().get('link')
+
+
+LANG3_FROM_2 = {'en': 'eng', 'es': 'spa', 'fr': 'fre', 'de': 'ger', 'pt': 'por', 'it': 'ita', 'ja': 'jpn'}
+LANG_LABEL   = {'en': 'English', 'es': 'Español', 'fr': 'Français', 'de': 'Deutsch',
+                'pt': 'Português', 'it': 'Italiano', 'ja': '日本語'}
+
+
+def cmd_fetch_subs(args):
+    langs: list[str] = [l.strip() for l in args.langs.split(',')]
+    db = open_db()
+
+    if args.movie_id:
+        movies = db.execute(
+            'SELECT id, title, year, imdb_id FROM movies WHERE id = ?', (args.movie_id,)
+        ).fetchall()
+    elif args.force:
+        movies = db.execute('SELECT id, title, year, imdb_id FROM movies').fetchall()
+    else:
+        # Only movies that are missing at least one of the requested languages
+        lang3s = [LANG3_FROM_2.get(l, l) for l in langs]
+        placeholders = ','.join('?' * len(lang3s))
+        movies = db.execute(f'''
+            SELECT id, title, year, imdb_id FROM movies
+            WHERE id NOT IN (
+                SELECT DISTINCT movie_id FROM subtitles WHERE lang IN ({placeholders})
+            )
+        ''', lang3s).fetchall()
+
+    print(f'\nfetch-subs: {len(movies)} movies to process, langs={langs}\n')
+    if not movies:
+        print('Nothing to do.')
+        db.close()
+        return
+
+    try:
+        token = opensubs_login()
+    except Exception as e:
+        print(f'Login failed: {e}')
+        db.close()
+        return
+
+    total_added = 0
+
+    for movie in movies:
+        mid, title, year, imdb_id = movie['id'], movie['title'], movie['year'], movie['imdb_id']
+        if not imdb_id:
+            print(f'  SKIP {title} — no IMDB ID')
+            continue
+
+        # Determine save folder from existing files
+        row = db.execute('SELECT path FROM files WHERE movie_id = ? LIMIT 1', (mid,)).fetchone()
+        if not row:
+            print(f'  SKIP {title} — no file path in DB')
+            continue
+        save_dir = Path(row['path']).parent
+
+        print(f'  {title} ({year}) [{imdb_id}]')
+
+        for lang in langs:
+            lang3 = LANG3_FROM_2.get(lang, lang)
+            label = LANG_LABEL.get(lang, lang.upper())
+
+            # Skip if already present for this lang
+            existing = db.execute(
+                'SELECT id FROM subtitles WHERE movie_id = ? AND lang = ?', (mid, lang3)
+            ).fetchone()
+            if existing and not args.force:
+                print(f'    [{lang}] already registered, skip')
+                continue
+
+            results = opensubs_search(imdb_id, lang, token)
+            if not results:
+                print(f'    [{lang}] no results')
+                continue
+
+            # Pick first result (already sorted by download_count)
+            best = results[0]
+            files = best.get('attributes', {}).get('files', [])
+            if not files:
+                print(f'    [{lang}] no file in result')
+                continue
+
+            file_id = files[0]['file_id']
+            download_url = opensubs_get_download_url(file_id, token)
+            if not download_url:
+                break  # quota hit — stop all downloads
+
+            # Download SRT content
+            r = requests.get(download_url, timeout=30)
+            r.raise_for_status()
+
+            safe_title = re.sub(r'[^\w\s-]', '', title).strip().replace(' ', '_')
+            out_path = save_dir / f'{safe_title}.{lang}.srt'
+            out_path.write_bytes(r.content)
+
+            # Register in DB
+            size = out_path.stat().st_size
+            db.execute(
+                'INSERT OR REPLACE INTO subtitles (movie_id, path, lang, label, format, size_bytes) VALUES (?, ?, ?, ?, ?, ?)',
+                (mid, str(out_path), lang3, label, 'srt', size),
+            )
+            db.commit()
+            total_added += 1
+            print(f'    [{lang}] saved → {out_path.name}')
+            time.sleep(1)  # be polite to the API
+
+    db.close()
+    print(f'\nDone. {total_added} subtitle(s) added.')
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 def main():
@@ -478,6 +657,12 @@ def main():
     p_scrape.add_argument('--force',   action='store_true', help='Re-scrape all movies')
     p_scrape.add_argument('--dry-run', action='store_true', help='Preview only, no writes')
 
+    # fetch-subs
+    p_fetch = sub.add_parser('fetch-subs', help='Download subtitles from OpenSubtitles')
+    p_fetch.add_argument('--langs',     default='en,es', help='Comma-separated lang codes (default: en,es)')
+    p_fetch.add_argument('--force',     action='store_true', help='Re-download even if already present')
+    p_fetch.add_argument('--movie-id',  type=int, default=None, metavar='ID', help='Process a single movie by DB id')
+
     # clean-files
     sub.add_parser('clean-files', help='Remove duplicate file rows, 4K links, missing paths')
 
@@ -490,6 +675,7 @@ def main():
         'sync':        cmd_sync,
         'ingest':      cmd_ingest,
         'scrape':      cmd_scrape,
+        'fetch-subs':  cmd_fetch_subs,
         'clean-files': cmd_clean_files,
         'status':      cmd_status,
     }

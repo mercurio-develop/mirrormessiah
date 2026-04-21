@@ -5,6 +5,7 @@ import HeroBackdrop from '@/components/HeroBackdrop';
 import { ChevronLeft, Star, Calendar, Hash, Clock, Info, Activity, Globe, User, Edit } from 'lucide-react';
 import { getMovie } from '@/features/movie/queries/get-movie';
 import { getMoviePlayback } from '@/features/movie/queries/get-movie-playback';
+import { b64urlEncode } from '@/lib/pathenc';
 import Image from 'next/image';
 
 interface WatchPageProps {
@@ -14,8 +15,7 @@ interface WatchPageProps {
 const getPosterUrl = (thumbnail: string | null | undefined): string | null => {
     if (!thumbnail) return null;
     if (thumbnail.startsWith('http')) return thumbnail;
-    const cleanPath = thumbnail.replace(/\/+/g, '/');
-    return "/api/images?path=" + encodeURIComponent(cleanPath) + "&public=true";
+    return "/api/images?path=" + b64urlEncode(thumbnail);
 };
 
 export default async function WatchPage({ params }: WatchPageProps) {
@@ -169,6 +169,7 @@ export default async function WatchPage({ params }: WatchPageProps) {
                       src={posterUrl}
                       alt={movie.title}
                       fill
+                      unoptimized
                       className="object-cover group-hover:scale-105 transition-transform duration-700"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent opacity-60" />

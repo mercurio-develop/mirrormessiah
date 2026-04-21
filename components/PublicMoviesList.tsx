@@ -5,6 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { MovieWithFile } from '@/lib/db';
+import { b64urlEncode } from '@/lib/pathenc';
 import { Search, Play, Edit, Loader2, Filter, X, ChevronDown, Monitor, ArrowDownAZ, ArrowUpAZ, Clock, Star, Info } from 'lucide-react';
 import { useAdmin } from '@/contexts/AdminContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -18,8 +19,7 @@ const ITEMS_PER_LOAD = 24;
 const getPosterUrl = (thumbnail: string | null | undefined): string => {
   if (!thumbnail) return '/placeholder.svg';
   if (thumbnail.startsWith('http')) return thumbnail;
-  const cleanPath = thumbnail.replace(/\/+/g, '/');
-  return "/api/images?path=" + encodeURIComponent(cleanPath) + "&public=true";
+  return "/api/images?path=" + b64urlEncode(thumbnail);
 };
 
 export default function PublicMoviesList({ initialMovies }: PublicMoviesListProps) {
@@ -285,6 +285,11 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
                       <span className="bg-red-600/90 backdrop-blur-md text-white text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest flex items-center gap-1.5 shadow-xl">
                         <div className="w-1 h-1 rounded-full bg-white animate-pulse" />
                         Adult
+                      </span>
+                    )}
+                    {(movie as any).has_subtitles === 1 && (
+                      <span className="bg-black/70 backdrop-blur-md text-white text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest shadow-xl border border-white/20">
+                        CC
                       </span>
                     )}
                   </div>
