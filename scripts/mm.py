@@ -54,7 +54,7 @@ FOLDER_RE = re.compile(
     re.IGNORECASE,
 )
 
-SKIP_QUALITY = re.compile(r'2160p|4K|UHD', re.IGNORECASE)
+SKIP_QUALITY = re.compile(r'2160p|4K|UHD|BLURAY|BRRIP|BDRIP', re.IGNORECASE)
 
 # ---------------------------------------------------------------------------
 # DB helpers
@@ -424,8 +424,8 @@ def cmd_clean_files(args):
     db = open_db()
     removed = 0
 
-    # 1. Remove 4K/UHD file links (keep the movie row, just unlink the file)
-    rows = db.execute("SELECT id, path FROM files WHERE path LIKE '%2160p%' OR path LIKE '%4K%' OR path LIKE '%UHD%'").fetchall()
+    # 1. Remove 4K/UHD/BLURAY file links (keep the movie row, just unlink the file)
+    rows = db.execute("SELECT id, path FROM files WHERE path LIKE '%2160p%' OR path LIKE '%4K%' OR path LIKE '%UHD%' OR path LIKE '%BLURAY%' OR path LIKE '%BDRIP%' OR path LIKE '%BRRIP%'").fetchall()
     for row in rows:
         db.execute('DELETE FROM files WHERE id=?', (row[0],))
         print(f'  unlinked 4K: {Path(row[1]).name}')
