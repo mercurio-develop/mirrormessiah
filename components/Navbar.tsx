@@ -5,16 +5,15 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { LogOut, Film, Shield, Terminal, LayoutGrid, Sparkles } from 'lucide-react';
 import { useAdmin } from '@/contexts/AdminContext';
 import ThemeToggle from './ThemeToggle';
+import { Suspense } from 'react';
 
-export default function Navbar() {
+function NavbarContent() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { isAdmin, isDevelopment, logout, logoutAdmin } = useAdmin();
 
   const isFamilyMode = searchParams.get('audience') === 'family';
-
-  if (pathname === '/login') return null;
 
   const toggleFamilyMode = () => {
     const params = new URLSearchParams(searchParams.toString());
@@ -46,6 +45,8 @@ export default function Navbar() {
       console.error('Sign_Out_Failure:', error);
     }
   };
+
+  if (pathname === '/login') return null;
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-[100] transition-all duration-500 glass-effect">
@@ -119,5 +120,13 @@ export default function Navbar() {
         </div>
       </div>
     </nav>
+  );
+}
+
+export default function Navbar() {
+  return (
+    <Suspense fallback={null}>
+      <NavbarContent />
+    </Suspense>
   );
 }

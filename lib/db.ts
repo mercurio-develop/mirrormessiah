@@ -8,8 +8,7 @@ let db: Database.Database | null = null;
 
 export function getDb(): Database.Database {
   if (!db) {
-    const defaultPath = path.join(process.cwd(), 'media.db');
-    const dbPath = process.env.DB_PATH || defaultPath;
+    const dbPath = path.join(process.cwd(), 'media.db');
     
     if (!fs.existsSync(dbPath)) {
         throw new Error('Database access failure: ' + dbPath);
