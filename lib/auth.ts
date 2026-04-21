@@ -74,6 +74,33 @@ export function withAdminAuth<T extends any[]>(
   };
 }
 
+/**
+ * Validates that the user has at least general app access (GATE_KEY)
+ */
+export async function requireGateKey(request: Request): Promise<void> {
+  const gateKey = process.env.GATE_KEY;
+
+  if (!gateKey) {
+    throw new AuthError('Gate key not configured on server', 500);
+  }
+
+  const cookie = request.headers.get('cookie');
+  if (cookie) {
+    const tokenMatch = cookie.match(/mm_gate_token=([^;]+)/);
+    if (tokenMatch) {
+      try {
+        const SECRET_KEY = new TextEncoder().encode(gateKey);
+        await jwtVerify(tokenMatch[1], SECRET_KEY);
+        return; // Valid session
+      } catch (e) {
+        // Fall through to error
+      }
+    }
+  }
+
+  throw new AuthError('Access denied: Authentication required', 401);
+}
+
 export function isAdminKeyConfigured(): boolean {
   return !!process.env.ADMIN_KEY;
 }

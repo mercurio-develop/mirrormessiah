@@ -8,6 +8,7 @@ import { b64urlEncode } from '@/lib/b64url';
 import { Save, Loader2, AlertCircle, Trash2, Globe, Info, Search, Film, Calendar, Star, Clock, Sparkles, ChevronDown, Edit } from 'lucide-react';
 import FileBrowser from './FileBrowser';
 import SubtitleManager from './SubtitleManager';
+import MediaFileManager from './MediaFileManager';
 
 interface AdminMovieFormProps {
   movie: Movie;
@@ -300,6 +301,9 @@ export default function AdminMovieForm({ movie }: AdminMovieFormProps) {
                 className="w-full bg-background border border-border rounded-xl p-6 text-sm font-medium leading-relaxed text-foreground/80 focus:border-primary transition-all outline-none"
               />
             </div>
+
+            {/* Media Files */}
+            <MediaFileManager movieId={movie.id} />
 
             {/* Subtitles */}
             <SubtitleManager movieId={movie.id} />

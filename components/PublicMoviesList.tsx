@@ -64,7 +64,7 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
   const loadingRef = useRef(false);
   const offsetRef = useRef(initialMovies.length);
 
-  const qualities = ['720p', '1080p', '4K'];
+  const qualities = ['720p', '1080p'];
   const years = useMemo(() => {
     const currentYear = new Date().getFullYear();
     const startYear = 1950;
