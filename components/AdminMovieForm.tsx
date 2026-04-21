@@ -395,6 +395,7 @@ export default function AdminMovieForm({ movie }: AdminMovieFormProps) {
       <FileBrowser 
         movieId={movie.id}
         isOpen={isBrowserOpen}
+        mode="images"
         onClose={() => setIsBrowserOpen(false)}
         onSelect={handlePosterSelect}
       />
