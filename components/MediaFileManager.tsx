@@ -164,7 +164,7 @@ export default function MediaFileManager({ movieId }: { movieId: number }) {
             onClick={handleScan}
             disabled={scanning}
             title="Scan the current directory for any new video files"
-            className="h-10 px-4 bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-bold rounded-xl flex items-center gap-2 transition-all disabled:opacity-50"
+            className="h-10 px-4  hover:bg-zinc-700 text-white text-xs font-bold rounded-xl flex items-center gap-2 transition-all disabled:opacity-50"
           >
             {scanning ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanSearch className="h-4 w-4" />}
             <span className="hidden sm:inline text-[10px] uppercase tracking-widest">Refresh</span>

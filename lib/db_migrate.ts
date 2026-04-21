@@ -47,26 +47,38 @@ export function runMigrations(): void {
           director    TEXT,
           language    TEXT,
           runtime     INTEGER,
+          needs_repair INTEGER DEFAULT 0,
           created_at  TEXT NOT NULL DEFAULT (datetime('now')),
           updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
         )
       `);
 
+      // Migration: Ensure existing movies table has needs_repair column
+      const movieColumns = db.prepare("PRAGMA table_info(movies)").all() as any[];
+      if (!movieColumns.some(col => col.name === 'needs_repair')) {
+          console.log('Migrating movies table to add needs_repair column...');
+          db.exec("ALTER TABLE movies ADD COLUMN needs_repair INTEGER DEFAULT 0");
+      }
+
       db.exec(`
         CREATE TABLE IF NOT EXISTS files (
-          id          INTEGER PRIMARY KEY,
-          library_id  INTEGER NOT NULL REFERENCES libraries(id) ON DELETE CASCADE,
-          movie_id    INTEGER NOT NULL REFERENCES movies(id) ON DELETE CASCADE,
-          path        TEXT NOT NULL UNIQUE,
-          size_bytes  INTEGER,
-          container   TEXT,
-          added_at    TEXT NOT NULL DEFAULT (datetime('now')),
-          mime_type   TEXT,
-          duration_sec INTEGER,
-          width       INTEGER,
-          height      INTEGER,
-          video_codec TEXT,
-          audio_codec TEXT
+          id                INTEGER PRIMARY KEY,
+          library_id        INTEGER NOT NULL REFERENCES libraries(id) ON DELETE CASCADE,
+          movie_id          INTEGER NOT NULL REFERENCES movies(id) ON DELETE CASCADE,
+          path              TEXT NOT NULL UNIQUE,
+          size_bytes        INTEGER,
+          container         TEXT,
+          original_path     TEXT,
+          fallback_mp4_path TEXT,
+          has_mp4_fallback  BOOLEAN DEFAULT 0,
+          added_at          TEXT NOT NULL DEFAULT (datetime('now')),
+          mime_type         TEXT,
+          duration_sec      INTEGER,
+          width             INTEGER,
+          height            INTEGER,
+          video_codec       TEXT,
+          audio_codec       TEXT,
+          language          TEXT
         )
       `);
 

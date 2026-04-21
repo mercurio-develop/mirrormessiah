@@ -55,7 +55,7 @@ interface ConfirmModalProps {
 function ConfirmModal({ count, deleteFiles, onDeleteFiles, onConfirm, onCancel }: ConfirmModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-      <div className="w-full max-w-md border border-destructive/30 bg-zinc-950 p-8 space-y-6 font-mono shadow-2xl">
+      <div className="w-full max-w-md border border-destructive/30  p-8 space-y-6 font-mono shadow-2xl">
         <div className="flex items-start gap-4">
           <div className="p-3 border border-destructive/50 text-destructive shrink-0">
             <AlertTriangle className="h-6 w-6" />
@@ -233,7 +233,7 @@ export default function DuplicatesPage() {
           {groups.map(group => {
             const entries = parseGroup(group);
             return (
-              <div key={group.normalized_title} className="border border-white/5 bg-zinc-950/50 p-6 space-y-4">
+              <div key={group.normalized_title} className="border border-white/5 /50 p-6 space-y-4">
                 <div className="flex items-center gap-3">
                   <AlertTriangle className="h-3 w-3 text-destructive/60" />
                   <span className="text-[9px] font-black uppercase tracking-widest text-white/40">{group.count} copies</span>

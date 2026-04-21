@@ -92,6 +92,7 @@ class MessiahManager:
                 rating REAL,
                 genres TEXT,
                 audience TEXT CHECK(audience IN ('family', 'adult')) DEFAULT NULL,
+                needs_repair BOOLEAN DEFAULT 0,
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
                 updated_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
