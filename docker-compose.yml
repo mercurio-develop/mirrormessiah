@@ -1,0 +1,37 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mirrormessiah-web
+    restart: unless-stopped
+    user: "0"
+    environment:
+      - NODE_ENV=production
+      # This ADMIN_KEY must be set in your .env file
+      - ADMIN_KEY=${ADMIN_KEY:?ADMIN_KEY is not set. Please create a .env file.}
+      - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3000}
+      - DB_PATH=/app/database/media.db
+    volumes:
+      - ./media.db:/app/database/media.db
+      # IMPORTANT: Mount your actual media directory here
+      - "/media/tushita/TUSHITA_W11_DATA/movies:/media/tushita/TUSHITA_W11_DATA/movies:ro"
+    networks:
+      internal-net:
+        aliases:
+          - mirrormessiah
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: mirrormessiah-tunnel
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN:?TUNNEL_TOKEN is not set. Please create a .env file.}
+    depends_on:
+      web:
+        condition: service_healthy
+    networks:
+      - internal-net
+
+networks:
+  internal-net:
+    driver: bridge

@@ -1,0 +1,126 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 263.4 70% 50.4%;
+    --primary-foreground: 210 20% 98%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 20% 98%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 263.4 70% 50.4%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 240 10% 6%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 10% 6%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 263.4 70% 50.4%;
+    --primary-foreground: 210 20% 98%;
+    --secondary: 240 3.7% 10%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 3.7% 15%;
+    --muted-foreground: 240 5% 64.9%;
+    --accent: 263.4 70% 50.4%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 20% 98%;
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 263.4 70% 50.4%;
+  }
+}
+
+@layer base {
+  * { 
+    border-color: hsl(var(--border));
+  }
+  body { 
+    @apply bg-background text-foreground antialiased selection:bg-primary/30 selection:text-foreground; 
+    font-feature-settings: "ss01", "ss02", "cv01", "cv02";
+  }
+
+  .dark body {
+    background-image: 
+      radial-gradient(circle at 50% 0%, rgba(139, 92, 246, 0.05) 0%, transparent 50%);
+    background-attachment: fixed;
+  }
+}
+
+/* 
+ * CLEAN SCI-FI UI SYSTEM
+ * Focused on readability and "High-Tech" feel without "fuzziness"
+ */
+
+.terminal-border {
+  @apply relative border border-border;
+}
+
+.terminal-border::before, .terminal-border::after {
+  content: "";
+  @apply absolute w-1 h-1 bg-primary/40 transition-colors pointer-events-none;
+}
+
+.terminal-border::before { @apply top-0 left-0; }
+.terminal-border::after { @apply bottom-0 right-0; }
+
+.data-grid {
+  background-image: radial-gradient(hsl(var(--foreground) / 0.03) 1px, transparent 0);
+  background-size: 32px 32px;
+}
+
+/* Glassmorphism that doesn't sacrifice text contrast */
+.glass-panel {
+  @apply bg-card/80 backdrop-blur-md border border-border shadow-xl;
+}
+
+.active-glow {
+  box-shadow: 0 0 15px -3px hsl(var(--primary) / 0.3);
+}
+
+/* Subtle motion that guides rather than distracts */
+.hover-lift {
+  @apply transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:shadow-primary/5;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { 
+  @apply bg-muted border-4 border-transparent rounded-full hover:bg-muted-foreground/30 transition-colors;
+}
+
+/* Video.js Cleanup */
+.video-js {
+  width: 100% !important;
+  height: 100% !important;
+  background-color: #000 !important;
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.video-js .vjs-big-play-button {
+  @apply bg-primary/90 border-none w-20 h-20 rounded-full !important;
+  line-height: 5rem !important;
+  margin-left: -2.5rem !important;
+  margin-top: -2.5rem !important;
+  box-shadow: 0 0 30px hsl(var(--primary) / 0.4);
+}
