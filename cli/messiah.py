@@ -123,7 +123,8 @@ class MessiahManager:
         self.conn.commit()
 
     def scan(self, root_path, library_name="Main_Registry"):
-        print(f"\n--- SCANNING SECTOR: {root_path} ---")
+        print(f"
+--- SCANNING SECTOR: {root_path} ---")
         root = Path(root_path)
         if not root.exists():
             print(f"ERROR: Path {root_path} not found.")
@@ -166,7 +167,8 @@ class MessiahManager:
         print(f"SCAN_COMPLETE: {found_count} new files indexed.")
 
     def cleanup(self):
-        print("\n--- INITIATING DUPLICATE PURGE ---")
+        print("
+--- INITIATING DUPLICATE PURGE ---")
         self.cursor.execute("""
             CREATE TEMP TABLE movie_mapping AS
             WITH ranked AS (
@@ -190,7 +192,8 @@ class MessiahManager:
         print(f"PURGE_COMPLETE: {len(mapping)} redundant entities removed.")
 
     def sync(self, strict=True):
-        print("\n--- SYNCING ASSETS (STRICT_MODE: {}) ---".format(strict))
+        print("
+--- SYNCING ASSETS (STRICT_MODE: {}) ---".format(strict))
         movies = self.cursor.execute("SELECT * FROM movies").fetchall()
         
         purged = 0
@@ -246,7 +249,8 @@ class MessiahManager:
         print(f"SYNC_COMPLETE: {linked} posters linked, {purged} non-compliant movies purged.")
 
     def scrape(self, force=False):
-        print("\n--- INITIATING YTS_INTELLIGENCE_SCRAPE ---")
+        print("
+--- INITIATING YTS_INTELLIGENCE_SCRAPE ---")
         query = "SELECT id, title, year FROM movies"
         if not force:
             query += " WHERE plot IS NULL OR rating IS NULL OR genres IS NULL"
@@ -335,10 +339,12 @@ class MessiahManager:
                 print(f"    [-] SIGNAL_LOST")
 
         self.conn.commit()
-        print(f"\nSCRAPE_COMPLETE: {scraped_count} entities enriched with YTS data.")
+        print(f"
+SCRAPE_COMPLETE: {scraped_count} entities enriched with YTS data.")
 
     def organize(self):
-        print("\n--- RESTRUCTURING FILE SYSTEM TO MATCH DATABASE ---")
+        print("
+--- RESTRUCTURING FILE SYSTEM TO MATCH DATABASE ---")
         movies = self.cursor.execute("SELECT id, title, year, quality, thumbnail FROM movies").fetchall()
         
         renamed_count = 0
@@ -373,7 +379,7 @@ class MessiahManager:
                 new_name += f" [{quality}]"
             
             # Sanitize new_name for filesystem
-            new_name = re.sub(r'[<>:"/\\|?*]', '_', new_name).strip()
+            new_name = re.sub(r'[<>:"/\|?*]', '_', new_name).strip()
             
             if current_dir.name == new_name:
                 continue
