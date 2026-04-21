@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { b64urlDecode, validateFilePath, getMimeType, parseRangeHeader } from '@/lib/pathenc';
+import { validateFilePath, getMimeType, parseRangeHeader } from '@/lib/pathenc';
+import { b64urlDecode } from '@/lib/b64url';
 import fs from 'fs';
 import { stat } from 'fs/promises';
 

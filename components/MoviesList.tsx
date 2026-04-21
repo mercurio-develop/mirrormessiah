@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { MovieWithFile } from '@/lib/db';
+import { MovieWithFile } from '@/lib/types';
 import { Search, Play, Edit, Loader2, Calendar, Hash, Activity, Film } from 'lucide-react';
 
 interface MoviesListProps {

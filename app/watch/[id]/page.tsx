@@ -5,7 +5,7 @@ import HeroBackdrop from '@/components/HeroBackdrop';
 import { ChevronLeft, Star, Calendar, Hash, Clock, Info, Activity, Globe, User, Edit } from 'lucide-react';
 import { getMovie } from '@/features/movie/queries/get-movie';
 import { getMoviePlayback } from '@/features/movie/queries/get-movie-playback';
-import { b64urlEncode } from '@/lib/pathenc';
+import { b64urlEncode } from '@/lib/b64url';
 import Image from 'next/image';
 
 interface WatchPageProps {

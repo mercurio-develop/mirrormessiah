@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 import { lookup } from 'mime-types';
-import { validateFilePath, b64urlDecode } from '@/lib/pathenc';
+import { validateFilePath } from '@/lib/pathenc';
+import { b64urlDecode } from '@/lib/b64url';
 
 export const dynamic = 'force-dynamic';
 
