@@ -83,17 +83,16 @@ export function getSubtitleMimeType(format: string): string {
 
 /**
  * Convert SRT subtitle content to VTT format
- * More robust conversion that handles line endings and timestamp formatting correctly
  */
 export function convertSrtToVtt(srtContent: string): string {
-  // Normalize line endings
-  let content = srtContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  // 1. Normalize line endings and strip BOM/whitespace
+  let content = srtContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
   
-  // Replace comma with dot in timestamps (SRT uses 00:00:00,000 -> VTT uses 00:00:00.000)
+  // 2. SRT to VTT timestamp conversion (comma to dot)
   content = content.replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2');
   
-  // Ensure the header is present and followed by an empty line
-  return 'WEBVTT\n\n' + content.trim();
+  // 3. Ensure WEBVTT header followed by exactly two newlines
+  return `WEBVTT\n\n${content}`;
 }
 
 /**

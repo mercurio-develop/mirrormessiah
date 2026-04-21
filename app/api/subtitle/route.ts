@@ -46,6 +46,8 @@ export async function GET(request: NextRequest) {
       headers: {
         'Content-Type': 'text/vtt; charset=utf-8',
         'Cache-Control': 'public, max-age=86400',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Credentials': 'true',
       },
     });
   } catch (error) {
