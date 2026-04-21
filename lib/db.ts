@@ -12,7 +12,7 @@ export function getDb(): Database.Database {
     const isBuild = process.env.NEXT_PHASE === 'phase-production-build';
     
     const defaultPath = path.join(/* turbopackIgnore: true */ process.cwd(), 'media.db');
-    const prodPath = '/app/media.db';
+    const prodPath = '/app/data/media.db';
     
     // In Production, strictly follow DB_PATH or /app/media.db
     // In Dev, follow DB_PATH or the local root file
