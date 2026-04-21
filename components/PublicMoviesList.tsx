@@ -100,8 +100,8 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
           offsetRef.current = newMovies.length;
         } else {
           setMovies(prev => {
-            const existingIds = new Set(prev.map(m => m.id));
-            const uniqueNewMovies = newMovies.filter(m => !existingIds.has(m.id));
+            const existingIds = new Set(prev.map((m: MovieWithFile) => m.id));
+            const uniqueNewMovies = newMovies.filter((m: MovieWithFile) => !existingIds.has(m.id));
             return [...prev, ...uniqueNewMovies];
           });
           offsetRef.current += newMovies.length;

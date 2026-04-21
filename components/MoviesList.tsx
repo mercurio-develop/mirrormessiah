@@ -34,8 +34,8 @@ export default function MoviesList({ initialMovies }: MoviesListProps) {
         const data = await res.json();
         if (data.movies.length < ITEMS_PER_LOAD) setHasMore(false);
         setMovies(prev => {
-          const existingIds = new Set(prev.map(m => m.id));
-          const uniqueNewMovies = data.movies.filter((m: any) => !existingIds.has(m.id));
+          const existingIds = new Set(prev.map((m: MovieWithFile) => m.id));
+          const uniqueNewMovies = data.movies.filter((m: MovieWithFile) => !existingIds.has(m.id));
           return [...prev, ...uniqueNewMovies];
         });
       }
@@ -55,7 +55,7 @@ export default function MoviesList({ initialMovies }: MoviesListProps) {
 
   const filteredMovies = useMemo(() => {
     const term = searchTerm.toLowerCase();
-    return movies.filter(m => 
+    return movies.filter((m: MovieWithFile) => 
       m.title.toLowerCase().includes(term) || 
       m.year?.toString().includes(term)
     );
