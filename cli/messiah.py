@@ -91,6 +91,7 @@ class MessiahManager:
                 plot TEXT,
                 rating REAL,
                 genres TEXT,
+                audience TEXT CHECK(audience IN ('family', 'adult')) DEFAULT NULL,
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
                 updated_at TEXT NOT NULL DEFAULT (datetime('now'))
             );

@@ -12,11 +12,12 @@ export async function GET(request: NextRequest) {
     const genre = searchParams.get('genre');
     const quality = searchParams.get('quality');
     const year = searchParams.get('year');
+    const audience = searchParams.get('audience') as 'family' | 'adult' | null;
     const sort = searchParams.get('sort') as 'newest' | 'title_asc' | 'title_desc' | null;
     const offset = parseInt(searchParams.get('offset') || '0');
     const limit = parseInt(searchParams.get('limit') || '24');
 
-    const result = getMovies({ q, genre, quality, year, sort, offset, limit });
+    const result = getMovies({ q, genre, quality, year, audience, sort, offset, limit });
     return NextResponse.json(result);
   } catch (error: any) {
     return NextResponse.json({ error: 'Failed to fetch treasury entities' }, { status: 500 });
@@ -35,6 +36,7 @@ export const POST = withAdminAuth(async (request: Request) => {
     const { 
       title, year, quality, imdb_id, tmdb_id, 
       thumbnail, plot, director, language, runtime,
+      audience,
       categories = [] 
     } = body;
     
@@ -43,9 +45,9 @@ export const POST = withAdminAuth(async (request: Request) => {
     const result = db.prepare(`
       INSERT INTO movies (
         title, year, quality, imdb_id, tmdb_id, 
-        thumbnail, plot, director, language, runtime
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(title, year, quality, imdb_id, tmdb_id, thumbnail, plot, director, language, runtime);
+        thumbnail, plot, director, language, runtime, audience
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(title, year, quality, imdb_id, tmdb_id, thumbnail, plot, director, language, runtime, audience);
     
     const movieId = result.lastInsertRowid;
     
