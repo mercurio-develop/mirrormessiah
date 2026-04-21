@@ -139,8 +139,8 @@ export default function MediaPlayer({
             }, false);
             
             if (track) {
-              track.mode = (subtitle.default || index === 0) ? 'showing' : 'disabled';
-              console.log(`[MediaPlayer] Track ${index} mode set to: ${track.mode}`);
+              (track as any).mode = (subtitle.default || index === 0) ? 'showing' : 'disabled';
+              console.log(`[MediaPlayer] Track ${index} mode set to: ${(track as any).mode}`);
             }
           });
         });
