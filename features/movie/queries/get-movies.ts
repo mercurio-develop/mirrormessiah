@@ -15,25 +15,44 @@ export function getMovies(options: {
   
   const params: any[] = [];
   const whereConditions: string[] = [];
-
-  let movieQuery = `
-    SELECT m.id, m.title, m.year, m.quality, m.thumbnail, m.genres, m.rating, m.audience
-    FROM movies m
-  `;
+  let relevanceSql = '0';
 
   if (q) {
     const searchTerms = q.trim().split(/\s+/);
     searchTerms.forEach(term => {
+      const isYear = /^\d{4}$/.test(term);
+      const likeTerm = `%${term}%`;
+      
       whereConditions.push(`(
         LOWER(m.title) LIKE LOWER(?) OR 
         LOWER(m.genres) LIKE LOWER(?) OR 
         LOWER(m.director) LIKE LOWER(?) OR
         LOWER(m.plot) LIKE LOWER(?)
+        ${isYear ? 'OR m.year = ?' : ''}
       )`);
-      const likeTerm = `%${term}%`;
+      
       params.push(likeTerm, likeTerm, likeTerm, likeTerm);
+      if (isYear) params.push(parseInt(term));
+
+      // Build relevance score
+      relevanceSql += ` + (
+        CASE WHEN LOWER(m.title) LIKE LOWER(?) THEN 10 ELSE 0 END +
+        CASE WHEN LOWER(m.genres) LIKE LOWER(?) THEN 5 ELSE 0 END +
+        CASE WHEN LOWER(m.director) LIKE LOWER(?) THEN 3 ELSE 0 END +
+        CASE WHEN LOWER(m.plot) LIKE LOWER(?) THEN 2 ELSE 0 END
+        ${isYear ? '+ CASE WHEN m.year = ? THEN 15 ELSE 0 END' : ''}
+      )`;
+      
+      params.push(likeTerm, likeTerm, likeTerm, likeTerm);
+      if (isYear) params.push(parseInt(term));
     });
   }
+
+  let movieQuery = `
+    SELECT m.id, m.title, m.year, m.quality, m.thumbnail, m.genres, m.rating, m.audience,
+           (${relevanceSql}) as search_relevance
+    FROM movies m
+  `;
 
   if (genre) {
     whereConditions.push('m.genres LIKE ?');
@@ -60,11 +79,11 @@ export function getMovies(options: {
   }
 
   if (sort === 'title_desc') {
-    movieQuery += ' ORDER BY m.title DESC, m.id DESC';
+    movieQuery += ' ORDER BY search_relevance DESC, m.title DESC, m.id DESC';
   } else if (sort === 'newest') {
-    movieQuery += ' ORDER BY m.id DESC';
+    movieQuery += ' ORDER BY search_relevance DESC, m.id DESC';
   } else {
-    movieQuery += ' ORDER BY m.title ASC, m.id ASC';
+    movieQuery += ' ORDER BY search_relevance DESC, m.title ASC, m.id ASC';
   }
   
   const totalQuery = `SELECT COUNT(*) as count FROM (${movieQuery})`;
