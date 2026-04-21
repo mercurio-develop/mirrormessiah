@@ -37,6 +37,11 @@ export default function MediaPlayer({
   const [error, setError] = useState<{ code: number; message: string } | null>(null);
   const [isFlagged, setIsFlagged] = useState(false);
 
+  const ctx = useRef({ id, src });
+  useEffect(() => {
+    ctx.current = { id, src };
+  }, [id, src]);
+
   useEffect(() => {
     if (!playerRef.current && videoRef.current) {
       const videoElement = document.createElement('video');
@@ -63,6 +68,35 @@ export default function MediaPlayer({
 
       playerRef.current = player;
 
+      player.on('loadedmetadata', () => {
+        const currentCtx = ctx.current;
+        const currentId = currentCtx.id || currentCtx.src;
+        const storageKey = `mm_playback_time_${currentId}`;
+        const savedTime = localStorage.getItem(storageKey);
+        if (savedTime) {
+          const time = parseFloat(savedTime);
+          if (!isNaN(time) && time > 0) {
+            player.currentTime(time);
+          }
+        }
+      });
+
+      player.on('timeupdate', () => {
+        const currentCtx = ctx.current;
+        const currentId = currentCtx.id || currentCtx.src;
+        const storageKey = `mm_playback_time_${currentId}`;
+        const currentTime = player.currentTime();
+        const duration = player.duration();
+        
+        if (currentTime && duration) {
+          if (currentTime < duration - 10) {
+            localStorage.setItem(storageKey, currentTime.toString());
+          } else {
+            localStorage.removeItem(storageKey);
+          }
+        }
+      });
+
       player.on('error', () => {
         const videoError = player.error();
         if (videoError) {
@@ -72,8 +106,9 @@ export default function MediaPlayer({
             });
 
             // Automatically flag for repair if we have an ID
-            if (id && !isFlagged) {
-              fetch(`/api/movies/${id}/repair`, { method: 'POST' })
+            const currentCtx = ctx.current;
+            if (currentCtx.id && !isFlagged) {
+              fetch(`/api/movies/${currentCtx.id}/repair`, { method: 'POST' })
                 .then(() => setIsFlagged(true))
                 .catch(err => console.error('[MediaPlayer] Failed to flag for repair:', err));
             }
