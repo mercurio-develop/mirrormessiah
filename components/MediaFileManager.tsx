@@ -311,7 +311,7 @@ export default function MediaFileManager({ movieId }: { movieId: number }) {
         isOpen={isDirBrowserOpen}
         mode="videos"
         onClose={() => setIsDirBrowserOpen(false)}
-        onSelect={() => {}} 
+        onSelect={handleRelink}
         onSelectDirectory={(dirPath) => {
             setIsDirBrowserOpen(false);
             setManualPath(dirPath);

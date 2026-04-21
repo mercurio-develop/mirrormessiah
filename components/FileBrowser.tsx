@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
-import { X, Loader2, Image as ImageIcon, Check, Video, Folder, ChevronRight, Home, ArrowLeft } from 'lucide-react';
+import { X, Loader2, Image as ImageIcon, Check, Video, Folder, ChevronRight, Home, ArrowLeft, Search } from 'lucide-react';
 import { b64urlEncode } from '@/lib/b64url';
 
 interface Item {
@@ -29,6 +29,7 @@ export default function FileBrowser({ movieId, isOpen, mode, onClose, onSelect, 
   const [error, setError] = useState<string | null>(null);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [libraries, setLibraries] = useState<any[]>([]);
+  const [filterText, setFilterText] = useState('');
 
   // Load initial movie directory or libraries
   useEffect(() => {
@@ -63,6 +64,7 @@ export default function FileBrowser({ movieId, isOpen, mode, onClose, onSelect, 
   };
 
   const fetchDirectory = async (path: string) => {
+    setFilterText('');
     setLoading(true);
     setError(null);
     try {
@@ -109,6 +111,13 @@ export default function FileBrowser({ movieId, isOpen, mode, onClose, onSelect, 
     }
   };
 
+  const filteredItems = useMemo(() =>
+    filterText.trim()
+      ? items.filter(i => i.name.toLowerCase().includes(filterText.toLowerCase()))
+      : items,
+    [items, filterText]
+  );
+
   if (!isOpen) return null;
 
   return (
@@ -142,6 +151,25 @@ export default function FileBrowser({ movieId, isOpen, mode, onClose, onSelect, 
                </button>
              )}
           </div>
+
+          {/* Filter */}
+          {items.length > 0 && (
+            <div className="relative mt-3">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/40 pointer-events-none" />
+              <input
+                type="text"
+                value={filterText}
+                onChange={e => setFilterText(e.target.value)}
+                placeholder="Filter in this folder..."
+                className="w-full h-9 bg-background/50 border border-border rounded-xl pl-9 pr-9 text-xs font-mono focus:border-primary/50 outline-none focus:ring-2 focus:ring-primary/5 transition-all"
+              />
+              {filterText && (
+                <button onClick={() => setFilterText('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/40 hover:text-foreground transition-colors">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Content */}
@@ -172,9 +200,14 @@ export default function FileBrowser({ movieId, isOpen, mode, onClose, onSelect, 
                <Folder className="h-16 w-16" />
                <span className="text-xs font-bold uppercase tracking-widest text-center">Empty directory sector</span>
             </div>
+          ) : filteredItems.length === 0 ? (
+            <div className="h-64 flex flex-col items-center justify-center text-muted-foreground/40 gap-4">
+               <Search className="h-12 w-12" />
+               <span className="text-xs font-bold uppercase tracking-widest text-center">No matches for "{filterText}"</span>
+            </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
-              {items.map((item) => (
+              {filteredItems.map((item) => (
                 <div 
                   key={item.path}
                   onClick={() => handleItemClick(item)}

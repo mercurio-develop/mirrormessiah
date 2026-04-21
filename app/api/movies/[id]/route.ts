@@ -43,7 +43,7 @@ export const PATCH = withAdminAuth(async (
     const db = getDb();
 
     // Standard metadata + Advanced identity fields
-    const fields = ['title', 'year', 'quality', 'plot', 'rating', 'genres', 'director', 'language', 'runtime', 'thumbnail', 'audience'];
+    const fields = ['title', 'year', 'quality', 'plot', 'rating', 'genres', 'director', 'language', 'runtime', 'thumbnail', 'audience', 'needs_repair'];
     const updates: string[] = [];
     const values: any[] = [];
 

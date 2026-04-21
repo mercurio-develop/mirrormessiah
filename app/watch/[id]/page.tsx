@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import MediaPlayer from '@/components/MediaPlayer';
 import HeroBackdrop from '@/components/HeroBackdrop';
-import {ChevronLeft, Star, Calendar, Hash, Clock, Info, Activity, Globe, User, Edit, Sparkles} from 'lucide-react';
+import {ChevronLeft, Star, Calendar, Hash, Clock, Info, Activity, Globe, User, Edit, Sparkles, AlertCircle} from 'lucide-react';
 import { getMovie } from '@/features/movie/queries/get-movie';
 import { getMoviePlayback } from '@/features/movie/queries/get-movie-playback';
 import { b64urlEncode } from '@/lib/b64url';
@@ -60,6 +60,17 @@ export default async function WatchPage({ params }: WatchPageProps) {
         <section className="w-full max-w-7xl mx-auto px-6 mb-12">
           <div className="aspect-video w-full bg-black rounded-2xl overflow-hidden shadow-[0_30px_100px_rgba(0,0,0,0.8)] border border-white/5 relative">
             {!movieData ? (
+              <div className="absolute top-4 right-4 z-20 flex items-center gap-1.5 px-3 py-1.5 bg-black/70 border border-destructive/60 text-destructive text-[10px] font-black uppercase tracking-widest rounded-full backdrop-blur-sm pointer-events-none">
+                <AlertCircle className="h-3 w-3" />
+                No_Source
+              </div>
+            ) : movie.needs_repair ? (
+              <div className="absolute top-4 right-4 z-20 flex items-center gap-1.5 px-3 py-1.5 bg-black/70 border border-destructive/60 text-destructive text-[10px] font-black uppercase tracking-widest rounded-full backdrop-blur-sm pointer-events-none">
+                <AlertCircle className="h-3 w-3" />
+                Stream_Unstable
+              </div>
+            ) : null}
+            {!movieData ? (
               <div className="w-full h-full flex flex-col items-center justify-center text-center p-12 bg-muted/10">
                 <Activity className="h-16 w-16 text-destructive mb-6 animate-pulse" />
                 <h2 className="text-3xl font-bold tracking-tight">Stream Unavailable</h2>
@@ -67,6 +78,7 @@ export default async function WatchPage({ params }: WatchPageProps) {
               </div>
             ) : (
               <MediaPlayer
+                id={movie.id}
                 src={movieData.source.src}
                 mimeType={movieData.mimeType}
                 subtitles={movieData.subtitles}
@@ -88,6 +100,12 @@ export default async function WatchPage({ params }: WatchPageProps) {
                 </h1>
                 
                 <div className="flex flex-wrap items-center gap-6 pt-2">
+                  {movie.needs_repair ? (
+                    <span className="px-3 py-1 bg-destructive/20 border border-destructive/40 text-destructive text-[10px] font-black uppercase tracking-widest rounded-full flex items-center gap-2 animate-pulse">
+                      <AlertCircle className="h-3.5 w-3.5" />
+                      Repair_Required
+                    </span>
+                  ) : null}
                   <div className="flex items-center gap-1.5 text-sm font-bold">
                     <Star className="h-5 w-5 text-primary fill-primary" />
                     <span>{movie.rating || '0.0'}</span>

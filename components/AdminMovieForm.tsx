@@ -44,6 +44,7 @@ export default function AdminMovieForm({ movie }: AdminMovieFormProps) {
     runtime: (movie as any).runtime?.toString() || '',
     audience: movie.audience || '',
     thumbnail: movie.thumbnail || '',
+    needs_repair: (movie as any).needs_repair === 1,
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -51,8 +52,9 @@ export default function AdminMovieForm({ movie }: AdminMovieFormProps) {
   const [status, setStatus] = useState<{ type: 'success' | 'error' | null, msg: string }>({ type: null, msg: '' });
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    const { name, value, type } = e.target as any;
+    const val = type === 'checkbox' ? (e.target as any).checked : value;
+    setFormData(prev => ({ ...prev, [name]: val }));
   };
 
   const handlePosterSelect = async (filePath: string) => {
@@ -94,6 +96,7 @@ export default function AdminMovieForm({ movie }: AdminMovieFormProps) {
           year: formData.year ? parseInt(formData.year) : null,
           rating: formData.rating ? parseFloat(formData.rating) : null,
           runtime: formData.runtime ? parseInt(formData.runtime) : null,
+          needs_repair: formData.needs_repair ? 1 : 0,
         }),
       });
 
@@ -132,6 +135,7 @@ export default function AdminMovieForm({ movie }: AdminMovieFormProps) {
         runtime: m.runtime?.toString() || '',
         audience: m.audience || '',
         thumbnail: m.thumbnail || '',
+        needs_repair: m.needs_repair === 1,
       });
       setStatus({ type: 'success', msg: 'Metadata synced from TMDB' });
     } catch (err: any) {
@@ -231,6 +235,24 @@ export default function AdminMovieForm({ movie }: AdminMovieFormProps) {
                       <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40 pointer-events-none" />
                     </div>
                   </div>
+                </div>
+
+                <div className="flex items-center gap-3 p-4 bg-destructive/5 border border-destructive/20 rounded-xl">
+                    <input
+                      id="needs_repair"
+                      name="needs_repair"
+                      type="checkbox"
+                      checked={formData.needs_repair}
+                      onChange={handleInputChange}
+                      className="h-5 w-5 rounded border-destructive/20 text-destructive focus:ring-destructive/30"
+                    />
+                    <label htmlFor="needs_repair" className="flex items-center gap-2 cursor-pointer">
+                       <AlertCircle className={`h-4 w-4 ${formData.needs_repair ? 'text-destructive animate-pulse' : 'text-muted-foreground'}`} />
+                       <div className="flex flex-col">
+                          <span className="text-sm font-bold text-foreground">Flag for Repair</span>
+                          <span className="text-[10px] font-medium text-muted-foreground uppercase">Enable if movie stream is failing or archive is corrupted</span>
+                       </div>
+                    </label>
                 </div>
               </div>
             </div>

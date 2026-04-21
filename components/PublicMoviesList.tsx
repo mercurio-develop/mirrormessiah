@@ -20,7 +20,8 @@ import {
     Clock,
     Star,
     Info,
-    Sparkles
+    Sparkles,
+    AlertCircle
 } from 'lucide-react';
 import { useAdmin } from '@/contexts/AdminContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -307,6 +308,12 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
                         Adult
                       </span>
                     )}
+                    {movie.needs_repair ? (
+                      <span className="bg-destructive/90 backdrop-blur-md text-white text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest flex items-center gap-1.5 shadow-xl animate-pulse">
+                        <AlertCircle className="h-3 w-3" />
+                        Repair
+                      </span>
+                    ) : null}
                     {(movie as any).has_subtitles === 1 && (
                       <span className="bg-primary/10 backdrop-blur-md text-primary text-[8px] font-extrabold px-1.5 py-0.5 rounded-sm uppercase tracking-widest border border-primary/20 flex items-center gap-1 shadow-sm">
                         <Sparkles className="h-2 w-2 fill-current" />

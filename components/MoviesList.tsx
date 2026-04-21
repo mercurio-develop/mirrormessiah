@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { MovieWithFile } from '@/lib/types';
 import { b64urlEncode } from '@/lib/b64url';
-import { Search, Play, Edit, Loader2, Calendar, Hash, Activity, Film, X } from 'lucide-react';
+import { Search, Play, Edit, Loader2, Calendar, Hash, Activity, Film, X, AlertCircle } from 'lucide-react';
 
 interface MoviesListProps {
   initialMovies: MovieWithFile[];
@@ -150,7 +150,11 @@ export default function MoviesList({ initialMovies }: MoviesListProps) {
               <div className="space-y-1">
                 <div className="flex justify-between items-center text-[10px] font-bold text-muted-foreground/50 uppercase tracking-wider">
                    <span className="font-mono">ID: {movie.id}</span>
-                   <span className="flex items-center gap-1 text-primary/60"><Activity className="h-2.5 w-2.5" /> Registry Linked</span>
+                   {movie.needs_repair ? (
+                     <span className="flex items-center gap-1 text-destructive animate-pulse"><AlertCircle className="h-2.5 w-2.5" /> Repair_Required</span>
+                   ) : (
+                     <span className="flex items-center gap-1 text-primary/60"><Activity className="h-2.5 w-2.5" /> Registry Linked</span>
+                   )}
                 </div>
                 <h3 className="text-sm font-bold text-foreground truncate group-hover:text-primary transition-colors">
                   {movie.title}

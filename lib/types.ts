@@ -24,6 +24,7 @@ export interface Movie {
   director: string | null;
   language: string | null;
   runtime: number | null;
+  needs_repair: number;
 }
 
 export interface File {
