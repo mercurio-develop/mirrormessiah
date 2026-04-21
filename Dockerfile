@@ -12,6 +12,8 @@ FROM node:20-slim AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+# Ensure an empty database exists for the build phase
+RUN touch media.db
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 

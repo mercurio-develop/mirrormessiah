@@ -8,22 +8,17 @@ let db: Database.Database | null = null;
 
 export function getDb(): Database.Database {
   if (!db) {
-    const dbPath = path.join(process.cwd(), 'media.db');
+    const dbPath = path.join(/*turbopackIgnore: true*/ process.cwd(), 'media.db');
     
-    // During build time, we might not have the DB file yet.
-    // We check if we're in a build environment or if the file exists.
-    const isBuild = process.env.NEXT_PHASE === 'phase-production-build';
-    
+    // Check if the database file exists. 
+    // If not, we use an in-memory instance to prevent build-time crashes.
     if (!fs.existsSync(dbPath)) {
-        if (isBuild) {
-            console.warn('Build Phase: Database file not found, creating temporary in-memory instance.');
-            db = new Database(':memory:');
-            return db;
-        }
-        throw new Error('Database access failure: ' + dbPath);
+        console.warn('Database file not found. Using temporary in-memory instance.');
+        db = new Database(':memory:');
+    } else {
+        db = new Database(dbPath, { readonly: false });
     }
-
-    db = new Database(dbPath, { readonly: false });
+    
     db.pragma('foreign_keys = ON');
     db.pragma('journal_mode = WAL');
   }
