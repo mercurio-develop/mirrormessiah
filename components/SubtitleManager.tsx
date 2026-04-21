@@ -122,7 +122,7 @@ export default function SubtitleManager({ movieId }: { movieId: number }) {
             type="button"
             onClick={handleScan}
             disabled={scanning}
-            className="h-9 px-4 bg-zinc-800 text-white text-xs font-bold rounded-xl flex items-center gap-2 hover:bg-zinc-700 disabled:opacity-50 transition-all"
+            className="h-9 px-4  text-white text-xs font-bold rounded-xl flex items-center gap-2 hover:bg-zinc-700 disabled:opacity-50 transition-all"
           >
             {scanning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ScanSearch className="h-3.5 w-3.5" />}
             Scan Directory

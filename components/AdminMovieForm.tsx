@@ -349,7 +349,7 @@ export default function AdminMovieForm({ movie }: AdminMovieFormProps) {
                 type="button"
                 disabled={isScraping || isSubmitting}
                 onClick={handleScrape}
-                className="w-full h-14 bg-zinc-800 text-white text-sm font-bold rounded-2xl flex items-center justify-center gap-3 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50"
+                className="w-full h-14  text-white text-sm font-bold rounded-2xl flex items-center justify-center gap-3 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50"
               >
                 {isScraping ? <Loader2 className="h-5 w-5 animate-spin" /> : <><Sparkles className="h-5 w-5" /> Scrape from TMDB</>}
               </button>

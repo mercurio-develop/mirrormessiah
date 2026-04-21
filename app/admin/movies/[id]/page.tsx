@@ -31,7 +31,7 @@ export default async function MovieEditPage({ params }: MovieEditPageProps) {
         </div>
       </div>
 
-      <div className="terminal-border p-8 bg-zinc-950/50 backdrop-blur-xl border-white/5">
+      <div className="terminal-border p-8 /50 backdrop-blur-xl border-white/5">
         <AdminMovieForm movie={movie} />
       </div>
     </div>

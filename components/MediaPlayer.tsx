@@ -13,6 +13,7 @@ interface SubtitleTrack {
 }
 
 interface MediaPlayerProps {
+  id?: string | number;
   src: string;
   mimeType?: string;
   subtitles?: SubtitleTrack[];
@@ -24,6 +25,7 @@ interface MediaPlayerProps {
 type VideoJsPlayer = ReturnType<typeof videojs>;
 
 export default function MediaPlayer({ 
+  id,
   src, 
   mimeType = 'video/mp4', 
   subtitles = [], 
@@ -33,6 +35,7 @@ export default function MediaPlayer({
   const videoRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<VideoJsPlayer | null>(null);
   const [error, setError] = useState<{ code: number; message: string } | null>(null);
+  const [isFlagged, setIsFlagged] = useState(false);
 
   useEffect(() => {
     if (!playerRef.current && videoRef.current) {
@@ -67,6 +70,13 @@ export default function MediaPlayer({
                 code: videoError.code,
                 message: videoError.message || 'Media stream interference detected'
             });
+
+            // Automatically flag for repair if we have an ID
+            if (id && !isFlagged) {
+              fetch(`/api/movies/${id}/repair`, { method: 'POST' })
+                .then(() => setIsFlagged(true))
+                .catch(err => console.error('[MediaPlayer] Failed to flag for repair:', err));
+            }
         }
       });
       
