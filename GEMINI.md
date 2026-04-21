@@ -13,11 +13,13 @@ MirrorMessiah is a standalone, high-fidelity media registry and streaming termin
 ## Core Commands (Python CLI)
 The project is managed via the unified CLI at \`cli/messiah.py\`.
 
-- **Full Re-seed**: \`python3 cli/messiah.py full --root /path/to/movies\`
-- **Update Registry**: \`python3 cli/messiah.py scan --root /path/to/movies\`
-- **Cleanup Duplicates**: \`python3 cli/messiah.py cleanup\`
-- **Sync Assets**: \`python3 cli/messiah.py sync\`
-- **Reset System**: \`python3 cli/messiah.py reset\`
+- **Full Re-seed**: `python3 cli/messiah.py full --root /path/to/movies`
+- **Update Registry**: `python3 cli/messiah.py scan --root /path/to/movies`
+- **Organize Folders**: `python3 cli/messiah.py organize`
+- **Cleanup Duplicates**: `python3 cli/messiah.py cleanup`
+- **Sync Assets**: `python3 cli/messiah.py sync`
+- **Reset System**: `python3 cli/messiah.py reset`
+
 
 ## Environment
 - **GATE_KEY**: Managed via \`.env.local\`

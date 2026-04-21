@@ -336,12 +336,106 @@ class MessiahManager:
         self.conn.commit()
         print(f"\nSCRAPE_COMPLETE: {scraped_count} entities enriched with YTS data.")
 
+    def organize(self):
+        print("\n--- RESTRUCTURING FILE SYSTEM TO MATCH DATABASE ---")
+        movies = self.cursor.execute("SELECT id, title, year, quality, thumbnail FROM movies").fetchall()
+        
+        renamed_count = 0
+        
+        for movie in movies:
+            mid = movie['id']
+            title = movie['title']
+            year = movie['year']
+            quality = movie['quality']
+            
+            # Find all files for this movie
+            files = self.cursor.execute("SELECT id, path FROM files WHERE movie_id = ?", (mid,)).fetchall()
+            if not files:
+                continue
+                
+            # Assume all files are in the same directory (standard for this project)
+            current_file_path = Path(files[0]['path'])
+            current_dir = current_file_path.parent
+            parent_dir = current_dir.parent
+            
+            # Skip if current_dir is the root of a library (should not happen with standard scan)
+            self.cursor.execute("SELECT root_path FROM libraries")
+            lib_roots = [Path(r[0]) for r in self.cursor.fetchall()]
+            if any(current_dir == root for root in lib_roots):
+                continue
+
+            # Construct desired folder name: Title (Year) [Quality]
+            new_name = f"{title}"
+            if year:
+                new_name += f" ({year})"
+            if quality and quality != "Unknown":
+                new_name += f" [{quality}]"
+            
+            # Sanitize new_name for filesystem
+            new_name = re.sub(r'[<>:"/\\|?*]', '_', new_name).strip()
+            
+            if current_dir.name == new_name:
+                continue
+                
+            new_dir = parent_dir / new_name
+            
+            # Handle collision
+            if new_dir.exists() and new_dir.resolve() != current_dir.resolve():
+                print(f"  [!] COLLISION: {new_dir} already exists. Skipping {title}.")
+                continue
+                
+            print(f"  [>] RENAMING: {current_dir.name} -> {new_name}")
+            
+            try:
+                os.rename(current_dir, new_dir)
+                renamed_count += 1
+                
+                # Update files paths in DB
+                all_files = self.cursor.execute("SELECT id, path FROM files WHERE movie_id = ?", (mid,)).fetchall()
+                for f in all_files:
+                    old_path = Path(f['path'])
+                    # We use relative path from old_dir to ensure we correctly map subfolders if any
+                    try:
+                        rel_path = old_path.relative_to(current_dir)
+                        new_path = new_dir / rel_path
+                        self.cursor.execute("UPDATE files SET path = ? WHERE id = ?", (str(new_path.absolute()), f['id']))
+                    except ValueError:
+                        # File is not under current_dir, skip it
+                        pass
+                
+                # Update subtitles paths in DB
+                subs = self.cursor.execute("SELECT id, path FROM subtitles WHERE movie_id = ?", (mid,)).fetchall()
+                for s in subs:
+                    old_sub_path = Path(s['path'])
+                    try:
+                        rel_sub_path = old_sub_path.relative_to(current_dir)
+                        new_sub_path = new_dir / rel_sub_path
+                        self.cursor.execute("UPDATE subtitles SET path = ? WHERE id = ?", (str(new_sub_path.absolute()), s['id']))
+                    except ValueError:
+                        pass
+                    
+                # Update thumbnail path if it was in the old directory
+                if movie['thumbnail']:
+                    old_thumb_path = Path(movie['thumbnail'])
+                    try:
+                        rel_thumb_path = old_thumb_path.relative_to(current_dir)
+                        new_thumb_path = new_dir / rel_thumb_path
+                        self.cursor.execute("UPDATE movies SET thumbnail = ? WHERE id = ?", (str(new_thumb_path.absolute()), mid))
+                    except ValueError:
+                        pass
+                        
+            except Exception as e:
+                print(f"  [!] ERROR renaming {current_dir}: {e}")
+                
+        self.conn.commit()
+        print(f"ORGANIZE_COMPLETE: {renamed_count} folders reorganized.")
+
     def close(self):
         self.conn.close()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='MirrorMessiah Unified CLI')
-    parser.add_argument('command', choices=['scan', 'cleanup', 'sync', 'scrape', 'full', 'reset'], help='Command to execute')
+    parser.add_argument('command', choices=['scan', 'cleanup', 'sync', 'scrape', 'full', 'reset', 'organize'], help='Command to execute')
     parser.add_argument('--root', help='Root media path for scan')
     parser.add_argument('--db', default='media.db', help='Database path')
     parser.add_argument('--lax', action='store_true', help='Disable strict 1080p MP4 requirement')
@@ -366,6 +460,9 @@ if __name__ == "__main__":
     
     if args.command in ['cleanup', 'full']:
         manager.cleanup()
+
+    if args.command == 'organize':
+        manager.organize()
         
     if args.command in ['sync', 'full']:
         manager.sync(strict=not args.lax)

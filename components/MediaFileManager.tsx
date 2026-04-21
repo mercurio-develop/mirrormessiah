@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Video, ScanSearch, Plus, Trash2, Loader2, AlertCircle, CheckCircle2, Search, Link as LinkIcon } from 'lucide-react';
+import { Video, ScanSearch, Plus, Trash2, Loader2, AlertCircle, CheckCircle2, Search, Link as LinkIcon, X } from 'lucide-react';
 import FileBrowser from './FileBrowser';
 
 interface MediaFile {
@@ -18,6 +18,13 @@ export default function MediaFileManager({ movieId }: { movieId: number }) {
   const [scanning, setScanning] = useState(false);
   const [isBrowserOpen, setIsBrowserOpen] = useState(false);
   const [status, setStatus] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
+  const [manualPath, setManualPath] = useState('');
+  const [showManualInput, setShowManualInput] = useState(false);
+
+  const showStatus = (type: 'success' | 'error', msg: string) => {
+    setStatus({ type, msg });
+    setTimeout(() => setStatus(null), 4000);
+  };
 
   const fetchFiles = useCallback(async () => {
     setLoading(true);
@@ -25,16 +32,37 @@ export default function MediaFileManager({ movieId }: { movieId: number }) {
       const res = await fetch(`/api/movies/${movieId}/files`);
       const data = await res.json();
       setFiles(data.files ?? []);
+    } catch (err) {
+      console.error('File fetch failed:', err);
     } finally {
       setLoading(false);
     }
   }, [movieId]);
 
-  useEffect(() => { fetchFiles(); }, [fetchFiles]);
+  useEffect(() => {
+    fetchFiles();
+  }, [fetchFiles]);
 
-  const showStatus = (type: 'success' | 'error', msg: string) => {
-    setStatus({ type, msg });
-    setTimeout(() => setStatus(null), 4000);
+  const handleManualRelink = async () => {
+    if (!manualPath.trim()) return;
+    try {
+      const res = await fetch(`/api/movies/${movieId}/relink`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ directoryPath: manualPath.trim() })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showStatus('error', data.error ?? 'Manual link failed');
+        return;
+      }
+      showStatus('success', 'Directory linked and scanned successfully');
+      setShowManualInput(false);
+      setManualPath('');
+      fetchFiles();
+    } catch {
+      showStatus('error', 'Manual link request failed');
+    }
   };
 
   const handleScan = async () => {
@@ -42,7 +70,14 @@ export default function MediaFileManager({ movieId }: { movieId: number }) {
     try {
       const res = await fetch(`/api/movies/${movieId}/scan-files`, { method: 'POST' });
       const data = await res.json();
-      if (!res.ok) { showStatus('error', data.error ?? 'Scan failed'); return; }
+      if (!res.ok) {
+        showStatus('error', data.error ?? 'Scan failed');
+        // If directory doesn't exist, show the manual input
+        if (res.status === 404) {
+          setShowManualInput(true);
+        }
+        return;
+      }
       showStatus('success', `Scanning complete: ${data.added} new files linked`);
       fetchFiles();
     } catch {
@@ -61,7 +96,10 @@ export default function MediaFileManager({ movieId }: { movieId: number }) {
         body: JSON.stringify({ filePath })
       });
       const data = await res.json();
-      if (!res.ok) { showStatus('error', data.error ?? 'Relink failed'); return; }
+      if (!res.ok) {
+        showStatus('error', data.error ?? 'Relink failed');
+        return;
+      }
       showStatus('success', 'New media source synchronized');
       fetchFiles();
     } catch {
@@ -71,12 +109,17 @@ export default function MediaFileManager({ movieId }: { movieId: number }) {
 
   const handleDelete = async (fileId: number) => {
     if (files.length <= 1) {
-        showStatus('error', 'Cannot remove last remaining media source');
-        return;
+      showStatus('error', 'Cannot remove last remaining media source');
+      return;
     }
+    if (!confirm('Are you sure you want to detach this file from the registry?')) return;
+
     try {
       const res = await fetch(`/api/movies/${movieId}/files/${fileId}`, { method: 'DELETE' });
-      if (!res.ok) { showStatus('error', 'De-linking failed'); return; }
+      if (!res.ok) {
+        showStatus('error', 'De-linking failed');
+        return;
+      }
       setFiles(prev => prev.filter(f => f.id !== fileId));
       showStatus('success', 'Media source detached from registry');
     } catch {
@@ -127,16 +170,46 @@ export default function MediaFileManager({ movieId }: { movieId: number }) {
         </div>
       )}
 
+      {showManualInput && (
+        <div className="p-5 bg-primary/5 border border-primary/20 rounded-2xl space-y-4 animate-in slide-in-from-top-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-primary">
+              <LinkIcon className="h-4 w-4" />
+              <span className="text-xs font-black uppercase tracking-widest">Manual Directory Link</span>
+            </div>
+            <button onClick={() => setShowManualInput(false)} className="text-muted-foreground hover:text-foreground">
+                <X className="h-4 w-4" />
+            </button>
+          </div>
+          <p className="text-xs text-muted-foreground font-medium">Automatic scan failed. Enter the absolute path to the directory where the movie is stored:</p>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={manualPath}
+              onChange={(e) => setManualPath(e.target.value)}
+              placeholder="/media/storage/movies/My Movie (2024)"
+              className="flex-1 h-12 bg-background border border-border rounded-xl px-4 text-xs font-mono focus:border-primary outline-none"
+            />
+            <button
+              onClick={handleManualRelink}
+              className="h-12 px-6 bg-primary text-white text-xs font-bold uppercase rounded-xl hover:opacity-90 transition-all shadow-lg shadow-primary/20"
+            >
+              Update Registry
+            </button>
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <div className="flex items-center justify-center py-8">
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
       ) : (
         <div className="space-y-3">
           {files.map(file => (
             <div
               key={file.id}
-              className="flex items-center gap-3 p-4 bg-muted/10 border border-border/50 rounded-xl group hover:border-border transition-all"
+              className="flex items-center gap-3 p-4 bg-muted/5 border border-border/50 rounded-xl group hover:border-border transition-all"
             >
               <div className="shrink-0 w-12 h-8 bg-primary/10 rounded-md flex items-center justify-center">
                 <span className="text-[10px] font-black text-primary uppercase">{file.container || 'MP4'}</span>
@@ -164,7 +237,7 @@ export default function MediaFileManager({ movieId }: { movieId: number }) {
         </div>
       )}
 
-      <FileBrowser 
+      <FileBrowser
         movieId={movieId}
         isOpen={isBrowserOpen}
         mode="videos"
