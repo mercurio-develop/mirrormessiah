@@ -8,14 +8,16 @@ services:
     user: "0"
     environment:
       - NODE_ENV=production
-      # This GATE_KEY must be set in your .env file
-      - GATE_KEY=${GATE_KEY:?GATE_KEY is not set. Please create a .env file.}
+      # GATE_KEY: Primary access for users/family
+      - GATE_KEY=${GATE_KEY:?GATE_KEY is not set.}
+      # ADMIN_KEY: Required for management (Local Dev) and master login
+      - ADMIN_KEY=${ADMIN_KEY:?ADMIN_KEY is not set.}
       - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3000}
       - DB_PATH=/app/database/media.db
     volumes:
       - ./media.db:/app/database/media.db
-      # IMPORTANT: Mount your actual media directory here
-      - "/media/tushita/TUSHITA_W11_DATA/movies:/media/tushita/TUSHITA_W11_DATA/movies:ro"
+      # MEDIA_DIR: Path to your movie collection
+      - "${MEDIA_DIR:?MEDIA_DIR is not set.}:${MEDIA_DIR}:ro"
     networks:
       internal-net:
         aliases:
