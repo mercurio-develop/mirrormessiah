@@ -13,9 +13,9 @@ services:
       # ADMIN_KEY: Required for management (Local Dev) and master login
       - ADMIN_KEY=${ADMIN_KEY:?ADMIN_KEY is not set.}
       - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3000}
-      - DB_PATH=/app/database/media.db
+      - DB_PATH=/app/media.db
     volumes:
-      - ./media.db:/app/database/media.db
+      - ./media.db:/app/media.db
       # MEDIA_DIR: Path to your movie collection
       - "${MEDIA_DIR:?MEDIA_DIR is not set.}:${MEDIA_DIR}:ro"
     networks:

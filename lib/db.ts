@@ -14,7 +14,7 @@ export function getDb(): Database.Database {
     const isBuild = process.env.NEXT_PHASE === 'phase-production-build';
     
     const defaultPath = path.join(/* turbopackIgnore: true */ process.cwd(), 'media.db');
-    const prodPath = '/app/database/media.db';
+    const prodPath = '/app/media.db';
     
     // Use environment variable if provided, otherwise pick based on environment
     let dbPath = process.env.DB_PATH || (isProd ? prodPath : defaultPath);
