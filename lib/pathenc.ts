@@ -89,7 +89,10 @@ export function convertSrtToVtt(srtContent: string): string {
   let content = srtContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
   
   // 2. SRT to VTT timestamp conversion (comma to dot)
-  content = content.replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2');
+  // Handles: 00:00:00,000 OR 0:00:00,000 OR 00:00:0,000
+  content = content.replace(/(\d+:\d{2}:\d{2}),(\d{3})/g, (match, time, ms) => {
+    return `${time}.${ms}`;
+  });
   
   // 3. Ensure WEBVTT header followed by exactly two newlines
   return `WEBVTT\n\n${content}`;
