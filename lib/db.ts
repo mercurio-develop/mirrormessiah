@@ -19,6 +19,8 @@ export function getDb(): Database.Database {
     // Use environment variable if provided, otherwise pick based on environment
     let dbPath = process.env.DB_PATH || (isProd ? prodPath : defaultPath);
 
+    console.log(`[Database] Initializing connection to: ${dbPath} (Mode: ${isProd ? 'Production' : 'Development'})`);
+
     // Build-time resilience
     if (!fs.existsSync(dbPath)) {
         if (isBuild) {

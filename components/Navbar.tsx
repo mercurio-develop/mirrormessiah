@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { LogOut, Film, Shield, Terminal, Sparkles } from 'lucide-react';
@@ -11,6 +12,11 @@ export default function Navbar() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { isAdmin, isDevelopment, logout, logoutAdmin } = useAdmin();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const isFamilyMode = searchParams.get('audience') === 'family';
 
@@ -74,7 +80,7 @@ export default function Navbar() {
             >
               <Sparkles className="w-4 h-4" /> {isFamilyMode ? 'Family Active' : 'Family Mode'}
             </button>
-            {isAdmin && isDevelopment && (
+            {mounted && isAdmin && isDevelopment && (
                <Link 
                 href="/admin" 
                 className={`text-sm font-semibold transition-colors hover:text-primary ${pathname.startsWith('/admin') ? 'text-primary' : 'text-muted-foreground'}`}
@@ -87,7 +93,7 @@ export default function Navbar() {
 
         <div className="flex items-center gap-4 sm:gap-6">
           <div className="flex items-center gap-2">
-            {isDevelopment && (
+            {mounted && isDevelopment && (
                <button 
                 onClick={handleAdminToggle}
                 className={`flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider border rounded-full transition-all ${
