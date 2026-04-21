@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import MediaPlayer from '@/components/MediaPlayer';
 import HeroBackdrop from '@/components/HeroBackdrop';
-import { ChevronLeft, Star, Calendar, Hash, Clock, Info, Activity, Globe, User, Edit } from 'lucide-react';
+import {ChevronLeft, Star, Calendar, Hash, Clock, Info, Activity, Globe, User, Edit, Sparkles} from 'lucide-react';
 import { getMovie } from '@/features/movie/queries/get-movie';
 import { getMoviePlayback } from '@/features/movie/queries/get-movie-playback';
 import { b64urlEncode } from '@/lib/b64url';
@@ -95,6 +95,15 @@ export default async function WatchPage({ params }: WatchPageProps) {
                   <span className="px-2 py-0.5 border border-muted-foreground/30 rounded text-[10px] font-black uppercase tracking-tighter text-muted-foreground">
                     {movie.quality || 'HDR'}
                   </span>
+                  {movieData?.subtitles && movieData.subtitles.length > 0 && (
+                    <>
+                      <div className="h-4 w-px bg-border/50" />
+                      <span className="px-2.5 py-0.5 border border-primary/40 bg-primary/10 rounded-sm text-[10px] font-black uppercase tracking-widest text-primary flex items-center gap-1.5 shadow-[0_0_15px_rgba(56,189,248,0.15)]">
+                        <Sparkles className="h-3 w-3 fill-current" />
+                        CC
+                      </span>
+                    </>
+                  )}
                   {movie.audience && (
                     <>
                       <div className="h-4 w-px bg-border/50" />

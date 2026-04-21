@@ -65,23 +65,14 @@ export default function MediaPlayer({
 
       playerRef.current = player;
 
-      subtitles.forEach((subtitle) => {
-        player.addRemoteTextTrack({
-          kind: 'captions',
-          src: subtitle.src,
-          srclang: subtitle.srclang || 'en',
-          label: subtitle.label || 'Subtitles',
-          default: subtitle.default || false
-        }, false);
-      });
-
       player.on('error', () => {
         const error = player.error();
         console.error('Video.js Error:', error);
       });
     }
-  }, [src, mimeType, subtitles]);
+  }, []); // Only run on mount
 
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (playerRef.current && !playerRef.current.isDisposed()) {
@@ -91,15 +82,52 @@ export default function MediaPlayer({
     };
   }, []);
 
+  // Handle source and mimeType changes
   useEffect(() => {
-    if (playerRef.current && !playerRef.current.isDisposed() && src) {
-      playerRef.current.src({
+    const player = playerRef.current;
+    if (player && !player.isDisposed() && src) {
+      player.src({
         src: src,
         type: mimeType
       });
-      playerRef.current.load();
+      player.load();
     }
   }, [src, mimeType]);
+
+  // Handle subtitle changes independently
+  useEffect(() => {
+    const player = playerRef.current;
+    if (player && !player.isDisposed()) {
+      // Remove all existing remote text tracks
+      const tracks = player.remoteTextTracks();
+      for (let i = tracks.length - 1; i >= 0; i--) {
+        const track = tracks[i];
+        player.removeRemoteTextTrack(track);
+      }
+
+      // Add new ones
+      if (subtitles && subtitles.length > 0) {
+        subtitles.forEach((subtitle, index) => {
+          const track = player.addRemoteTextTrack({
+            kind: 'captions',
+            src: subtitle.src,
+            srclang: subtitle.srclang || 'en',
+            label: subtitle.label || 'Subtitles',
+            default: subtitle.default || (index === 0) // Default to first track if none specified
+          }, false);
+          
+          // Force showing the default track
+          if (subtitle.default || index === 0) {
+             // We need to wait for the track to be added to the DOM before setting mode
+             // but addRemoteTextTrack returns a TextTrack object we can use
+             if (track) {
+                track.mode = 'showing';
+             }
+          }
+        });
+      }
+    }
+  }, [subtitles]);
 
   return (
     <div className={'relative w-full h-full ' + className}>
