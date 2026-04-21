@@ -98,8 +98,8 @@ export default async function WatchPage({ params }: WatchPageProps) {
                   {movieData?.subtitles && movieData.subtitles.length > 0 && (
                     <>
                       <div className="h-4 w-px bg-border/50" />
-                      <span className="px-2.5 py-0.5 border border-primary/40 bg-primary/10 rounded-sm text-[10px] font-black uppercase tracking-widest text-primary flex items-center gap-1.5 shadow-[0_0_15px_rgba(56,189,248,0.15)]">
-                        <Sparkles className="h-3 w-3 fill-current" />
+                      <span className="px-1.5 py-0.5 border border-primary/20 bg-primary/10 rounded-sm text-[9px] font-extrabold uppercase tracking-widest text-primary flex items-center gap-1 shadow-sm">
+                        <Sparkles className="h-2.5 w-2.5 fill-current" />
                         CC
                       </span>
                     </>

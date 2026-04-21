@@ -8,17 +8,46 @@ export function getMoviePlayback(id: number) {
   const movie = db.prepare('SELECT id, title FROM movies WHERE id = ?').get(id) as any;
   if (!movie) return null;
 
-  // 1. Try strict match: MP4 and 1080p
+  // 1. TOP PRIORITY: MP4, 1080p, and NOT x265/10bit (Most compatible high quality)
   let bestFile = db.prepare(`
     SELECT path, mime_type, size_bytes
     FROM files
     WHERE movie_id = ? 
     AND lower(path) LIKE '%.mp4'
     AND (path LIKE '%1080p%' OR path LIKE '%FHD%')
+    AND path NOT LIKE '%x265%'
+    AND path NOT LIKE '%10bit%'
+    AND path NOT LIKE '%HEVC%'
     LIMIT 1
   `).get(id) as { path: string; mime_type: string | null } | undefined;
 
-  // 2. Fallback to any MP4
+  // 2. High Compatibility: Any MP4 that is NOT x265/10bit
+  if (!bestFile) {
+    bestFile = db.prepare(`
+      SELECT path, mime_type, size_bytes
+      FROM files
+      WHERE movie_id = ? 
+      AND lower(path) LIKE '%.mp4'
+      AND path NOT LIKE '%x265%'
+      AND path NOT LIKE '%10bit%'
+      AND path NOT LIKE '%HEVC%'
+      LIMIT 1
+    `).get(id) as { path: string; mime_type: string | null } | undefined;
+  }
+
+  // 3. Fallback to 1080p MP4 even if it's x265 (Better than nothing)
+  if (!bestFile) {
+    bestFile = db.prepare(`
+      SELECT path, mime_type, size_bytes
+      FROM files
+      WHERE movie_id = ? 
+      AND lower(path) LIKE '%.mp4'
+      AND (path LIKE '%1080p%' OR path LIKE '%FHD%')
+      LIMIT 1
+    `).get(id) as { path: string; mime_type: string | null } | undefined;
+  }
+
+  // 4. Fallback to any MP4
   if (!bestFile) {
     bestFile = db.prepare(`
       SELECT path, mime_type, size_bytes
