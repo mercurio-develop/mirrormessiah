@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Video, ScanSearch, Plus, Trash2, Loader2, AlertCircle, CheckCircle2, Search, Link as LinkIcon, X } from 'lucide-react';
+import { Video, ScanSearch, Plus, Trash2, Loader2, AlertCircle, CheckCircle2, Search, Link as LinkIcon, X, FileVideo, HardDrive } from 'lucide-react';
 import FileBrowser from './FileBrowser';
 
 interface MediaFile {
@@ -73,10 +73,7 @@ export default function MediaFileManager({ movieId }: { movieId: number }) {
       const data = await res.json();
       if (!res.ok) {
         showStatus('error', data.error ?? 'Scan failed');
-        // If directory doesn't exist, show the manual input
-        if (res.status === 404) {
-          setShowManualInput(true);
-        }
+        if (res.status === 404) setShowManualInput(true);
         return;
       }
       showStatus('success', `Scanning complete: ${data.added} new files linked`);
@@ -129,46 +126,59 @@ export default function MediaFileManager({ movieId }: { movieId: number }) {
   };
 
   return (
-    <div className="p-8 bg-card border border-border rounded-2xl space-y-6 shadow-sm">
-      <div className="flex items-center justify-between pb-2 border-b border-border/50">
-        <div className="flex items-center gap-3">
-          <Video className="h-5 w-5 text-primary" />
-          <h3 className="text-lg font-bold text-foreground">Media Sources</h3>
+    <div className="p-8 bg-card border border-border rounded-2xl space-y-8 shadow-sm font-sans">
+      {/* Enhanced Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-border/50">
+        <div className="flex items-center gap-4">
+          <div className="p-3 bg-primary/10 rounded-xl">
+             <Video className="h-6 w-6 text-primary" />
+          </div>
+          <div>
+            <h3 className="text-xl font-bold text-foreground">Media Sources</h3>
+            <p className="text-xs text-muted-foreground font-medium">Manage video files linked to this entry</p>
+          </div>
           {files.length > 0 && (
-            <span className="text-[10px] font-black bg-primary/10 text-primary px-2 py-0.5 rounded-full uppercase tracking-widest">
-              {files.length}
+            <span className="ml-2 text-[10px] font-black bg-primary/10 text-primary px-2.5 py-1 rounded-full uppercase tracking-widest border border-primary/20">
+              {files.length} {files.length === 1 ? 'FILE' : 'FILES'}
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        
+        <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={handleScan}
             disabled={scanning}
-            className="h-9 px-4 bg-zinc-800 text-white text-xs font-bold rounded-xl flex items-center gap-2 hover:bg-zinc-700 disabled:opacity-50 transition-all"
+            title="Scan current folder for new videos"
+            className="h-10 px-4 bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-bold rounded-xl flex items-center gap-2 transition-all disabled:opacity-50"
           >
-            {scanning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ScanSearch className="h-3.5 w-3.5" />}
-            Refresh Folder
+            {scanning ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanSearch className="h-4 w-4" />}
+            <span className="hidden sm:inline">Refresh Folder</span>
           </button>
-          <button
-            type="button"
-            onClick={() => setIsBrowserOpen(true)}
-            className="h-9 px-4 bg-primary text-primary-foreground text-xs font-bold rounded-xl flex items-center gap-2 hover:opacity-90 transition-all"
-          >
-            <LinkIcon className="h-3.5 w-3.5" /> Relink File
-          </button>
+          
+          <div className="h-6 w-px bg-border/50 mx-1 hidden md:block" />
+          
           <button
             type="button"
             onClick={() => setIsDirBrowserOpen(true)}
-            className="h-9 px-4 bg-zinc-800 text-white text-xs font-bold rounded-xl flex items-center gap-2 hover:bg-zinc-700 transition-all"
+            className="h-10 px-4 bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-bold rounded-xl flex items-center gap-2 transition-all"
           >
-            <Search className="h-3.5 w-3.5" /> Browse Folders
+            <Search className="h-4 w-4" />
+            <span className="hidden sm:inline">Browse Folders</span>
+          </button>
+          
+          <button
+            type="button"
+            onClick={() => setIsBrowserOpen(true)}
+            className="h-10 px-5 bg-primary text-primary-foreground text-xs font-extrabold uppercase tracking-widest rounded-xl flex items-center gap-2 hover:opacity-90 transition-all shadow-lg shadow-primary/10"
+          >
+            <LinkIcon className="h-4 w-4" /> Relink
           </button>
         </div>
       </div>
 
       {status && (
-        <div className={`p-3 border text-xs font-bold flex items-center gap-2 rounded-xl animate-in fade-in ${
+        <div className={`p-4 border text-xs font-bold flex items-center gap-3 rounded-2xl animate-in fade-in slide-in-from-top-2 ${
           status.type === 'success'
             ? 'bg-primary/10 border-primary/20 text-primary'
             : 'bg-destructive/10 border-destructive/20 text-destructive'
@@ -179,69 +189,95 @@ export default function MediaFileManager({ movieId }: { movieId: number }) {
       )}
 
       {showManualInput && (
-        <div className="p-5 bg-primary/5 border border-primary/20 rounded-2xl space-y-4 animate-in slide-in-from-top-2">
+        <div className="p-6 bg-primary/5 border border-primary/20 rounded-2xl space-y-5 animate-in zoom-in-95 duration-300">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-primary">
-              <LinkIcon className="h-4 w-4" />
-              <span className="text-xs font-black uppercase tracking-widest">Manual Directory Link</span>
+            <div className="flex items-center gap-3 text-primary">
+              <HardDrive className="h-5 w-5" />
+              <span className="text-sm font-black uppercase tracking-widest">Manual Directory Link</span>
             </div>
-            <button onClick={() => setShowManualInput(false)} className="text-muted-foreground hover:text-foreground">
+            <button onClick={() => setShowManualInput(false)} className="p-1.5 hover:bg-primary/10 rounded-full transition-colors text-primary/40 hover:text-primary">
                 <X className="h-4 w-4" />
             </button>
           </div>
-          <p className="text-xs text-muted-foreground font-medium">Automatic scan failed. Enter the absolute path to the directory where the movie is stored:</p>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={manualPath}
-              onChange={(e) => setManualPath(e.target.value)}
-              placeholder="/media/storage/movies/My Movie (2024)"
-              className="flex-1 h-12 bg-background border border-border rounded-xl px-4 text-xs font-mono focus:border-primary outline-none"
-            />
-            <button
-              onClick={handleManualRelink}
-              className="h-12 px-6 bg-primary text-white text-xs font-bold uppercase rounded-xl hover:opacity-90 transition-all shadow-lg shadow-primary/20"
-            >
-              Update Registry
-            </button>
+          <div className="space-y-4">
+             <p className="text-xs text-muted-foreground font-medium leading-relaxed">
+                Automatic scan failed. Please verify the absolute path to the directory containing this movie's video files:
+             </p>
+             <div className="flex flex-col sm:flex-row gap-3">
+                <input
+                    type="text"
+                    value={manualPath}
+                    onChange={(e) => setManualPath(e.target.value)}
+                    placeholder="/path/to/movie/folder"
+                    className="flex-1 h-12 bg-background border border-border rounded-xl px-5 text-sm font-mono focus:border-primary outline-none focus:ring-4 focus:ring-primary/5 transition-all"
+                />
+                <button
+                    onClick={handleManualRelink}
+                    className="h-12 px-8 bg-primary text-primary-foreground text-xs font-black uppercase tracking-widest rounded-xl hover:opacity-90 transition-all shadow-xl shadow-primary/20"
+                >
+                    Link & Sync
+                </button>
+             </div>
           </div>
         </div>
       )}
 
       {loading ? (
-        <div className="flex items-center justify-center py-8">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="h-10 w-10 animate-spin text-primary/20" />
         </div>
       ) : (
-        <div className="space-y-3">
-          {files.map(file => (
-            <div
-              key={file.id}
-              className="flex items-center gap-3 p-4 bg-muted/5 border border-border/50 rounded-xl group hover:border-border transition-all"
-            >
-              <div className="shrink-0 w-12 h-8 bg-primary/10 rounded-md flex items-center justify-center">
-                <span className="text-[10px] font-black text-primary uppercase">{file.container || 'MP4'}</span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-bold text-foreground truncate">{file.path.split('/').pop()}</p>
-                <p className="text-[10px] text-muted-foreground/50 font-mono truncate">{file.path}</p>
-              </div>
-              <div className="shrink-0 flex items-center gap-4">
-                {file.size_bytes && (
-                  <span className="text-[10px] font-bold text-muted-foreground/40 font-mono">
-                    {(file.size_bytes / (1024 * 1024 * 1024)).toFixed(2)} GB
-                  </span>
-                )}
-                <button
-                  type="button"
-                  onClick={() => handleDelete(file.id)}
-                  className="h-8 w-8 flex items-center justify-center text-muted-foreground/30 hover:text-destructive opacity-0 group-hover:opacity-100 transition-all rounded-lg hover:bg-destructive/10"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
+        <div className="grid grid-cols-1 gap-4">
+          {files.length === 0 ? (
+            <div className="py-16 text-center border-2 border-dashed border-border rounded-2xl">
+               <FileVideo className="h-12 w-12 text-muted-foreground/20 mx-auto mb-4" />
+               <p className="text-sm font-bold text-muted-foreground uppercase tracking-widest">No active media sources</p>
             </div>
-          ))}
+          ) : (
+            files.map(file => (
+              <div
+                key={file.id}
+                className="group flex flex-col sm:flex-row sm:items-center gap-4 p-5 bg-muted/20 border border-border/40 rounded-2xl hover:bg-muted/40 hover:border-border transition-all duration-300"
+              >
+                <div className="shrink-0 w-14 h-14 bg-background border border-border rounded-xl flex items-center justify-center shadow-sm group-hover:border-primary/30 transition-colors">
+                  <div className="flex flex-col items-center">
+                    <Video className="h-5 w-5 text-primary/60 group-hover:text-primary transition-colors" />
+                    <span className="text-[8px] font-black text-primary/40 uppercase mt-1">{(file.container || 'MP4')}</span>
+                  </div>
+                </div>
+                
+                <div className="flex-1 min-w-0 space-y-1">
+                  <div className="flex items-center gap-3">
+                     <p className="text-sm font-bold text-foreground truncate">{file.path.split('/').pop()}</p>
+                     <span className="px-2 py-0.5 bg-primary/5 text-primary text-[8px] font-black uppercase rounded-sm border border-primary/10">ID: {file.id}</span>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground/40 font-mono truncate max-w-2xl">{file.path}</p>
+                  
+                  <div className="flex items-center gap-4 pt-1">
+                    {file.size_bytes && (
+                      <span className="text-[10px] font-bold text-muted-foreground/60 flex items-center gap-1.5">
+                        <HardDrive className="h-3 w-3" /> {(file.size_bytes / (1024 * 1024 * 1024)).toFixed(2)} GB
+                      </span>
+                    )}
+                    <span className="text-[10px] font-bold text-muted-foreground/30 flex items-center gap-1.5">
+                      <Clock className="h-3 w-3" /> Linked {new Date(file.added_at).toLocaleDateString()}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="shrink-0 flex items-center justify-end">
+                   <button
+                    type="button"
+                    onClick={() => handleDelete(file.id)}
+                    title="Detach from registry"
+                    className="h-10 w-10 flex items-center justify-center text-muted-foreground/30 hover:text-destructive hover:bg-destructive/10 transition-all rounded-xl border border-transparent hover:border-destructive/20"
+                  >
+                    <Trash2 className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       )}
 
@@ -258,7 +294,7 @@ export default function MediaFileManager({ movieId }: { movieId: number }) {
         isOpen={isDirBrowserOpen}
         mode="videos"
         onClose={() => setIsDirBrowserOpen(false)}
-        onSelect={() => {}} // Not used in this mode
+        onSelect={() => {}} 
         onSelectDirectory={(dirPath) => {
             setIsDirBrowserOpen(false);
             setManualPath(dirPath);
@@ -268,3 +304,9 @@ export default function MediaFileManager({ movieId }: { movieId: number }) {
     </div>
   );
 }
+
+const Clock = ({ className }: { className?: string }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+    </svg>
+);
