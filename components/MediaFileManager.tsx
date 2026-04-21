@@ -149,30 +149,33 @@ export default function MediaFileManager({ movieId }: { movieId: number }) {
             type="button"
             onClick={handleScan}
             disabled={scanning}
-            title="Scan current folder for new videos"
+            title="Scan the current directory for any new video files"
             className="h-10 px-4 bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-bold rounded-xl flex items-center gap-2 transition-all disabled:opacity-50"
           >
             {scanning ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanSearch className="h-4 w-4" />}
-            <span className="hidden sm:inline">Refresh Folder</span>
+            <span className="hidden sm:inline text-[10px] uppercase tracking-widest">Refresh</span>
           </button>
           
           <div className="h-6 w-px bg-border/50 mx-1 hidden md:block" />
           
           <button
             type="button"
-            onClick={() => setIsDirBrowserOpen(true)}
-            className="h-10 px-4 bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-bold rounded-xl flex items-center gap-2 transition-all"
+            onClick={() => setIsBrowserOpen(true)}
+            title="Choose a specific video file to link to this movie"
+            className="h-10 px-4 border border-border hover:bg-muted text-muted-foreground hover:text-foreground text-xs font-bold rounded-xl flex items-center gap-2 transition-all"
           >
-            <Search className="h-4 w-4" />
-            <span className="hidden sm:inline">Browse Folders</span>
+            <FileVideo className="h-4 w-4" />
+            <span className="hidden sm:inline text-[10px] uppercase tracking-widest">Relink File</span>
           </button>
           
           <button
             type="button"
-            onClick={() => setIsBrowserOpen(true)}
+            onClick={() => setIsDirBrowserOpen(true)}
+            title="Select an entire folder to scan and link all videos inside"
             className="h-10 px-5 bg-primary text-primary-foreground text-xs font-extrabold uppercase tracking-widest rounded-xl flex items-center gap-2 hover:opacity-90 transition-all shadow-lg shadow-primary/10"
           >
-            <LinkIcon className="h-4 w-4" /> Relink
+            <Folder className="h-4 w-4" />
+            <span className="hidden sm:inline">Link Folder</span>
           </button>
         </div>
       </div>
