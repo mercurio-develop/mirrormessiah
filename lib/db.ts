@@ -8,39 +8,46 @@ let db: Database.Database | null = null;
 
 export function getDb(): Database.Database {
   if (!db) {
-    // 1. In Production, we MUST use the volume-mounted database
-    // 2. In Development, we use the local file in the root
     const isProd = process.env.NODE_ENV === 'production';
     const isBuild = process.env.NEXT_PHASE === 'phase-production-build';
     
     const defaultPath = path.join(/* turbopackIgnore: true */ process.cwd(), 'media.db');
     const prodPath = '/app/media.db';
     
-    // Use environment variable if provided, otherwise pick based on environment
+    // In Production, strictly follow DB_PATH or /app/media.db
+    // In Dev, follow DB_PATH or the local root file
     let dbPath = process.env.DB_PATH || (isProd ? prodPath : defaultPath);
 
-    console.log(`[Database] Initializing connection to: ${dbPath} (Mode: ${isProd ? 'Production' : 'Development'})`);
+    // Build-phase resilience (keep this for Next.js compilation)
+    if (isBuild) {
+        console.warn('Build Phase: Using temporary in-memory database.');
+        return new Database(':memory:');
+    }
 
-    // Build-time resilience
+    // Runtime Check: If the file is missing, we need to know!
     if (!fs.existsSync(dbPath)) {
-        if (isBuild) {
-            console.warn('Build Phase: Using in-memory DB.');
-            db = new Database(':memory:');
-            return db;
-        }
-        // If we're not building and it's missing, try fallback to default
-        if (fs.existsSync(defaultPath)) {
+        console.error(`[Database] CRITICAL ERROR: Database file not found at: ${dbPath}`);
+        console.error(`[Database] Available directory content: ${fs.readdirSync(path.dirname(dbPath)).join(', ')}`);
+        
+        // Fallback to local root only if in dev
+        if (!isProd && fs.existsSync(defaultPath)) {
             dbPath = defaultPath;
         } else {
-            console.warn(`Database not found at ${dbPath}, creating in-memory fallback.`);
-            db = new Database(':memory:');
-            return db;
+            throw new Error(`Registry Connection Failure: File not found at ${dbPath}`);
         }
     }
 
-    db = new Database(dbPath, { readonly: false });
-    db.pragma('foreign_keys = ON');
-    db.pragma('journal_mode = WAL');
+    try {
+        db = new Database(dbPath, { readonly: false, timeout: 5000 });
+        db.pragma('foreign_keys = ON');
+        db.pragma('journal_mode = WAL');
+        
+        const count = db.prepare('SELECT COUNT(*) as c FROM movies').get() as { c: number };
+        console.log(`[Database] CONNECTED TO: ${dbPath} | ENTITIES_FOUND: ${count.c}`);
+    } catch (err: any) {
+        console.error(`[Database] CONNECTION_FAILURE: ${err.message}`);
+        throw err;
+    }
   }
 
   return db;
