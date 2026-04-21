@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import '@/lib/db_migrate'
 import './globals.css'
 import { ThemeProvider } from '@/contexts/ThemeContext'
 import { AdminProvider } from '@/contexts/AdminContext'

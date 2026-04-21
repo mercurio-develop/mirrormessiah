@@ -49,7 +49,7 @@ export function getMovies(options: {
   }
 
   let movieQuery = `
-    SELECT m.id, m.title, m.year, m.quality, m.thumbnail, m.genres, m.rating, m.audience,
+    SELECT m.id, m.title, m.year, m.quality, m.thumbnail, m.genres, m.rating, m.audience, m.needs_repair,
            (${relevanceSql}) as search_relevance,
            EXISTS(SELECT 1 FROM subtitles WHERE movie_id = m.id) as has_subtitles
     FROM movies m

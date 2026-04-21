@@ -29,12 +29,12 @@ export async function GET(
     
     // 1. Try to find an existing file link
     const movieFile = db.prepare(`
-      SELECT f.path, m.library_id
+      SELECT f.path, m.library_id, m.title
       FROM movies m
       LEFT JOIN files f ON f.movie_id = m.id
       WHERE m.id = ?
       LIMIT 1
-    `).get(movieId) as { path: string | null; library_id: number } | undefined;
+    `).get(movieId) as { path: string | null; library_id: number; title: string } | undefined;
     
     if (!movieFile) {
       return NextResponse.json({ error: 'Movie record not found' }, { status: 404 });
