@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import videojs from 'video.js';
 import 'video.js/dist/video-js.css';
+import { AlertCircle, RefreshCcw } from 'lucide-react';
 
 interface SubtitleTrack {
   src: string;
@@ -31,6 +32,7 @@ export default function MediaPlayer({
 }: MediaPlayerProps) {
   const videoRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<VideoJsPlayer | null>(null);
+  const [error, setError] = useState<{ code: number; message: string } | null>(null);
 
   useEffect(() => {
     if (!playerRef.current && videoRef.current) {
@@ -59,9 +61,17 @@ export default function MediaPlayer({
       playerRef.current = player;
 
       player.on('error', () => {
-        const error = player.error();
-        console.error('Video.js Error:', error);
+        const videoError = player.error();
+        if (videoError) {
+            setError({
+                code: videoError.code,
+                message: videoError.message || 'Media stream interference detected'
+            });
+        }
       });
+      
+      // Clear error on new source
+      player.on('loadstart', () => setError(null));
       
       // Initialize source
       player.src({ src, type: mimeType });
@@ -130,8 +140,30 @@ export default function MediaPlayer({
   }, []);
 
   return (
-    <div className={'relative w-full h-full ' + className}>
+    <div className={'relative w-full h-full group bg-black overflow-hidden ' + className}>
       <div ref={videoRef} className="absolute inset-0" />
+      
+      {/* Internal Error Overlay */}
+      {error && (
+        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/90 backdrop-blur-sm p-8 text-center animate-in fade-in duration-500">
+           <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-full mb-6">
+              <AlertCircle className="h-10 w-10 text-destructive animate-pulse" />
+           </div>
+           <div className="space-y-2 max-w-md">
+                <h3 className="text-xl font-bold text-foreground uppercase tracking-tight italic">Stream_Interruption</h3>
+                <p className="text-xs font-bold text-muted-foreground uppercase tracking-[0.2em] opacity-60">Error Code {error.code}: {error.message}</p>
+                <p className="text-sm text-muted-foreground mt-4 leading-relaxed">
+                    The requested archive stream could not be stabilized. This may be due to unsupported encoding or temporary storage offline.
+                </p>
+           </div>
+           <button 
+                onClick={() => window.location.reload()}
+                className="mt-10 px-8 py-3 bg-white text-black hover:bg-zinc-200 text-xs font-black uppercase tracking-widest rounded-full transition-all flex items-center gap-3 shadow-2xl"
+           >
+              <RefreshCcw className="h-4 w-4" /> Restart Session
+           </button>
+        </div>
+      )}
     </div>
   );
 }
