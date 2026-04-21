@@ -2,7 +2,7 @@ node_modules
 .next
 .env
 .env.local
-*.log
-*.db-shm
+media.db
+media.db-shm
 *.db-wal
 .git
