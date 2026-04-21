@@ -7,6 +7,7 @@ import { getMovie } from '@/features/movie/queries/get-movie';
 import { getMoviePlayback } from '@/features/movie/queries/get-movie-playback';
 import { b64urlEncode } from '@/lib/b64url';
 import Image from 'next/image';
+import AdminEditButton from '@/components/AdminEditButton';
 
 interface WatchPageProps {
   params: Promise<{ id: string }>;
@@ -24,7 +25,8 @@ const getPosterUrl = (thumbnail: string | null | undefined): string | null => {
 };
 
 export default async function WatchPage({ params }: WatchPageProps) {
-  const { id } = await params;
+
+    const { id } = await params;
   const movieId = parseInt(id);
   if (isNaN(movieId)) notFound();
 
@@ -206,14 +208,7 @@ export default async function WatchPage({ params }: WatchPageProps) {
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent opacity-60" />
                   </div>
-                  <div className="mt-8">
-                     <Link 
-                        href={"/admin/movies/" + movie.id}
-                        className="flex items-center justify-center gap-2 w-full py-4 bg-muted hover:bg-muted/80 text-xs font-bold uppercase tracking-widest rounded-xl transition-all"
-                     >
-                        <Edit className="h-4 w-4" /> Edit Entry
-                     </Link>
-                  </div>
+                    <AdminEditButton movieId={movie.id} />
                 </div>
               )}
             </div>
