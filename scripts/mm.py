@@ -53,6 +53,8 @@ FOLDER_RE = re.compile(
     re.IGNORECASE,
 )
 
+SKIP_QUALITY = re.compile(r'2160p|4K|UHD', re.IGNORECASE)
+
 # ---------------------------------------------------------------------------
 # DB helpers
 # ---------------------------------------------------------------------------
@@ -265,6 +267,11 @@ def ingest_path(db: sqlite3.Connection, path: Path, library_id: int, auto_scrape
         return False
 
     meta = parse_folder_name(folder.name)
+
+    # Skip 4K/2160p folders
+    if SKIP_QUALITY.search(folder.name):
+        print(f'  Skipping 4K: {folder.name}')
+        return False
 
     # Check if already in DB by title+year+quality
     existing = db.execute(
