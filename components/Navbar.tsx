@@ -2,12 +2,11 @@
 
 import Link from 'next/link';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
-import { LogOut, Film, Shield, Terminal, LayoutGrid, Sparkles } from 'lucide-react';
+import { LogOut, Film, Shield, Terminal, Sparkles } from 'lucide-react';
 import { useAdmin } from '@/contexts/AdminContext';
 import ThemeToggle from './ThemeToggle';
-import { Suspense } from 'react';
 
-function NavbarContent() {
+export default function Navbar() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -120,13 +119,5 @@ function NavbarContent() {
         </div>
       </div>
     </nav>
-  );
-}
-
-export default function Navbar() {
-  return (
-    <Suspense fallback={null}>
-      <NavbarContent />
-    </Suspense>
   );
 }
