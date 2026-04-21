@@ -78,7 +78,7 @@ export default async function WatchPage({ params }: WatchPageProps) {
             <div className="lg:col-span-8 space-y-12">
               {/* Header Info */}
               <div className="space-y-6">
-                <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight leading-[1.1]">
+                <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight leading-[1.1]">
                   {movie.title}
                 </h1>
                 
