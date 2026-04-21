@@ -37,7 +37,7 @@ export const POST = withAdminAuth(async (
     const db = getDb();
     
     // Find matching library
-    const library = db.prepare('SELECT id FROM libraries WHERE ? LIKE root_path || "%" LIMIT 1').get(targetPath) as { id: number } | undefined;
+    const library = db.prepare("SELECT id FROM libraries WHERE ? LIKE root_path || '%' LIMIT 1").get(targetPath) as { id: number } | undefined;
     
     if (!library) {
         return NextResponse.json({ error: 'Path is not within any registered library' }, { status: 400 });
