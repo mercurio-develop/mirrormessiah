@@ -3,6 +3,7 @@ import './globals.css'
 import { ThemeProvider } from '@/contexts/ThemeContext'
 import { AdminProvider } from '@/contexts/AdminContext'
 import Navbar from '@/components/Navbar'
+import { Suspense } from 'react'
 
 export const metadata: Metadata = {
   title: 'MirrorMessiah | Premium Media Registry',
@@ -19,9 +20,13 @@ export default function RootLayout({
       <body className="h-full font-sans">
         <ThemeProvider>
           <AdminProvider>
-            <Navbar />
+            <Suspense fallback={<div className="h-20" />}>
+              <Navbar />
+            </Suspense>
             <main className="min-h-screen pt-20">
-              {children}
+              <Suspense fallback={null}>
+                {children}
+              </Suspense>
             </main>
           </AdminProvider>
         </ThemeProvider>

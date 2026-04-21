@@ -8,7 +8,7 @@ let db: Database.Database | null = null;
 
 export function getDb(): Database.Database {
   if (!db) {
-    const dbPath = path.join(/*turbopackIgnore: true*/ process.cwd(), 'media.db');
+    const dbPath = path.join(/* turbopackIgnore: true */ process.cwd(), 'media.db');
     
     // Check if the database file exists. 
     // If not, we use an in-memory instance to prevent build-time crashes.

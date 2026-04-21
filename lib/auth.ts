@@ -13,8 +13,15 @@ export class AuthError extends Error {
  * IMPORTANT: Admin features are restricted to development mode only.
  */
 export async function requireAdminKey(request: Request): Promise<void> {
-  // 0. Restrict to Local Development (but allow during build)
-  if (process.env.NODE_ENV === 'production' && process.env.NEXT_PHASE !== 'phase-production-build') {
+  // 0. Build Phase & Environment Safeguard
+  const isBuild = process.env.NEXT_PHASE === 'phase-production-build';
+  const isAdminKeySet = !!process.env.ADMIN_KEY;
+
+  if (isBuild && !isAdminKeySet) {
+    return;
+  }
+
+  if (process.env.NODE_ENV === 'production' && !isBuild) {
     throw new AuthError('Administrative tools are restricted to local development only', 403);
   }
 
@@ -78,6 +85,14 @@ export function withAdminAuth<T extends any[]>(
  * Validates that the user has at least general app access (GATE_KEY)
  */
 export async function requireGateKey(request: Request): Promise<void> {
+  // 0. Build Phase Safeguard
+  const isBuild = process.env.NEXT_PHASE === 'phase-production-build';
+  const isGateKeySet = !!process.env.GATE_KEY;
+
+  if (isBuild && !isGateKeySet) {
+    return;
+  }
+
   const gateKey = process.env.GATE_KEY;
 
   if (!gateKey) {
