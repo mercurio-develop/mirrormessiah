@@ -9,6 +9,7 @@ import { Save, Loader2, AlertCircle, Trash2, Globe, Info, Search, Film, Calendar
 import FileBrowser from './FileBrowser';
 import SubtitleManager from './SubtitleManager';
 import MediaFileManager from './MediaFileManager';
+import DeleteMovieModal from './DeleteMovieModal';
 
 interface AdminMovieFormProps {
   movie: Movie;
@@ -17,12 +18,19 @@ interface AdminMovieFormProps {
 const getPosterUrl = (thumbnail: string | null | undefined): string => {
   if (!thumbnail) return '/placeholder.svg';
   if (thumbnail.startsWith('http')) return thumbnail;
-  return "/api/images?path=" + b64urlEncode(thumbnail);
+  
+  // Handle paths that might have a cache-buster query param already
+  const [basePath, query] = thumbnail.split('?');
+  let url = "/api/images?path=" + b64urlEncode(basePath);
+  if (query) url += "&" + query;
+  
+  return url;
 };
 
 export default function AdminMovieForm({ movie }: AdminMovieFormProps) {
   const router = useRouter();
   const [isBrowserOpen, setIsBrowserOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   
   const [formData, setFormData] = useState({
     title: movie.title || '',
@@ -59,7 +67,9 @@ export default function AdminMovieForm({ movie }: AdminMovieFormProps) {
       
       if (res.ok) {
         const data = await res.json();
-        setFormData(prev => ({ ...prev, thumbnail: data.thumbnail }));
+        // Add timestamp to bust cache
+        const cacheBuster = data.thumbnail + (data.thumbnail.includes('?') ? '&' : '?') + 't=' + Date.now();
+        setFormData(prev => ({ ...prev, thumbnail: cacheBuster }));
         setStatus({ type: 'success', msg: 'Poster updated successfully' });
       }
     } catch (err) {
@@ -80,6 +90,7 @@ export default function AdminMovieForm({ movie }: AdminMovieFormProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...formData,
+          thumbnail: formData.thumbnail.split('?')[0],
           year: formData.year ? parseInt(formData.year) : null,
           rating: formData.rating ? parseFloat(formData.rating) : null,
           runtime: formData.runtime ? parseInt(formData.runtime) : null,
@@ -130,18 +141,8 @@ export default function AdminMovieForm({ movie }: AdminMovieFormProps) {
     }
   };
 
-  const handleDelete = async () => {
-    if (!confirm('Are you sure you want to permanently delete this movie from the registry?')) return;
-
-    setIsSubmitting(true);
-    try {
-      const response = await fetch("/api/movies/" + movie.id, { method: 'DELETE' });
-      if (response.ok) {
-        router.push('/admin/movies');
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
+  const handleDelete = () => {
+    setIsDeleteModalOpen(true);
   };
   
   const posterUrl = getPosterUrl(formData.thumbnail);
@@ -398,6 +399,13 @@ export default function AdminMovieForm({ movie }: AdminMovieFormProps) {
         mode="images"
         onClose={() => setIsBrowserOpen(false)}
         onSelect={handlePosterSelect}
+      />
+
+      <DeleteMovieModal
+        movie={{ id: movie.id, title: formData.title }}
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onDeleted={() => router.push('/admin/movies')}
       />
     </>
   );

@@ -15,7 +15,12 @@ interface WatchPageProps {
 const getPosterUrl = (thumbnail: string | null | undefined): string | null => {
     if (!thumbnail) return null;
     if (thumbnail.startsWith('http')) return thumbnail;
-    return "/api/images?path=" + b64urlEncode(thumbnail);
+    
+    const [basePath, query] = thumbnail.split('?');
+    let url = "/api/images?path=" + b64urlEncode(basePath);
+    if (query) url += "&" + query;
+    
+    return url;
 };
 
 export default async function WatchPage({ params }: WatchPageProps) {

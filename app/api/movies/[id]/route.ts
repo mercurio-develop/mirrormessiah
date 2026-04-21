@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { withAdminAuth } from '@/lib/auth';
 import fs from 'fs';
+import path from 'path';
 
 /**
  * GET /api/movies/[id]
@@ -79,21 +80,44 @@ export const DELETE = withAdminAuth(async (
     const movieId = parseInt(id);
     const db = getDb();
 
-    const body = await request.json().catch(() => ({})) as { deleteFiles?: boolean };
+    const body = await request.json().catch(() => ({})) as { deleteFiles?: boolean; deleteDirectory?: boolean };
 
-    if (body.deleteFiles) {
-      // Collect paths shared with other movies — never delete those
-      const sharedPaths = new Set<string>(
-        (db.prepare('SELECT DISTINCT path FROM files WHERE movie_id != ?').all(movieId) as { path: string }[])
+    // 1. Identify shared resources to prevent data loss
+    const files = db.prepare('SELECT path FROM files WHERE movie_id = ?').all(movieId) as { path: string }[];
+    const subs  = db.prepare('SELECT path FROM subtitles WHERE movie_id = ?').all(movieId) as { path: string }[];
+    
+    if (body.deleteFiles || body.deleteDirectory) {
+      // Find all paths in the DB linked to OTHER movies
+      const allOtherPaths = new Set<string>(
+        (db.prepare('SELECT path FROM files WHERE movie_id != ? UNION SELECT path FROM subtitles WHERE movie_id != ?').all(movieId, movieId) as { path: string }[])
           .map(r => r.path)
       );
 
-      const files = db.prepare('SELECT path FROM files WHERE movie_id = ?').all(movieId) as { path: string }[];
-      const subs  = db.prepare('SELECT path FROM subtitles WHERE movie_id = ?').all(movieId) as { path: string }[];
+      // Handle Individual Files
+      if (body.deleteFiles && !body.deleteDirectory) {
+        for (const f of [...files, ...subs]) {
+          if (allOtherPaths.has(f.path)) continue;
+          try { if (fs.existsSync(f.path)) fs.unlinkSync(f.path); } catch {}
+        }
+      }
 
-      for (const f of [...files, ...subs]) {
-        if (sharedPaths.has(f.path)) continue;
-        try { if (fs.existsSync(f.path)) fs.unlinkSync(f.path); } catch {}
+      // Handle Full Directory
+      if (body.deleteDirectory && files.length > 0) {
+        const movieDir = path.dirname(files[0].path);
+        
+        // Check if ANY file in this directory belongs to another movie in the DB
+        const sharedDirEntries = db.prepare('SELECT COUNT(*) as count FROM files WHERE movie_id != ? AND path LIKE ?').get(movieId, movieDir + '%') as { count: number };
+        
+        if (sharedDirEntries.count === 0) {
+           try {
+             if (fs.existsSync(movieDir)) {
+               // Use recursive delete for the directory
+               fs.rmSync(movieDir, { recursive: true, force: true });
+             }
+           } catch (e) {
+             console.error(`Failed to delete directory: ${movieDir}`, e);
+           }
+        }
       }
     }
 
