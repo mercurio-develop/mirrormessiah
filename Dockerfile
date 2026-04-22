@@ -37,8 +37,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install CLI dependencies
 RUN pip3 install --no-cache-dir --root-user-action=ignore requests python-dotenv beautifulsoup4 --break-system-packages
 
-RUN addgroup --system --gid 1001 nodejs \
-  && adduser --system --uid 1001 nextjs
+RUN groupadd --gid 1001 nodejs \
+  && useradd --uid 1001 --gid nodejs --shell /bin/bash --create-home nextjs
 
 # Create data directory and ensure permissions
 RUN mkdir -p /app/data && chown nextjs:nodejs /app/data
