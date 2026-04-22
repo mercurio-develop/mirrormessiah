@@ -1,7 +1,10 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useTransition } from 'react';
 import { Subtitles, ScanSearch, Plus, Trash2, Loader2, AlertCircle, CheckCircle2, Languages } from 'lucide-react';
+import { scanMovieSubtitlesAction } from '../actions/scan-subtitles';
+import { createMovieSubtitleAction } from '../actions/create-subtitle';
+import { deleteMovieSubtitleAction } from '../actions/delete-subtitle';
 
 interface Subtitle {
   id: number;
@@ -25,8 +28,7 @@ const LANG_OPTIONS = [
 export default function SubtitleManager({ movieId }: { movieId: number }) {
   const [subtitles, setSubtitles] = useState<Subtitle[]>([]);
   const [loading, setLoading] = useState(true);
-  const [scanning, setScanning] = useState(false);
-  const [adding, setAdding] = useState(false);
+  const [isPending, startTransition] = useTransition();
   const [status, setStatus] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
 
   const [newPath, setNewPath] = useState('');
@@ -53,56 +55,51 @@ export default function SubtitleManager({ movieId }: { movieId: number }) {
   };
 
   const handleScan = async () => {
-    setScanning(true);
-    try {
-      const res = await fetch(`/api/movies/${movieId}/scan-subtitles`, { method: 'POST' });
-      const data = await res.json();
-      if (!res.ok) { showStatus('error', data.error ?? 'Scan failed'); return; }
-      showStatus('success', `Found ${data.found} file(s), added ${data.added} new`);
-      if (data.added > 0) fetchSubtitles();
-    } catch {
-      showStatus('error', 'Scan failed');
-    } finally {
-      setScanning(false);
-    }
+    startTransition(async () => {
+        const result = await scanMovieSubtitlesAction(movieId);
+        if (result.status === 'success') {
+            showStatus('success', result.message || 'Scan complete');
+            fetchSubtitles();
+        } else {
+            showStatus('error', result.message || 'Scan failed');
+        }
+    });
   };
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newPath.trim()) return;
-    setAdding(true);
-    try {
-      const langOption = LANG_OPTIONS.find(l => l.code === newLang);
-      const res = await fetch(`/api/movies/${movieId}/subtitles`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          path: newPath.trim(),
-          lang: newLang || undefined,
-          label: newLabel.trim() || langOption?.label || undefined,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) { showStatus('error', data.error ?? 'Add failed'); return; }
-      showStatus('success', 'Subtitle registered');
-      setNewPath('');
-      setNewLabel('');
-      setNewLang('eng');
-      setShowAdd(false);
-      fetchSubtitles();
-    } finally {
-      setAdding(false);
-    }
+    
+    startTransition(async () => {
+        const langOption = LANG_OPTIONS.find(l => l.code === newLang);
+        const result = await createMovieSubtitleAction(movieId, {
+            path: newPath.trim(),
+            lang: newLang || undefined,
+            label: newLabel.trim() || langOption?.label || undefined,
+        });
+
+        if (result.status === 'success') {
+            showStatus('success', 'Subtitle registered');
+            setNewPath('');
+            setNewLabel('');
+            setNewLang('eng');
+            setShowAdd(false);
+            fetchSubtitles();
+        } else {
+            showStatus('error', result.message || 'Add failed');
+        }
+    });
   };
 
   const handleDelete = async (subtitleId: number) => {
-    try {
-      const res = await fetch(`/api/movies/${movieId}/subtitles/${subtitleId}`, { method: 'DELETE' });
-      if (!res.ok) { showStatus('error', 'Delete failed'); return; }
-      setSubtitles(prev => prev.filter(s => s.id !== subtitleId));
-    } catch {
-      showStatus('error', 'Delete failed');
-    }
+    startTransition(async () => {
+        const result = await deleteMovieSubtitleAction(movieId, subtitleId);
+        if (result.status === 'success') {
+            setSubtitles(prev => prev.filter(s => s.id !== subtitleId));
+        } else {
+            showStatus('error', result.message || 'Delete failed');
+        }
+    });
   };
 
   return (
@@ -121,10 +118,10 @@ export default function SubtitleManager({ movieId }: { movieId: number }) {
           <button
             type="button"
             onClick={handleScan}
-            disabled={scanning}
+            disabled={isPending}
             className="h-9 px-4  text-white text-xs font-bold rounded-xl flex items-center gap-2 hover:bg-zinc-700 disabled:opacity-50 transition-all"
           >
-            {scanning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ScanSearch className="h-3.5 w-3.5" />}
+            {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ScanSearch className="h-3.5 w-3.5" />}
             Scan Directory
           </button>
           <button
@@ -200,10 +197,10 @@ export default function SubtitleManager({ movieId }: { movieId: number }) {
             </button>
             <button
               type="submit"
-              disabled={adding || !newPath.trim()}
+              disabled={isPending || !newPath.trim()}
               className="h-9 px-4 bg-primary text-primary-foreground text-xs font-bold rounded-xl flex items-center gap-2 disabled:opacity-50 transition-all"
             >
-              {adding ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+              {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
               Register
             </button>
           </div>

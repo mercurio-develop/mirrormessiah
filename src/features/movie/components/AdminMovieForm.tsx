@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { Movie } from '@/lib/types';
@@ -10,6 +10,8 @@ import FileBrowser from '@/components/FileBrowser';
 import SubtitleManager from './SubtitleManager';
 import MediaFileManager from './MediaFileManager';
 import DeleteMovieModal from './DeleteMovieModal';
+import { updateMovieAction } from '../actions/update-movie';
+import { scrapeMovieAction } from '../actions/scrape-movie';
 
 interface AdminMovieFormProps {
   movie: Movie;
@@ -31,6 +33,8 @@ export default function AdminMovieForm({ movie }: AdminMovieFormProps) {
   const router = useRouter();
   const [isBrowserOpen, setIsBrowserOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const [isScraping, setIsScraping] = useState(false);
   
   const [formData, setFormData] = useState({
     title: movie.title || '',
@@ -47,8 +51,6 @@ export default function AdminMovieForm({ movie }: AdminMovieFormProps) {
     needs_repair: (movie as any).needs_repair === 1,
   });
 
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isScraping, setIsScraping] = useState(false);
   const [status, setStatus] = useState<{ type: 'success' | 'error' | null, msg: string }>({ type: null, msg: '' });
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -59,90 +61,74 @@ export default function AdminMovieForm({ movie }: AdminMovieFormProps) {
 
   const handlePosterSelect = async (filePath: string) => {
     setIsBrowserOpen(false);
-    setIsSubmitting(true);
-    try {
-      const res = await fetch("/api/movies/" + movie.id + "/poster", {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filePath })
-      });
-      
-      if (res.ok) {
-        const data = await res.json();
-        // Add timestamp to bust cache
-        const cacheBuster = data.thumbnail + (data.thumbnail.includes('?') ? '&' : '?') + 't=' + Date.now();
-        setFormData(prev => ({ ...prev, thumbnail: cacheBuster }));
-        setStatus({ type: 'success', msg: 'Poster updated successfully' });
-      }
-    } catch (err) {
-      console.error('Poster selection error:', err);
-    } finally {
-      setIsSubmitting(false);
-    }
+    startTransition(async () => {
+        const result = await updateMovieAction(movie.id, {
+            thumbnail: filePath
+        });
+
+        if (result.status === 'success') {
+            // Add timestamp to bust cache for immediate preview
+            const cacheBuster = filePath + (filePath.includes('?') ? '&' : '?') + 't=' + Date.now();
+            setFormData(prev => ({ ...prev, thumbnail: cacheBuster }));
+            setStatus({ type: 'success', msg: 'Poster updated successfully' });
+        } else {
+            setStatus({ type: 'error', msg: result.message || 'Poster update failed' });
+        }
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitting(true);
     setStatus({ type: null, msg: '' });
 
-    try {
-      const response = await fetch("/api/movies/" + movie.id, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...formData,
-          thumbnail: formData.thumbnail.split('?')[0],
-          year: formData.year ? parseInt(formData.year) : null,
-          rating: formData.rating ? parseFloat(formData.rating) : null,
-          runtime: formData.runtime ? parseInt(formData.runtime) : null,
-          needs_repair: formData.needs_repair ? 1 : 0,
-        }),
-      });
+    startTransition(async () => {
+        const result = await updateMovieAction(movie.id, {
+            ...formData,
+            thumbnail: formData.thumbnail.split('?')[0],
+            year: formData.year ? parseInt(formData.year) : null,
+            rating: formData.rating ? parseFloat(formData.rating) : null,
+            runtime: formData.runtime ? parseInt(formData.runtime) : null,
+            needs_repair: formData.needs_repair ? 1 : 0,
+        });
 
-      if (!response.ok) throw new Error('Update failed');
-
-      setStatus({ type: 'success', msg: 'Registry entry synchronized' });
-      setTimeout(() => router.push('/admin/movies'), 1000);
-    } catch (err) {
-      setStatus({ type: 'error', msg: 'Failed to update registry entry' });
-    } finally {
-      setIsSubmitting(false);
-    }
+        if (result.status === 'success') {
+            setStatus({ type: 'success', msg: result.message || 'Updated' });
+            setTimeout(() => router.push('/admin/movies'), 1000);
+        } else {
+            setStatus({ type: 'error', msg: result.message || 'Update failed' });
+        }
+    });
   };
 
   const handleScrape = async () => {
     setIsScraping(true);
     setStatus({ type: null, msg: '' });
-    try {
-      const res = await fetch(`/api/movies/${movie.id}/scrape-metadata`, { method: 'POST' });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Scrape failed');
-      }
-      // Reload updated movie data into form
-      const updated = await fetch(`/api/movies/${movie.id}`).then(r => r.json());
-      const m = updated.movie;
-      setFormData({
-        title: m.title || '',
-        year: m.year?.toString() || '',
-        quality: m.quality || '',
-        plot: m.plot || '',
-        rating: m.rating?.toString() || '',
-        genres: m.genres || '',
-        director: m.director || '',
-        language: m.language || '',
-        runtime: m.runtime?.toString() || '',
-        audience: m.audience || '',
-        thumbnail: m.thumbnail || '',
-        needs_repair: m.needs_repair === 1,
-      });
-      setStatus({ type: 'success', msg: 'Metadata synced from TMDB' });
-    } catch (err: any) {
-      setStatus({ type: 'error', msg: err.message });
-    } finally {
-      setIsScraping(false);
+    
+    const result = await scrapeMovieAction(movie.id);
+    
+    if (result.status === 'success') {
+        // Reload updated movie data into form
+        const updated = await fetch(`/api/movies/${movie.id}`).then(r => r.json());
+        const m = updated.movie;
+        setFormData({
+            title: m.title || '',
+            year: m.year?.toString() || '',
+            quality: m.quality || '',
+            plot: m.plot || '',
+            rating: m.rating?.toString() || '',
+            genres: m.genres || '',
+            director: m.director || '',
+            language: m.language || '',
+            runtime: m.runtime?.toString() || '',
+            audience: m.audience || '',
+            thumbnail: m.thumbnail || '',
+            needs_repair: m.needs_repair === 1,
+        });
+        setStatus({ type: 'success', msg: result.message || 'Metadata synced' });
+    } else {
+        setStatus({ type: 'error', msg: result.message || 'Scrape failed' });
     }
+    setIsScraping(false);
   };
 
   const handleDelete = () => {
@@ -369,7 +355,7 @@ export default function AdminMovieForm({ movie }: AdminMovieFormProps) {
             <div className="space-y-4">
               <button
                 type="button"
-                disabled={isScraping || isSubmitting}
+                disabled={isScraping || isPending}
                 onClick={handleScrape}
                 className="w-full h-14  text-white text-sm font-bold rounded-2xl flex items-center justify-center gap-3 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50"
               >
@@ -378,15 +364,15 @@ export default function AdminMovieForm({ movie }: AdminMovieFormProps) {
 
               <button
                 type="submit"
-                disabled={isSubmitting || isScraping}
+                disabled={isPending || isScraping}
                 className="w-full h-14 bg-primary text-primary-foreground text-sm font-bold rounded-2xl flex items-center justify-center gap-3 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-primary/20 disabled:opacity-50"
               >
-                {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <><Save className="h-5 w-5" /> Save Changes</>}
+                {isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <><Save className="h-5 w-5" /> Save Changes</>}
               </button>
 
               <button
                 type="button"
-                disabled={isSubmitting}
+                disabled={isPending}
                 onClick={handleDelete}
                 className="w-full h-14 border border-destructive/20 text-destructive/60 hover:text-destructive hover:bg-destructive/5 text-sm font-bold rounded-2xl transition-all flex items-center justify-center gap-2"
               >

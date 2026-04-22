@@ -1,27 +1,30 @@
-import { NextResponse } from 'next/server';
-import { withAdminAuth } from '@/lib/auth';
+'use server';
+
 import { getDb } from '@/lib/db';
+import { requireAdminKeyAuth, AuthError } from '@/lib/auth';
+import { ActionState } from '@/lib/action-state';
 import { searchMovie, getMovieDetails, posterUrl, extractDirector } from '@/lib/tmdb';
+import { revalidatePath } from 'next/cache';
 import fs from 'fs';
 import path from 'path';
 
-export const POST = withAdminAuth(async (
-  _request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) => {
-  const { id } = await params;
-  const movieId = parseInt(id);
-  const db = getDb();
-
-  const movie = db.prepare('SELECT * FROM movies WHERE id = ?').get(movieId) as any;
-  if (!movie) return NextResponse.json({ error: 'Movie not found' }, { status: 404 });
-
+export async function scrapeMovieAction(movieId: number): Promise<ActionState> {
   try {
+    await requireAdminKeyAuth();
+    const db = getDb();
+
+    const movie = db.prepare('SELECT * FROM movies WHERE id = ?').get(movieId) as any;
+    if (!movie) {
+      return { status: 'error', message: 'Movie not found' };
+    }
+
     // Resolve TMDB ID
     let tmdbId: number = movie.tmdb_id;
     if (!tmdbId) {
       const result = await searchMovie(movie.title, movie.year);
-      if (!result) return NextResponse.json({ error: 'Not found on TMDB' }, { status: 404 });
+      if (!result) {
+        return { status: 'error', message: 'Not found on TMDB' };
+      }
       tmdbId = result.id;
     }
 
@@ -87,8 +90,19 @@ export const POST = withAdminAuth(async (
       movieId,
     );
 
-    return NextResponse.json({ success: true, tmdb_id: tmdbId });
+    revalidatePath(`/admin/movies/${movieId}`);
+    revalidatePath('/admin/movies');
+    revalidatePath('/');
+    revalidatePath(`/watch/${movieId}`);
+
+    return {
+      status: 'success',
+      message: 'Metadata synced from TMDB',
+    };
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error instanceof AuthError) {
+      return { status: 'error', message: error.message };
+    }
+    return { status: 'error', message: 'Scrape failed: ' + error.message };
   }
-});
+}

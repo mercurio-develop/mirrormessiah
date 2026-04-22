@@ -1,10 +1,44 @@
 import { jwtVerify } from 'jose';
+import { cookies, headers } from 'next/headers';
 
 export class AuthError extends Error {
   constructor(message: string, public status: number = 401) {
     super(message);
     this.name = 'AuthError';
   }
+}
+
+/**
+ * Validates the admin status for Server Actions
+ */
+export async function requireAdminKeyAuth(): Promise<void> {
+  if (process.env.NODE_ENV === 'production') {
+    throw new AuthError('Administrative tools are restricted to local development only', 403);
+  }
+
+  const adminKey = process.env.ADMIN_KEY;
+  if (!adminKey) {
+    throw new AuthError('Admin key not configured on server', 500);
+  }
+
+  // 1. Check Header (Direct CLI/API access)
+  const headersList = await headers();
+  const providedKey = headersList.get('x-admin-key');
+  if (providedKey === adminKey) return;
+
+  // 2. Check Cookie
+  const cookieStore = await cookies();
+  const token = cookieStore.get('mm_admin_token')?.value;
+
+  if (token) {
+    try {
+      const SECRET_KEY = new TextEncoder().encode(adminKey);
+      await jwtVerify(token, SECRET_KEY);
+      return; 
+    } catch (e) {}
+  }
+
+  throw new AuthError('Unauthorized access', 401);
 }
 
 /**
