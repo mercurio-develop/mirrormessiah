@@ -198,15 +198,33 @@ export default function MediaPlayer({
                 <h3 className="text-xl font-bold text-foreground uppercase tracking-tight italic">Stream_Interruption</h3>
                 <p className="text-xs font-bold text-muted-foreground uppercase tracking-[0.2em] opacity-60">Error Code {error.code}: {error.message}</p>
                 <p className="text-sm text-muted-foreground mt-4 leading-relaxed">
-                    The requested archive stream could not be stabilized. This may be due to unsupported encoding or temporary storage offline.
+                    The requested archive stream could not be stabilized. This is likely an unsupported legacy format (like AVI or MKV with incompatible codecs) that your browser cannot decode natively.
                 </p>
            </div>
-           <button 
-                onClick={() => window.location.reload()}
-                className="mt-10 px-8 py-3 bg-white text-black hover:bg-zinc-200 text-xs font-black uppercase tracking-widest rounded-full transition-all flex items-center gap-3 shadow-2xl"
-           >
-              <RefreshCcw className="h-4 w-4" /> Restart Session
-           </button>
+           
+           <div className="flex flex-col sm:flex-row items-center gap-4 mt-10">
+             {id && (
+               <a 
+                    href={`/api/movies/${id}/vlc.m3u`}
+                    className="px-6 py-3 bg-orange-500 text-white hover:bg-orange-600 text-xs font-black uppercase tracking-widest rounded-full transition-all flex items-center gap-2 shadow-xl"
+               >
+                  Play in VLC
+               </a>
+             )}
+             <a 
+                  href={src}
+                  download
+                  className="px-6 py-3 bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-black uppercase tracking-widest rounded-full transition-all flex items-center gap-2 shadow-xl"
+             >
+                Download File
+             </a>
+             <button 
+                  onClick={() => window.location.reload()}
+                  className="px-6 py-3 bg-white/10 text-white hover:bg-white/20 border border-white/20 text-xs font-black uppercase tracking-widest rounded-full transition-all flex items-center gap-2"
+             >
+                <RefreshCcw className="h-4 w-4" /> Retry
+             </button>
+           </div>
         </div>
       )}
     </div>

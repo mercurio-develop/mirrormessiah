@@ -38,11 +38,51 @@ async function tmdbFetch<T>(endpoint: string, params: Record<string, string> = {
 }
 
 export async function searchMovie(title: string, year?: number | null): Promise<TmdbSearchResult | null> {
-  const params: Record<string, string> = { query: title };
-  if (year) params.year = String(year);
+  const clean = (t: string) => {
+    // Technical noise usually found in scene releases
+    const noise = [
+      'PROPER', 'REPACK', 'UNRATED', 'EXTENDED', 'DIRECTORS CUT', 'LIMITED', 'INTERNAL', 
+      'RERIP', 'REAL', 'READNFO', 'SUBBED', 'DUBBED', 'HC', 'HDRIP', 'BDRIP', 'BRRIP'
+    ];
+    let cleaned = t;
+    noise.forEach(n => {
+      const re = new RegExp(`\\b${n}\\b`, 'gi');
+      cleaned = cleaned.replace(re, '');
+    });
+    return cleaned.replace(/[^\w\s]/gi, ' ').replace(/\s+/g, ' ').trim();
+  };
+  
+  const searchAttempts = [
+    { query: title, year: year ? String(year) : undefined },
+    { query: title },
+    { query: clean(title), year: year ? String(year) : undefined },
+    { query: clean(title) },
+  ];
 
-  const data = await tmdbFetch<{ results: TmdbSearchResult[] }>('/search/movie', params);
-  return data.results[0] ?? null;
+  // If title has a comma or colon, it might be a subtitle. Add short title attempt.
+  if (title.includes(',') || title.includes(':')) {
+    const shortTitle = title.split(/[,:]/)[0].trim();
+    if (shortTitle.length > 3) {
+      searchAttempts.push({ query: shortTitle, year: year ? String(year) : undefined });
+      searchAttempts.push({ query: shortTitle });
+    }
+  }
+
+  for (const attempt of searchAttempts) {
+    try {
+      const params: Record<string, string> = { query: attempt.query };
+      if (attempt.year) params.year = attempt.year;
+      
+      const data = await tmdbFetch<{ results: TmdbSearchResult[] }>('/search/movie', params);
+      if (data.results && data.results.length > 0) {
+        return data.results[0];
+      }
+    } catch (e) {
+      console.error(`TMDB Search failed for ${attempt.query}:`, e);
+    }
+  }
+
+  return null;
 }
 
 export async function getMovieDetails(tmdbId: number): Promise<TmdbMovieDetails> {
