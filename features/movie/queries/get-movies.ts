@@ -87,16 +87,24 @@ export function getMovies(options: {
     movieQuery += ' ORDER BY search_relevance DESC, m.title ASC, m.id ASC';
   }
   
-  const totalQuery = `SELECT COUNT(*) as count FROM (${movieQuery})`;
-  const { count: total } = db.prepare(totalQuery).get(...params) as { count: number };
+  try {
+    const totalQuery = `SELECT COUNT(*) as count FROM (${movieQuery})`;
+    const { count: total } = db.prepare(totalQuery).get(...params) as { count: number };
 
-  movieQuery += ` LIMIT ? OFFSET ?`;
-  params.push(limit, offset);
+    movieQuery += ` LIMIT ? OFFSET ?`;
+    params.push(limit, offset);
 
-  const movies = db.prepare(movieQuery).all(...params) as any[];
+    const movies = db.prepare(movieQuery).all(...params) as any[];
 
-  return {
-    movies,
-    total
-  };
+    return {
+      movies,
+      total
+    };
+  } catch (error: any) {
+    // Graceful fallback for empty/uninitialized DB
+    if (error.message.includes('no such table')) {
+        return { movies: [], total: 0 };
+    }
+    throw error;
+  }
 }
