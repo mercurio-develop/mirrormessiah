@@ -16,7 +16,7 @@ import {
   HardDrive,
   Folder
 } from 'lucide-react';
-import FileBrowser from './FileBrowser';
+import FileBrowser from '@/components/FileBrowser';
 
 interface MediaFile {
   id: number;
