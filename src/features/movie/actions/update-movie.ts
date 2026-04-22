@@ -24,8 +24,15 @@ export async function updateMovieAction(
 
     fields.forEach(field => {
       if (formData[field] !== undefined) {
+        let value = formData[field];
+        
+        // Normalize audience to NULL if empty to satisfy CHECK constraint
+        if (field === 'audience' && value === '') {
+            value = null;
+        }
+
         updates.push(`${field} = ?`);
-        values.push(formData[field]);
+        values.push(value);
       }
     });
 

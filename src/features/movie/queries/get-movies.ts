@@ -6,11 +6,12 @@ export function getMovies(options: {
   quality?: string | null;
   year?: string | null;
   audience?: 'family' | 'adult' | null;
-  sort?: 'newest' | 'title_asc' | 'title_desc' | null;
+  sort?: 'newest' | 'title_asc' | 'title_desc' | 'rating' | 'repair' | null;
+  hasThumbnail?: boolean | null;
   offset?: number;
   limit?: number;
 } = {}) {
-  const { q, genre, quality, year, audience, sort, offset = 0, limit = 24 } = options;
+  const { q, genre, quality, year, audience, sort, hasThumbnail, offset = 0, limit = 24 } = options;
   const db = getDb();
   
   const params: any[] = [];
@@ -75,6 +76,12 @@ export function getMovies(options: {
     params.push(audience);
   }
 
+  if (hasThumbnail === true) {
+    whereConditions.push('m.thumbnail IS NOT NULL AND m.thumbnail != "" AND m.thumbnail != "null" AND m.thumbnail != "undefined"');
+  } else if (hasThumbnail === false) {
+    whereConditions.push('(m.thumbnail IS NULL OR m.thumbnail = "" OR m.thumbnail = "null" OR m.thumbnail = "undefined")');
+  }
+
   if (whereConditions.length > 0) {
     movieQuery += ` WHERE ${whereConditions.join(' AND ')}`;
   }
@@ -83,6 +90,10 @@ export function getMovies(options: {
     movieQuery += ' ORDER BY search_relevance DESC, m.title DESC, m.id DESC';
   } else if (sort === 'newest') {
     movieQuery += ' ORDER BY search_relevance DESC, m.id DESC';
+  } else if (sort === 'rating') {
+    movieQuery += ' ORDER BY search_relevance DESC, m.rating DESC, m.title ASC';
+  } else if (sort === 'repair') {
+    movieQuery += ' ORDER BY m.needs_repair DESC, m.title ASC';
   } else {
     movieQuery += ' ORDER BY search_relevance DESC, m.title ASC, m.id ASC';
   }

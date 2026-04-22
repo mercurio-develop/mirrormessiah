@@ -40,6 +40,13 @@ const GENRE_OPTIONS = [
   'TV Movie', 'Thriller', 'War', 'Western'
 ];
 
+const SORT_OPTIONS = [
+    { value: 'title_asc', label: 'Title A-Z' },
+    { value: 'title_desc', label: 'Title Z-A' },
+    { value: 'newest', label: 'Latest Added' },
+    { value: 'rating', label: 'Top Rated' }
+];
+
 const getPosterUrl = (thumbnail: string | null | undefined): string => {
   if (!thumbnail) return '/placeholder.svg';
   if (thumbnail.startsWith('http')) return thumbnail;
@@ -62,11 +69,11 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
   const [selectedAudience, setSelectedAudience] = useState<'family' | 'adult' | ''>(
     (searchParams.get('audience') as any) || ''
   );
-  const [sort, setSort] = useState<'title_asc' | 'title_desc'>('title_asc');
+  const [sort, setSort] = useState<'title_asc' | 'title_desc' | 'rating' | 'newest'>('title_asc');
   const [showFilters, setShowFilters] = useState(true);
   const [isScrolled, setIsScrolled] = useState(false);
 
-  // Minimal scroll track for depth only
+  // Track scroll for depth only
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 10);
     window.addEventListener('scroll', handleScroll, { passive: true });
@@ -143,7 +150,7 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
     return list;
   }, []);
 
-  const fetchMovies = useCallback(async (search = '', quality = '', year = '', audience = '', sortOrder: 'title_asc' | 'title_desc' = 'title_asc', genre = '', reset = false) => {
+  const fetchMovies = useCallback(async (search = '', quality = '', year = '', audience = '', sortOrder: 'title_asc' | 'title_desc' | 'rating' | 'newest' = 'title_asc', genre = '', reset = false) => {
     if (loadingRef.current) return;
 
     loadingRef.current = true;
@@ -242,10 +249,10 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
                </div>
                <input
                   type="text"
-                  placeholder="Search by title, director, or year..."
+                  placeholder="Search your movie collection..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full h-11 bg-transparent pl-8 pr-12 font-bold tracking-tight text-lg placeholder:text-muted-foreground/20 focus:outline-none border-b border-border focus:border-primary transition-colors"
+                  className="w-full h-11 bg-transparent pl-8 pr-12 font-bold tracking-tight text-lg placeholder:text-muted-foreground/20 focus:outline-none border-b border-border/40 focus:border-primary transition-colors"
                />
                {searchTerm && (
                   <button onClick={() => setSearchTerm('')} className="absolute right-0 top-1/2 -translate-y-1/2 p-2 hover:bg-muted rounded-full transition-colors text-muted-foreground/40 hover:text-foreground">
@@ -310,21 +317,14 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
                 <LayoutGroup>
                     <div className="overflow-visible pt-2">
                       <div className="flex flex-nowrap lg:flex-wrap items-end gap-5 overflow-x-auto lg:overflow-visible pb-2 -mx-6 px-6 lg:mx-0 lg:px-0 scrollbar-hide">
-                         {/* Sort Toggle */}
-                         <div className="flex flex-col gap-2 shrink-0">
-                            <span className="text-[10px] uppercase tracking-[0.25em] font-black text-foreground/40 ml-1 leading-none">Order</span>
-                            <button 
-                                onClick={() => setSort(sort === 'title_asc' ? 'title_desc' : 'title_asc')}
-                                className={`flex items-center gap-2 px-4 h-11 rounded-xl border text-[12px] font-bold transition-all shadow-md active:scale-95 ${
-                                  sort === 'title_asc' 
-                                    ? 'bg-primary border-primary text-primary-foreground shadow-lg shadow-primary/10' 
-                                    : 'bg-muted/20 border-border/50 hover:border-primary/30 text-foreground/80 hover:bg-muted/40'
-                                }`}
-                            >
-                                {sort === 'title_asc' ? <ArrowDownAZ className="h-3.5 w-3.5" /> : <ArrowUpAZ className="h-3.5 w-3.5" />}
-                                {sort === 'title_asc' ? 'A-Z' : 'Z-A'}
-                            </button>
-                         </div>
+                         {/* Sort Dropdown */}
+                         <Dropdown 
+                           label="Order"
+                           value={sort}
+                           onChange={(val) => setSort(val as any)}
+                           options={SORT_OPTIONS}
+                           className="w-44"
+                         />
 
                          <div className="h-8 w-px bg-border/40 mx-1 hidden lg:block mb-1.5 shrink-0" />
 
@@ -407,12 +407,13 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
                 transition={{ 
                   duration: 0.3, 
                   delay: (idx % 12) * 0.03,
-                  ease: 'easeOut'
+                  ease: 'easeOut' 
                 }}
-                className="flex flex-col gap-3 group"
+                whileHover={{ scale: 1.02 }}
+                className="flex flex-col gap-4 group"
               >
-                <Link href={"/watch/" + movie.id} className={`block relative aspect-poster bg-muted rounded-xl overflow-hidden shadow-md border border-white/[0.03] transition-all duration-500 ${
-                  selectedAudience === 'family' ? 'group-hover:shadow-green-500/5 group-hover:border-green-500/10' : 'group-hover:shadow-primary/5 group-hover:border-primary/10'
+                <Link href={"/watch/" + movie.id} className={`block relative aspect-poster bg-muted rounded-xl overflow-hidden shadow-xl border-2 border-transparent transition-all duration-300 ${
+                  selectedAudience === 'family' ? 'group-hover:shadow-green-500/10 group-hover:border-green-500/20' : 'group-hover:shadow-primary/10 group-hover:border-primary/20'
                 }`}>
                   <Image
                     src={getPosterUrl(movie.thumbnail)}
@@ -421,7 +422,7 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
                     unoptimized
                     priority={idx < 6}
                     sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 15vw"
-                    className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+                    className="object-cover transition-transform duration-700 group-hover:scale-105"
                     onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder.svg'; }}
                   />
                   
