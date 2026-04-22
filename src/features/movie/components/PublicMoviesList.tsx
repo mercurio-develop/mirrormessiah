@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { MovieWithFile } from '@/lib/types';
 import { b64urlEncode } from '@/lib/b64url';
 import { 
@@ -39,6 +39,8 @@ const getPosterUrl = (thumbnail: string | null | undefined): string => {
 };
 
 export default function PublicMoviesList({ initialMovies }: PublicMoviesListProps) {
+  const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const { isAdmin } = useAdmin();
   
@@ -56,6 +58,16 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
       setSelectedAudience(audience || '');
     }
   }, [searchParams, selectedAudience]);
+
+  const handleAudienceChange = (id: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (id) {
+      params.set('audience', id);
+    } else {
+      params.delete('audience');
+    }
+    router.push(`${pathname}?${params.toString()}`, { scroll: false });
+  };
   
   const [movies, setMovies] = useState<MovieWithFile[]>(initialMovies);
   const [loading, setLoading] = useState(false);
@@ -148,7 +160,7 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
     setSearchTerm('');
     setSelectedQuality('');
     setSelectedYear('');
-    setSelectedAudience('');
+    handleAudienceChange('');
     setSort('title_asc');
   };
 
@@ -214,7 +226,7 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
                 ].map(cat => (
                   <button 
                     key={cat.id}
-                    onClick={() => setSelectedAudience(cat.id as any)}
+                    onClick={() => handleAudienceChange(cat.id)}
                     className={`flex items-center gap-2.5 px-6 py-3 rounded-xl border text-sm font-extrabold transition-all shadow-md active:scale-95 ${
                       selectedAudience === cat.id 
                         ? 'bg-primary border-primary text-primary-foreground shadow-[0_0_20px_rgba(56,189,248,0.3)] ring-2 ring-primary/20' 
