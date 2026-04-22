@@ -192,10 +192,10 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
           </div>
         </div>
 
-        {/* Filter Row */}
-        <div className="flex flex-wrap items-center gap-6">
+        {/* Filter Row - Horizontally scrollable on mobile */}
+        <div className="flex flex-nowrap lg:flex-wrap items-end gap-6 overflow-x-auto pb-4 -mx-6 px-6 lg:mx-0 lg:px-0 scrollbar-hide">
            {/* Sort Toggle */}
-           <div className="flex flex-col gap-2">
+           <div className="flex flex-col gap-2 shrink-0">
               <span className="text-[11px] uppercase tracking-[0.2em] font-black text-foreground/50 ml-1">Sort Order</span>
               <button 
                   onClick={() => setSort(sort === 'title_asc' ? 'title_desc' : 'title_asc')}
@@ -210,10 +210,10 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
               </button>
            </div>
 
-           <div className="h-12 w-px bg-border/40 mx-2 hidden sm:block self-end mb-1" />
+           <div className="h-12 w-px bg-border/40 mx-2 hidden lg:block mb-1 shrink-0" />
 
            {/* Audience Selection */}
-           <div className="flex flex-col gap-2">
+           <div className="flex flex-col gap-2 shrink-0">
               <span className="text-[11px] uppercase tracking-[0.2em] font-black text-foreground/50 ml-1">Classification</span>
               <div className="flex gap-2.5">
                 {[
@@ -237,10 +237,10 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
               </div>
            </div>
 
-           <div className="h-12 w-px bg-border/40 mx-2 hidden md:block self-end mb-1" />
+           <div className="h-12 w-px bg-border/40 mx-2 hidden lg:block mb-1 shrink-0" />
 
            {/* Quality Pills */}
-           <div className="flex flex-col gap-2">
+           <div className="flex flex-col gap-2 shrink-0">
               <span className="text-[11px] uppercase tracking-[0.2em] font-black text-foreground/50 ml-1">Resolution</span>
               <div className="flex gap-2.5">
                 <button 
@@ -269,21 +269,21 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
               </div>
            </div>
 
-           <div className="h-6 w-px bg-border/50 mx-2 hidden lg:block" />
+           <div className="h-12 w-px bg-border/40 mx-2 hidden lg:block mb-1 shrink-0" />
 
            {/* Year Dropdown */}
-           <div className="flex items-center gap-2">
-              <span className="text-[10px] uppercase tracking-widest font-black mr-2 opacity-30">Release:</span>
-              <div className="relative">
+           <div className="flex flex-col gap-2 shrink-0 pr-4 lg:pr-0">
+              <span className="text-[11px] uppercase tracking-[0.2em] font-black text-foreground/50 ml-1">Release Year</span>
+              <div className="relative group/select">
                 <select
                   value={selectedYear}
                   onChange={(e) => setSelectedYear(e.target.value)}
-                  className="bg-white/5 border border-white/10 rounded-full px-5 py-2.5 text-xs font-bold outline-none cursor-pointer hover:border-white/20 transition-all appearance-none pr-10"
+                  className="bg-card border border-border rounded-xl px-6 py-3 text-sm font-extrabold outline-none cursor-pointer hover:border-primary/40 transition-all appearance-none pr-12 shadow-md group-hover/select:bg-muted/50"
                 >
-                  <option value="" className="bg-background">All Years</option>
-                  {years.slice(0, 30).map(y => <option key={y} value={y} className="bg-background">{y}</option>)}
+                  <option value="" className="bg-background">All Eras</option>
+                  {years.slice(0, 50).map(y => <option key={y} value={y} className="bg-background">{y}</option>)}
                 </select>
-                <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 h-3 w-3 pointer-events-none opacity-50" />
+                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 pointer-events-none text-muted-foreground transition-transform group-hover/select:translate-y-[-40%]" />
               </div>
            </div>
         </div>

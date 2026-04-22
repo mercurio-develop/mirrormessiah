@@ -12,6 +12,7 @@ import MediaFileManager from './MediaFileManager';
 import DeleteMovieModal from './DeleteMovieModal';
 import { updateMovieAction } from '../actions/update-movie';
 import { scrapeMovieAction } from '../actions/scrape-movie';
+import AdminEditButton from './AdminEditButton';
 
 interface AdminMovieFormProps {
   movie: Movie;
@@ -77,8 +78,8 @@ export default function AdminMovieForm({ movie }: AdminMovieFormProps) {
     });
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     setStatus({ type: null, msg: '' });
 
     startTransition(async () => {
@@ -139,12 +140,13 @@ export default function AdminMovieForm({ movie }: AdminMovieFormProps) {
 
   return (
     <>
-      <form onSubmit={handleSubmit} className="space-y-10 font-sans pb-24">
+      <form onSubmit={handleSubmit} className="space-y-10 font-sans pb-32 relative">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
           
-          <div className="lg:col-span-8 space-y-8">
+          {/* Main Content Area */}
+          <div className="order-2 lg:order-1 lg:col-span-8 space-y-8">
             {/* Core Details */}
-            <div className="p-8 bg-card border border-border rounded-2xl space-y-8 shadow-sm">
+            <div className="p-6 sm:p-8 bg-card border border-border rounded-2xl space-y-8 shadow-sm">
               <div className="flex items-center gap-3 pb-2 border-b border-border/50">
                  <Film className="h-5 w-5 text-primary" />
                  <h3 className="text-lg font-bold text-foreground">Core Identity</h3>
@@ -162,63 +164,63 @@ export default function AdminMovieForm({ movie }: AdminMovieFormProps) {
                   />
                 </div>
                 
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-6">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6">
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest ml-1">Year</label>
+                    <label className="text-[10px] sm:text-xs font-bold text-muted-foreground uppercase tracking-widest ml-1">Year</label>
                     <div className="relative">
-                       <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40" />
+                       <Calendar className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40" />
                        <input
                         name="year"
                         type="number"
                         value={formData.year}
                         onChange={handleInputChange}
-                        className="w-full h-12 bg-background border border-border rounded-xl pl-12 pr-4 text-sm font-semibold text-foreground focus:border-primary outline-none transition-all"
+                        className="w-full h-12 bg-background border border-border rounded-xl pl-10 sm:pl-12 pr-2 text-sm font-semibold text-foreground focus:border-primary outline-none transition-all"
                       />
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest ml-1">Rating</label>
+                    <label className="text-[10px] sm:text-xs font-bold text-muted-foreground uppercase tracking-widest ml-1">Rating</label>
                     <div className="relative">
-                       <Star className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40" />
+                       <Star className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40" />
                        <input
                         name="rating"
                         type="number"
                         step="0.1"
                         value={formData.rating}
                         onChange={handleInputChange}
-                        className="w-full h-12 bg-background border border-border rounded-xl pl-12 pr-4 text-sm font-semibold text-foreground focus:border-primary outline-none transition-all"
+                        className="w-full h-12 bg-background border border-border rounded-xl pl-10 sm:pl-12 pr-2 text-sm font-semibold text-foreground focus:border-primary outline-none transition-all"
                       />
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest ml-1">Quality</label>
+                    <label className="text-[10px] sm:text-xs font-bold text-muted-foreground uppercase tracking-widest ml-1">Quality</label>
                     <div className="relative">
-                       <Film className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40" />
+                       <Film className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40" />
                        <input
                         name="quality"
                         value={formData.quality}
                         onChange={handleInputChange}
                         placeholder="1080p, 4K"
-                        className="w-full h-12 bg-background border border-border rounded-xl pl-12 pr-4 text-sm font-semibold text-foreground focus:border-primary outline-none transition-all"
+                        className="w-full h-12 bg-background border border-border rounded-xl pl-10 sm:pl-12 pr-2 text-sm font-semibold text-foreground focus:border-primary outline-none transition-all"
                       />
                     </div>
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest ml-1">Audience</label>
+                    <label className="text-[10px] sm:text-xs font-bold text-muted-foreground uppercase tracking-widest ml-1">Audience</label>
                     <div className="relative">
-                       <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40" />
+                       <Search className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40" />
                        <select
                         name="audience"
                         value={formData.audience}
                         onChange={handleInputChange}
-                        className="w-full h-12 bg-background border border-border rounded-xl pl-12 pr-10 text-sm font-semibold text-foreground focus:border-primary outline-none transition-all appearance-none"
+                        className="w-full h-12 bg-background border border-border rounded-xl pl-10 sm:pl-12 pr-8 sm:pr-10 text-sm font-semibold text-foreground focus:border-primary outline-none transition-all appearance-none"
                       >
                         <option value="">Standard</option>
                         <option value="family">Family</option>
                         <option value="adult">Adult</option>
                       </select>
-                      <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40 pointer-events-none" />
+                      <ChevronDown className="absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40 pointer-events-none" />
                     </div>
                   </div>
                 </div>
@@ -236,7 +238,7 @@ export default function AdminMovieForm({ movie }: AdminMovieFormProps) {
                        <AlertCircle className={`h-4 w-4 ${formData.needs_repair ? 'text-destructive animate-pulse' : 'text-muted-foreground'}`} />
                        <div className="flex flex-col">
                           <span className="text-sm font-bold text-foreground">Flag for Repair</span>
-                          <span className="text-[10px] font-medium text-muted-foreground uppercase">Enable if movie stream is failing or archive is corrupted</span>
+                          <span className="text-[9px] sm:text-[10px] font-medium text-muted-foreground uppercase">Stream failing or archive corrupted</span>
                        </div>
                     </label>
                 </div>
@@ -244,13 +246,13 @@ export default function AdminMovieForm({ movie }: AdminMovieFormProps) {
             </div>
 
             {/* Production Details */}
-            <div className="p-8 bg-card border border-border rounded-2xl space-y-8 shadow-sm">
+            <div className="p-6 sm:p-8 bg-card border border-border rounded-2xl space-y-8 shadow-sm">
               <div className="flex items-center gap-3 pb-2 border-b border-border/50">
                  <Globe className="h-5 w-5 text-primary" />
                  <h3 className="text-lg font-bold text-foreground">Production Details</h3>
               </div>
               
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-8">
                 <div className="space-y-2">
                   <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest ml-1">Genres</label>
                   <input
@@ -296,7 +298,7 @@ export default function AdminMovieForm({ movie }: AdminMovieFormProps) {
             </div>
 
             {/* Synopsis */}
-            <div className="p-8 bg-card border border-border rounded-2xl space-y-8 shadow-sm">
+            <div className="p-6 sm:p-8 bg-card border border-border rounded-2xl space-y-8 shadow-sm">
               <div className="flex items-center gap-3 pb-2 border-b border-border/50">
                  <Info className="h-5 w-5 text-primary" />
                  <h3 className="text-lg font-bold text-foreground">Synopsis</h3>
@@ -311,15 +313,15 @@ export default function AdminMovieForm({ movie }: AdminMovieFormProps) {
               />
             </div>
 
-            {/* Media Files */}
-            <MediaFileManager movieId={movie.id} />
-
-            {/* Subtitles */}
-            <SubtitleManager movieId={movie.id} />
+            {/* Media Files & Subtitles - Encapsulated with overflow protection */}
+            <div className="space-y-8 overflow-hidden">
+                <MediaFileManager movieId={movie.id} />
+                <SubtitleManager movieId={movie.id} />
+            </div>
           </div>
 
-          {/* Sidebar */}
-          <div className="lg:col-span-4 space-y-8">
+          {/* Sidebar Area */}
+          <div className="order-1 lg:order-2 lg:col-span-4 space-y-8">
             <div className="p-6 bg-card border border-border rounded-2xl space-y-6 shadow-xl">
               <div className="aspect-poster relative bg-muted rounded-xl overflow-hidden shadow-inner group">
                  <Image
@@ -330,7 +332,7 @@ export default function AdminMovieForm({ movie }: AdminMovieFormProps) {
                   className="object-cover transition-transform duration-1000 group-hover:scale-105"
                   onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder.svg'; }}
                 />
-                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all bg-black/60 backdrop-blur-sm">
+                <div className="absolute inset-0 flex items-center justify-center lg:opacity-0 group-hover:opacity-100 transition-all bg-black/60 backdrop-blur-sm">
                    <button 
                      type="button"
                      onClick={() => setIsBrowserOpen(true)}
@@ -357,7 +359,7 @@ export default function AdminMovieForm({ movie }: AdminMovieFormProps) {
                 type="button"
                 disabled={isScraping || isPending}
                 onClick={handleScrape}
-                className="w-full h-14  text-white text-sm font-bold rounded-2xl flex items-center justify-center gap-3 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50"
+                className="w-full h-14 bg-zinc-900 border border-zinc-800 text-white text-sm font-bold rounded-2xl flex items-center justify-center gap-3 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50"
               >
                 {isScraping ? <Loader2 className="h-5 w-5 animate-spin" /> : <><Sparkles className="h-5 w-5" /> Scrape from TMDB</>}
               </button>
@@ -365,7 +367,7 @@ export default function AdminMovieForm({ movie }: AdminMovieFormProps) {
               <button
                 type="submit"
                 disabled={isPending || isScraping}
-                className="w-full h-14 bg-primary text-primary-foreground text-sm font-bold rounded-2xl flex items-center justify-center gap-3 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-primary/20 disabled:opacity-50"
+                className="hidden lg:flex w-full h-14 bg-primary text-primary-foreground text-sm font-bold rounded-2xl items-center justify-center gap-3 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-primary/20 disabled:opacity-50"
               >
                 {isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <><Save className="h-5 w-5" /> Save Changes</>}
               </button>
@@ -385,19 +387,19 @@ export default function AdminMovieForm({ movie }: AdminMovieFormProps) {
                 </div>
               )}
             </div>
-            
-            <div className="p-6 bg-muted/20 border border-border rounded-2xl space-y-4">
-              <div className="flex justify-between items-center border-b border-border/50 pb-2">
-                 <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Metadata Info</span>
-                 <span className="text-[10px] font-mono text-primary/40">0x{movie.id.toString(16).toUpperCase()}</span>
-              </div>
-              <div className="space-y-2 text-[10px] font-bold text-muted-foreground/40 uppercase tracking-widest">
-                 <p>Created: {new Date(movie.created_at).toLocaleDateString()}</p>
-                 <p>Last Update: {new Date(movie.updated_at).toLocaleDateString()}</p>
-              </div>
-            </div>
           </div>
 
+        </div>
+
+        {/* Mobile Floating Action Button (FAB) */}
+        <div className="lg:hidden fixed bottom-6 right-6 left-6 z-[60] animate-in slide-in-from-bottom-10 duration-500">
+           <button
+            type="submit"
+            disabled={isPending || isScraping}
+            className="w-full h-16 bg-primary text-primary-foreground font-black uppercase tracking-widest text-sm rounded-2xl flex items-center justify-center gap-3 shadow-[0_20px_50px_rgba(56,189,248,0.3)] active:scale-95 transition-all disabled:opacity-50"
+          >
+            {isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <><Save className="h-6 w-6" /> Commit Changes</>}
+          </button>
         </div>
       </form>
 
