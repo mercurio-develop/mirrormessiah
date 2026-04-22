@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { LogOut, Film, Shield, Terminal, Sparkles } from 'lucide-react';
 import { useAdmin } from '@/contexts/AdminContext';
-import ThemeToggle from './ThemeToggle';
+import ThemeToggle from './ui/ThemeToggle';
 
 export default function Navbar() {
   const router = useRouter();
