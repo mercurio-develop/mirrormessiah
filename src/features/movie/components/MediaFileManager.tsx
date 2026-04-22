@@ -85,11 +85,16 @@ export default function MediaFileManager({ movieId }: { movieId: number }) {
     startTransition(async () => {
         const result = await scanMovieFilesAction(movieId);
         if (result.status === 'success') {
-            showStatus('success', result.message || 'Scanning complete');
+            const { added, removed, repaired } = result.payload || { added: 0, removed: 0, repaired: false };
+            let msg = result.message || 'Scanning complete';
+            if (repaired) msg = `Sector location repaired! ${added} files linked.`;
+            else if (added > 0 || removed > 0) msg = `Sync complete: +${added} / -${removed} files.`;
+            
+            showStatus('success', msg);
             fetchFiles();
         } else {
             showStatus('error', result.message || 'Scan failed');
-            if (result.message?.includes('No existing files')) setShowManualInput(true);
+            if (result.message?.includes('location could not be determined')) setShowManualInput(true);
         }
     });
   };

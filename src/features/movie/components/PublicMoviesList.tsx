@@ -193,36 +193,41 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
         </div>
 
         {/* Filter Row */}
-        <div className="flex flex-wrap items-center gap-4">
+        <div className="flex flex-wrap items-center gap-6">
            {/* Sort Toggle */}
-           <button 
-              onClick={() => setSort(sort === 'title_asc' ? 'title_desc' : 'title_asc')}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-full border text-xs font-bold transition-all ${
-                sort === 'title_asc' ? 'bg-primary border-primary text-primary-foreground' : 'bg-white/5 border-white/10 hover:border-white/20'
-              }`}
-           >
-              {sort === 'title_asc' ? <ArrowDownAZ className="h-3.5 w-3.5" /> : <ArrowUpAZ className="h-3.5 w-3.5" />}
-              {sort === 'title_asc' ? 'Title A-Z' : 'Title Z-A'}
-           </button>
+           <div className="flex flex-col gap-2">
+              <span className="text-[11px] uppercase tracking-[0.2em] font-black text-foreground/50 ml-1">Sort Order</span>
+              <button 
+                  onClick={() => setSort(sort === 'title_asc' ? 'title_desc' : 'title_asc')}
+                  className={`flex items-center gap-2.5 px-6 py-3 rounded-xl border text-sm font-extrabold transition-all shadow-md active:scale-95 ${
+                    sort === 'title_asc' 
+                      ? 'bg-primary border-primary text-primary-foreground shadow-[0_0_20px_rgba(56,189,248,0.3)] ring-2 ring-primary/20' 
+                      : 'bg-card border-border hover:border-primary/40 text-foreground hover:bg-muted/50'
+                  }`}
+              >
+                  {sort === 'title_asc' ? <ArrowDownAZ className="h-4 w-4" /> : <ArrowUpAZ className="h-4 w-4" />}
+                  {sort === 'title_asc' ? 'Title A-Z' : 'Title Z-A'}
+              </button>
+           </div>
 
-           <div className="h-6 w-px bg-border/50 mx-2 hidden sm:block" />
+           <div className="h-12 w-px bg-border/40 mx-2 hidden sm:block self-end mb-1" />
 
            {/* Audience Selection */}
-           <div className="flex items-center gap-2">
-              <span className="text-[10px] uppercase tracking-widest font-black mr-2 text-muted-foreground/80">Category:</span>
-              <div className="flex gap-2">
+           <div className="flex flex-col gap-2">
+              <span className="text-[11px] uppercase tracking-[0.2em] font-black text-foreground/50 ml-1">Classification</span>
+              <div className="flex gap-2.5">
                 {[
                   { id: '', label: 'All', icon: null },
-                  { id: 'family', label: 'Family', icon: <div className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" /> },
-                  { id: 'adult', label: 'Adult', icon: <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]" /> }
+                  { id: 'family', label: 'Family', icon: <div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.8)]" /> },
+                  { id: 'adult', label: 'Adult', icon: <div className="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.8)]" /> }
                 ].map(cat => (
                   <button 
                     key={cat.id}
                     onClick={() => setSelectedAudience(cat.id as any)}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-full border text-xs font-bold transition-all ${
+                    className={`flex items-center gap-2.5 px-6 py-3 rounded-xl border text-sm font-extrabold transition-all shadow-md active:scale-95 ${
                       selectedAudience === cat.id 
-                        ? 'bg-primary border-primary text-primary-foreground' 
-                        : 'bg-muted/50 border-border hover:bg-muted hover:border-muted-foreground/30 text-muted-foreground hover:text-foreground'
+                        ? 'bg-primary border-primary text-primary-foreground shadow-[0_0_20px_rgba(56,189,248,0.3)] ring-2 ring-primary/20' 
+                        : 'bg-card border-border hover:border-primary/40 text-foreground hover:bg-muted/50'
                     }`}
                   >
                     {cat.icon}
@@ -232,18 +237,18 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
               </div>
            </div>
 
-           <div className="h-6 w-px bg-border/50 mx-2 hidden md:block" />
+           <div className="h-12 w-px bg-border/40 mx-2 hidden md:block self-end mb-1" />
 
            {/* Quality Pills */}
-           <div className="flex items-center gap-2">
-              <span className="text-[10px] uppercase tracking-widest font-black mr-2 text-muted-foreground/80">Quality:</span>
-              <div className="flex gap-2">
+           <div className="flex flex-col gap-2">
+              <span className="text-[11px] uppercase tracking-[0.2em] font-black text-foreground/50 ml-1">Resolution</span>
+              <div className="flex gap-2.5">
                 <button 
                   onClick={() => setSelectedQuality('')}
-                  className={`px-4 py-2 rounded-full border text-xs font-bold transition-all ${
+                  className={`px-6 py-3 rounded-xl border text-sm font-extrabold transition-all shadow-md active:scale-95 ${
                     !selectedQuality 
-                      ? 'bg-foreground text-background border-foreground shadow-lg shadow-foreground/5' 
-                      : 'bg-muted/50 border-border hover:bg-muted hover:border-muted-foreground/30 text-muted-foreground hover:text-foreground'
+                      ? 'bg-foreground text-background border-foreground shadow-[0_0_20px_rgba(255,255,255,0.1)] ring-2 ring-foreground/20' 
+                      : 'bg-card border-border hover:border-primary/40 text-foreground hover:bg-muted/50'
                   }`}
                 >
                   All
@@ -252,10 +257,10 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
                   <button 
                     key={q}
                     onClick={() => setSelectedQuality(q)}
-                    className={`px-4 py-2 rounded-full border text-xs font-bold transition-all ${
+                    className={`px-6 py-3 rounded-xl border text-sm font-extrabold transition-all shadow-md active:scale-95 ${
                       selectedQuality === q 
-                        ? 'bg-foreground text-background border-foreground shadow-lg shadow-foreground/5' 
-                        : 'bg-muted/50 border-border hover:bg-muted hover:border-muted-foreground/30 text-muted-foreground hover:text-foreground'
+                        ? 'bg-foreground text-background border-foreground shadow-[0_0_20px_rgba(255,255,255,0.1)] ring-2 ring-foreground/20' 
+                        : 'bg-card border-border hover:border-primary/40 text-foreground hover:bg-muted/50'
                     }`}
                   >
                     {q}
