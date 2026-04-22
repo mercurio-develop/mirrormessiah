@@ -5,7 +5,6 @@ services:
       dockerfile: Dockerfile
     container_name: mirrormessiah-web
     restart: unless-stopped
-    user: "0"
     environment:
       - NODE_ENV=production
       # GATE_KEY: Primary access for users/family
@@ -14,14 +13,21 @@ services:
       - ADMIN_KEY=${ADMIN_KEY:?ADMIN_KEY is not set.}
       - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3000}
       - DB_PATH=/app/data/media.db
+      - MEDIA_DIR=${MEDIA_DIR}
     volumes:
-      - ./:/app/data
-      # MEDIA_DIR: Path to your movie collection
-      - "${MEDIA_DIR:?MEDIA_DIR is not set.}:${MEDIA_DIR}:ro"
+      - ./data:/app/data
+      # MEDIA_DIR: Path to your movie collection. Mounted as rw for poster management by mm.py
+      - "${MEDIA_DIR:?MEDIA_DIR is not set.}:${MEDIA_DIR}"
     networks:
       internal-net:
         aliases:
           - mirrormessiah
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/login', r => process.exit(r.statusCode < 400 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   tunnel:
     image: cloudflare/cloudflared:latest

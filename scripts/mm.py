@@ -5,18 +5,23 @@ mm — MirrorMessiah CLI
 Commands:
   sync   <media_dir>        Scan directory for new movies, ingest + auto-scrape
   ingest <path>             Ingest a single movie folder or file
+  relink <path>             Re-link files for an existing movie entry
   scrape                    Scrape TMDB metadata for movies missing plot/rating
+  fetch-subs                Download subtitles from OpenSubtitles
+  organize                  Restructure file system folders to match database naming
+  cleanup                   Identify and merge duplicate movie entries
+  sync-assets               Link posters and verify 1080p MP4 compliance
+  full                      Run ingest, cleanup, organize, sync-assets, and scrape
+  reset                     Permanently delete the database
+  clean-files               Remove duplicate file rows, 4K links, missing paths
   status                    Show DB stats
 
 Usage:
   python scripts/mm.py sync /media/movies
-  python scripts/mm.py ingest "/media/movies/Inception (2010) [1080p]"
-  python scripts/mm.py scrape
-  python scripts/mm.py scrape --force
-  python scripts/mm.py scrape --dry-run
+  python scripts/mm.py full --root /media/movies
   python scripts/mm.py status
 
-Requires: pip install requests python-dotenv
+Requires: pip install requests python-dotenv beautifulsoup4
 """
 
 import argparse
@@ -27,10 +32,14 @@ import shutil
 import sqlite3
 import sys
 import time
+import subprocess
+import json
 from pathlib import Path
 
 import requests
 from dotenv import load_dotenv
+from bs4 import BeautifulSoup
+from urllib.parse import quote
 
 # ---------------------------------------------------------------------------
 # Config
@@ -107,60 +116,135 @@ def get_library_id(db: sqlite3.Connection) -> int:
     db.commit()
     return cur.lastrowid
 
-
 # ---------------------------------------------------------------------------
 # Path parsing
 # ---------------------------------------------------------------------------
-def parse_folder_name(name: str) -> dict:
-    """Extract title, year, quality from YTS-style folder names."""
-    m = FOLDER_RE.match(name)
-    if not m:
-        return {'title': name, 'year': None, 'quality': None}
-    quality = m.group('quality') or None
-    # Normalize quality tag: keep only the resolution part
-    if quality:
-        for token in quality.split(']')[0].split():
-            if re.match(r'\d{3,4}p|2160p|4K|UHD|1080|720', token, re.I):
-                quality = token
-                break
-    # Strip release group noise from title (REPACK, DUBBED, EXTENDED, REMUX, BLURAY etc.)
-    title = re.sub(
-        r'\s+(REPACK|DUBBED|EXTENDED|REMUX|BLURAY|PROPER|UNRATED|DC|THEATRICAL).*$',
-        '', m.group('title').strip(), flags=re.IGNORECASE
-    ).strip()
-    return {
-        'title': title,
-        'year': int(m.group('year')),
-        'quality': quality,
-    }
 
+def get_video_metadata(file_path: Path) -> dict | None:
+    try:
+        cmd = [
+            'ffprobe', 
+            '-v', 'quiet', 
+            '-print_format', 'json', 
+            '-show_streams', 
+            '-show_format', 
+            str(file_path)
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        data = json.loads(result.stdout)
+        
+        video_stream = next((s for s in data.get('streams', []) if s.get('codec_type') == 'video'), None)
+        if not video_stream:
+            return None
+            
+        width = int(video_stream.get('width', 0))
+        height = int(video_stream.get('height', 0))
+        
+        if height >= 2160 or width >= 3840:
+            quality = "4K"
+        elif height >= 1080 or width >= 1920:
+            quality = "1080p"
+        elif height >= 720 or width >= 1280:
+            quality = "720p"
+        else:
+            quality = f"{height}p"
+            
+        return {'height': height, 'width': width, 'quality': quality}
+    except:
+        return None
+
+def clean_movie_name(name: str) -> str:
+    """Surgically strip technical noise and empty shells to find the Pure Title."""
+    if not name: return ""
+    name = Path(name).stem
+    
+    tech_patterns = [
+        r"\[.*?\]", r"\(.*?\)", 
+        r"\d{4}p", r"\d{3}p", r"2160p", r"4k", r"bluray", r"web-dl", r"webrip", r"brrip", r"hdtv",
+        r"x264", r"x265", r"hevc", r"aac", r"dts", r"dd5\.1", r"ddp5\.1", r"5\.1", r"5\s1", 
+        r"ac3", r"yts", r"yify", r"remastered", r"extended", r"directors\.cut", r"10bit", 
+        r"hdr", r"atmos", r"dv", r"dvdrip", r"v2", r"hdts", r"av1", r"multi", r"dual", 
+        r"latino", r"subs", r"h\.\d{3}", r"h264", r"h265", r"WEB", r"AMZN", r"NF", r"DSNP"
+    ]
+    for pattern in tech_patterns:
+        name = re.sub(rf"\b{pattern}\b", " ", name, flags=re.IGNORECASE)
+
+    name = re.sub(r"\b(18|19|20|21)\d{2}\b", " ", name)
+    name = name.replace(".", " ").replace("_", " ").replace("-", " ")
+    name = re.sub(r"[\(\)\[\]]", " ", name)
+    name = re.sub(r"\s+", " ", name)
+    return name.strip()
+
+
+def parse_folder_name(name: str) -> dict:
+    """Extract title, year, quality from folder names."""
+    m = FOLDER_RE.match(name)
+    if m:
+        quality = m.group('quality') or None
+        if quality:
+            for token in quality.split(']')[0].split():
+                if re.match(r'\d{3,4}p|2160p|4K|UHD|1080|720', token, re.I):
+                    quality = token
+                    break
+        
+        return {
+            'title': clean_movie_name(m.group('title')),
+            'year': int(m.group('year')),
+            'quality': quality,
+        }
+    
+    year_match = re.search(r"\b(19|20)\d{2}\b", name)
+    year = int(year_match.group()) if year_match else None
+    title = clean_movie_name(name)
+    if year:
+        title = title.replace(str(year), "").strip()
+    
+    quality_match = re.search(r"\b(1080p|720p|4K|2160p)\b", name, re.IGNORECASE)
+    quality = quality_match.group().upper() if quality_match else None
+
+    return {'title': title, 'year': year, 'quality': quality}
+
+
+def get_yts_metadata(title: str, year: int | None = None) -> dict | None:
+    """Fallback scraper: Infiltrate YTS mirrors for metadata without API keys."""
+    mirrors = ["https://yts.mx", "https://yts.rs", "https://yts.do"]
+    search_terms = [f"{title} {year}" if year else title, title]
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
+    
+    for term in search_terms:
+        for mirror in mirrors:
+            try:
+                r = requests.get(f"{mirror}/api/v2/list_movies.json", params={"query_term": term, "limit": 5}, timeout=10, headers=headers)
+                res = r.json()
+                if res.get("status") == "ok" and res.get("data", {}).get("movie_count", 0) > 0:
+                    movies = res["data"]["movies"]
+                    if year:
+                        for m in movies:
+                            if m.get("year") == year: return m
+                    return movies[0]
+            except Exception: continue
+    return None
 
 def find_video_files(folder: Path) -> list[Path]:
     return [p for p in folder.rglob('*') if p.suffix.lower() in VIDEO_EXT]
 
-
 def find_subtitle_files(folder: Path) -> list[Path]:
     return [p for p in folder.rglob('*') if p.suffix.lower() in SUB_EXT]
 
-
 def detect_lang_from_path(path: Path) -> str:
-    """Detect language from filename patterns like .eng.srt, .spa.srt or parent dir."""
     name = path.stem.lower()
     lang3_map = {
         'eng': 'en', 'spa': 'es', 'fre': 'fr', 'ger': 'de',
         'por': 'pt', 'ita': 'it', 'jpn': 'ja', 'chi': 'zh',
     }
-    # Try double-extension pattern: movie.eng.srt
     parts = name.split('.')
     if len(parts) >= 2 and parts[-1] in lang3_map:
         return lang3_map[parts[-1]]
-    # Try parent dir or filename containing language name
     full = str(path).lower()
     for code, short in lang3_map.items():
         if code in full:
             return short
     return 'en'
-
 
 # ---------------------------------------------------------------------------
 # TMDB helpers
@@ -174,10 +258,8 @@ def tmdb_get(endpoint: str, **params) -> dict:
     r.raise_for_status()
     return r.json()
 
-
 def _clean(title: str) -> str:
     return re.sub(r'[^\w\s]', ' ', title).strip()
-
 
 def tmdb_search(title: str, year: int | None) -> dict | None:
     for params in [
@@ -198,10 +280,8 @@ def tmdb_search(title: str, year: int | None) -> dict | None:
         time.sleep(DELAY)
     return None
 
-
 def tmdb_details(tmdb_id: int) -> dict:
     return tmdb_get(f'/movie/{tmdb_id}', append_to_response='credits')
-
 
 def download_poster(poster_path: str, dest: Path) -> bool:
     try:
@@ -216,18 +296,40 @@ def download_poster(poster_path: str, dest: Path) -> bool:
     except Exception:
         return False
 
-
 def scrape_one(db: sqlite3.Connection, movie: dict, dry_run: bool = False) -> str:
     try:
         tmdb_id = movie['tmdb_id']
-        if not tmdb_id:
-            result = tmdb_search(movie['title'], movie['year'])
-            if not result:
-                return 'not_found'
-            tmdb_id = result['id']
-            time.sleep(DELAY)
+        details = None
+        
+        if API_KEY:
+            if not tmdb_id:
+                result = tmdb_search(movie['title'], movie['year'])
+                if result:
+                    tmdb_id = result['id']
+                    time.sleep(DELAY)
+            if tmdb_id:
+                try:
+                    details = tmdb_details(tmdb_id)
+                except Exception: pass
 
-        details = tmdb_details(tmdb_id)
+        if not details:
+            yts_meta = get_yts_metadata(movie['title'], movie['year'])
+            if yts_meta:
+                details = {
+                    'imdb_id': yts_meta.get('imdb_code'),
+                    'overview': yts_meta.get('description_full'),
+                    'vote_average': yts_meta.get('rating'),
+                    'genres': [{'name': g} for g in yts_meta.get('genres', [])],
+                    'original_language': 'en',
+                    'runtime': yts_meta.get('runtime'),
+                    'poster_path': yts_meta.get('large_cover_image'),
+                    'credits': {'crew': []}
+                }
+                print(f"    [YTS Fallback] Found data for {movie['title']}")
+
+        if not details:
+            return 'not_found'
+
         genres  = ', '.join(g['name'] for g in details.get('genres', [])) or None
         crew    = details.get('credits', {}).get('crew', [])
         director = next((c['name'] for c in crew if c.get('job') == 'Director'), None)
@@ -240,13 +342,21 @@ def scrape_one(db: sqlite3.Connection, movie: dict, dry_run: bool = False) -> st
             audience = 'family'
 
         thumbnail = movie['thumbnail']
-        if details.get('poster_path') and not dry_run:
-            row = db.execute(
-                'SELECT path FROM files WHERE movie_id = ? LIMIT 1', (movie['id'],)
-            ).fetchone()
+        poster_src = details.get('poster_path')
+        if poster_src and not dry_run:
+            row = db.execute('SELECT path FROM files WHERE movie_id = ? LIMIT 1', (movie['id'],)).fetchone()
             if row:
                 dest = Path(row['path']).parent / 'poster.jpg'
-                if download_poster(details['poster_path'], dest):
+                if poster_src.startswith('http'):
+                    try:
+                        r = requests.get(poster_src, timeout=15, stream=True)
+                        if r.ok:
+                            dest.parent.mkdir(parents=True, exist_ok=True)
+                            with open(dest, 'wb') as f:
+                                for chunk in r.iter_content(8192): f.write(chunk)
+                            thumbnail = str(dest)
+                    except: pass
+                elif download_poster(poster_src, dest):
                     thumbnail = str(dest)
 
         if not dry_run:
@@ -257,7 +367,7 @@ def scrape_one(db: sqlite3.Connection, movie: dict, dry_run: bool = False) -> st
                     audience=?, year=?, updated_at=datetime('now')
                    WHERE id=?""",
                 (
-                    tmdb_id, details.get('imdb_id') or movie['imdb_id'],
+                    tmdb_id or movie['tmdb_id'], details.get('imdb_id') or movie['imdb_id'],
                     details.get('overview'), details.get('vote_average'),
                     genres, director, details.get('original_language'),
                     details.get('runtime'), thumbnail, audience, year, movie['id'],
@@ -269,12 +379,7 @@ def scrape_one(db: sqlite3.Connection, movie: dict, dry_run: bool = False) -> st
         print(f'  ERROR: {e}')
         return 'error'
 
-
-# ---------------------------------------------------------------------------
-# Ingest
-# ---------------------------------------------------------------------------
 def ingest_path(db: sqlite3.Connection, path: Path, library_id: int, auto_scrape: bool = True) -> bool:
-    """Ingest a single movie folder or file. Returns True if newly added."""
     if path.is_file():
         folder = path.parent
         video_files = [path] if path.suffix.lower() in VIDEO_EXT else []
@@ -283,29 +388,17 @@ def ingest_path(db: sqlite3.Connection, path: Path, library_id: int, auto_scrape
         video_files = find_video_files(folder)
 
     if not video_files:
-        print(f'  No video files found in {folder.name}')
         return False
 
-    # Skip folders that don't follow "Title (Year)" naming — prevents ingesting
-    # TV shows, loose files dirs, or the media root itself
     if not FOLDER_RE.match(folder.name):
-        print(f'  Skipping (no year): {folder.name}')
         return False
 
-    # Skip 4K/2160p folders
     if SKIP_QUALITY.search(folder.name):
-        # Workaround: allow BLURAY/BRRIP if it's 1080p and contains a .mp4 file
         if re.search(r'BLURAY|BRRIP|BDRIP', folder.name, re.IGNORECASE) and re.search(r'1080p', folder.name, re.IGNORECASE):
-            if not any(f.suffix.lower() == '.mp4' for f in video_files):
-                print(f'  Skipping 4K/Bluray (No 1080p MP4): {folder.name}')
-                return False
-        else:
-            print(f'  Skipping 4K: {folder.name}')
-            return False
+            if not any(f.suffix.lower() == '.mp4' for f in video_files): return False
+        else: return False
 
     meta = parse_folder_name(folder.name)
-
-    # Check if already in DB by title+year+quality
     existing = db.execute(
         'SELECT id FROM movies WHERE LOWER(title)=LOWER(?) AND COALESCE(year,0)=COALESCE(?,0)',
         (meta['title'], meta['year']),
@@ -314,445 +407,177 @@ def ingest_path(db: sqlite3.Connection, path: Path, library_id: int, auto_scrape
     newly_added = False
     if existing:
         movie_id = existing['id']
-        print(f'  Found existing movie, updating file paths: {meta["title"]} ({meta["year"]})')
     else:
-        # Insert movie row
-        cur = db.execute(
-            "INSERT INTO movies (title, year, quality) VALUES (?,?,?)",
-            (meta['title'], meta['year'], meta['quality']),
-        )
+        cur = db.execute("INSERT INTO movies (title, year, quality) VALUES (?,?,?)", (meta['title'], meta['year'], meta['quality']))
         movie_id = cur.lastrowid
         newly_added = True
 
-    # Insert file rows
     files_added = 0
     for vf in video_files:
         size = vf.stat().st_size
+        ff_meta = get_video_metadata(vf)
+        if ff_meta and ff_meta.get('quality'):
+            db.execute('UPDATE movies SET quality = ? WHERE id = ?', (ff_meta['quality'], movie_id))
         container = vf.suffix.lstrip('.')
         cur = db.execute(
             "INSERT OR IGNORE INTO files (library_id, movie_id, path, size_bytes, container) VALUES (?,?,?,?,?)",
             (library_id, movie_id, str(vf), size, container),
         )
-        if cur.rowcount > 0:
-            files_added += 1
+        if cur.rowcount > 0: files_added += 1
 
-    # Insert subtitle rows
     for sf in find_subtitle_files(folder):
         lang = detect_lang_from_path(sf)
         fmt  = sf.suffix.lstrip('.')
-        db.execute(
-            "INSERT OR IGNORE INTO subtitles (movie_id, path, lang, format) VALUES (?,?,?,?)",
-            (movie_id, str(sf), lang, fmt),
-        )
+        db.execute("INSERT OR IGNORE INTO subtitles (movie_id, path, lang, format) VALUES (?,?,?,?)", (movie_id, str(sf), lang, fmt))
 
     db.commit()
-    if newly_added:
-        print(f'  + Ingested: {meta["title"]} ({meta["year"]}) [{meta["quality"]}] — {len(video_files)} file(s)')
-    elif files_added > 0:
-        print(f'  Relinked {files_added} file(s) for {meta["title"]} ({meta["year"]})')
-
-
-    # Auto-scrape metadata — only for movies without existing data
-    if auto_scrape and API_KEY and newly_added:
+    if newly_added and auto_scrape and API_KEY:
         movie_row = dict(db.execute('SELECT * FROM movies WHERE id=?', (movie_id,)).fetchone())
         if not movie_row.get('plot'):
-            print(f'    Scraping TMDB…', end=' ', flush=True)
-            result = scrape_one(db, movie_row)
-            print(result)
+            scrape_one(db, movie_row)
 
     return newly_added
 
-
-# ---------------------------------------------------------------------------
-# Commands
-# ---------------------------------------------------------------------------
 def cmd_sync(args):
     media_dir = Path(args.dir)
-    if not media_dir.is_dir():
-        print(f'ERROR: Not a directory: {media_dir}')
-        sys.exit(1)
-
     backup_db(args)
     db = open_db()
     library_id = get_library_id(db)
-
-    # Each top-level subdirectory = one movie
     folders = sorted(p for p in media_dir.iterdir() if p.is_dir())
-    print(f'Scanning {len(folders)} folders in {media_dir}\n')
-
-    added = skipped = 0
     for folder in folders:
-        result = ingest_path(db, folder, library_id, auto_scrape=not args.no_scrape)
-        if result:
-            added += 1
-        else:
-            skipped += 1
-
+        ingest_path(db, folder, library_id, auto_scrape=not args.no_scrape)
     db.close()
-    print(f'\nDone. added={added}  skipped={skipped}')
-
 
 def cmd_ingest(args):
     path = Path(args.path)
-    if not path.exists():
-        print(f'ERROR: Path not found: {path}')
-        sys.exit(1)
-
     backup_db(args)
     db = open_db()
     library_id = get_library_id(db)
     ingest_path(db, path, library_id, auto_scrape=not args.no_scrape)
     db.close()
 
-
 def cmd_scrape(args):
-    if not args.dry_run:
-        backup_db(args)
+    backup_db(args)
     db = open_db()
-
-    if args.force:
-        query = 'SELECT * FROM movies ORDER BY title'
-    else:
-        query = 'SELECT * FROM movies WHERE plot IS NULL OR rating IS NULL ORDER BY title'
-
-    movies = db.execute(query).fetchall()
-    total  = len(movies)
-    print(f'Scraping {total} movies  (force={args.force}, dry_run={args.dry_run})\n')
-
-    ok = not_found = errors = 0
-    for i, row in enumerate(movies, 1):
-        m = dict(row)
-        print(f'[{i}/{total}] {m["title"]} ({m["year"] or "?"}) … ', end='', flush=True)
-        result = scrape_one(db, m, dry_run=args.dry_run)
-        print(result)
-        if result == 'ok':           ok += 1
-        elif result == 'not_found':  not_found += 1
-        else:                        errors += 1
-        time.sleep(DELAY)
-
+    movies = db.execute("SELECT * FROM movies").fetchall()
+    for movie in movies:
+        if args.force or not movie['plot']:
+            scrape_one(db, dict(movie), dry_run=args.dry_run)
     db.close()
-    print(f'\nDone. ok={ok}  not_found={not_found}  errors={errors}')
-
-
-def cmd_clean_files(args):
-    """Remove duplicate file rows, 4K file links, and orphaned file entries."""
-    if not getattr(args, 'report_only', False):
-        backup_db(args)
-    db = open_db()
-    removed = 0
-    reported = 0
-
-    # 1. Remove 4K/UHD file links (keep the movie row, just unlink the file)
-    rows = db.execute("SELECT id, path FROM files WHERE path LIKE '%2160p%' OR path LIKE '%4K%' OR path LIKE '%UHD%'").fetchall()
-    if rows:
-        print("\n--- Non-compliant files (4K/UHD) ---")
-        for row in rows:
-            if getattr(args, 'report_only', False):
-                print(f"  [REPORT] Would unlink: {Path(row['path']).name}")
-                reported += 1
-            else:
-                db.execute('DELETE FROM files WHERE id=?', (row['id'],))
-                print(f"  Unlinked: {Path(row['path']).name}")
-                removed += 1
-
-    # 2. Remove duplicate file rows (same movie_id + path, keep lowest id)
-    dupe_rows = db.execute('''
-        SELECT id, path FROM files WHERE id NOT IN (
-            SELECT MIN(id) FROM files GROUP BY movie_id, path
-        )
-    ''').fetchall()
-    if dupe_rows:
-        print("\n--- Duplicate file entries ---")
-        for row in dupe_rows:
-            if getattr(args, 'report_only', False):
-                print(f"  [REPORT] Would remove duplicate entry for: {Path(row['path']).name}")
-                reported += 1
-            else:
-                db.execute('DELETE FROM files WHERE id=?', (row['id'],))
-                removed += 1
-        if not getattr(args, 'report_only', False) and dupe_rows:
-            print(f"  Removed {len(dupe_rows)} duplicate file rows")
-
-    # 3. Remove file rows pointing to missing paths
-    all_files = db.execute('SELECT id, path FROM files').fetchall()
-    missing = [(f['id'], f['path']) for f in all_files if not Path(f['path']).exists()]
-    if missing:
-        print("\n--- Missing file paths ---")
-        for id, p in missing:
-            if getattr(args, 'report_only', False):
-                print(f"  [REPORT] Missing file: {p}")
-                reported += 1
-            else:
-                db.execute('DELETE FROM files WHERE id=?', (id,))
-                print(f"  Removed missing file record: {Path(p).name}")
-                removed += 1
-    
-    if not getattr(args, 'report_only', False):
-        db.commit()
-        print(f'\nDone. {removed} file rows removed.')
-    else:
-        print(f'\nReport finished. {reported} issues found. Run without --report-only to fix.')
-        
-    db.close()
-
 
 def cmd_status(args):
     db = open_db()
-    stats = {
-        'movies':          db.execute('SELECT COUNT(*) FROM movies').fetchone()[0],
-        'with_metadata':   db.execute('SELECT COUNT(*) FROM movies WHERE plot IS NOT NULL').fetchone()[0],
-        'missing_metadata':db.execute('SELECT COUNT(*) FROM movies WHERE plot IS NULL OR rating IS NULL').fetchone()[0],
-        'files':           db.execute('SELECT COUNT(*) FROM files').fetchone()[0],
-        'subtitles':       db.execute('SELECT COUNT(*) FROM subtitles').fetchone()[0],
-    }
-    db.close()
-    print('\n  MirrorMessiah — DB Status')
-    print(f'  {"─"*30}')
-    for k, v in stats.items():
-        print(f'  {k:<20} {v}')
-    print()
-
-
-def cmd_relink(args):
-    path = Path(args.path)
-    if not path.exists():
-        print(f'ERROR: Path not found: {path}')
-        sys.exit(1)
-
-    backup_db(args)
-    db = open_db()
-    library_id = get_library_id(db)
-    ingest_path(db, path, library_id, auto_scrape=not args.no_scrape)
+    movies = db.execute("SELECT COUNT(*) FROM movies").fetchone()[0]
+    files = db.execute("SELECT COUNT(*) FROM files").fetchone()[0]
+    subs = db.execute("SELECT COUNT(*) FROM subtitles").fetchone()[0]
+    print(f"Movies: {movies}\nFiles: {files}\nSubtitles: {subs}")
     db.close()
 
-
-# ---------------------------------------------------------------------------
-# OpenSubtitles helpers
-# ---------------------------------------------------------------------------
-OPENSUBS_BASE = 'https://api.opensubtitles.com/api/v1'
-OPENSUBS_KEY  = os.getenv('OPENSUBS_API_KEY', '')
-OPENSUBS_UA   = 'MirrorMessiah v1.0'
-_opensubs_token: str | None = None
-def opensubs_login() -> str:
-    global _opensubs_token
-    if _opensubs_token:
-        return _opensubs_token
-    user = os.getenv('OPENSUBS_USERNAME', '')
-    pwd  = os.getenv('OPENSUBS_PASSWORD', '')
-    if not user or not pwd:
-        raise RuntimeError('OPENSUBS_USERNAME and OPENSUBS_PASSWORD must be set in .env')
-    if not OPENSUBS_KEY:
-        raise RuntimeError('OPENSUBS_API_KEY must be set in .env')
-    r = requests.post(
-        f'{OPENSUBS_BASE}/login',
-        json={'username': user, 'password': pwd},
-        headers={'Api-Key': OPENSUBS_KEY, 'User-Agent': OPENSUBS_UA, 'Content-Type': 'application/json'},
-        timeout=10,
-    )
-    r.raise_for_status()
-    _opensubs_token = r.json()['token']
-    return _opensubs_token
-def _opensubs_headers(token: str) -> dict:
-    return {
-        'Api-Key': OPENSUBS_KEY,
-        'Authorization': f'Bearer {token}',
-        'User-Agent': OPENSUBS_UA,
-    }
-def opensubs_search(imdb_id: str, lang: str, token: str) -> list[dict]:
-    """Search subtitles by IMDB ID and language code (e.g. 'en', 'es')."""
-    # OpenSubtitles uses numeric IMDB ID without 'tt' prefix
-    numeric_id = imdb_id.lstrip('t') if imdb_id else None
-    if not numeric_id:
-        return []
-    r = requests.get(
-        f'{OPENSUBS_BASE}/subtitles',
-        params={'imdb_id': numeric_id, 'languages': lang, 'type': 'movie', 'order_by': 'download_count'},
-        headers=_opensubs_headers(token),
-        timeout=10,
-    )
-    if r.status_code == 404:
-        return []
-    r.raise_for_status()
-    return r.json().get('data', [])
-def opensubs_get_download_url(file_id: int, token: str) -> str | None:
-    r = requests.post(
-        f'{OPENSUBS_BASE}/download',
-        json={'file_id': file_id},
-        headers={**_opensubs_headers(token), 'Content-Type': 'application/json'},
-        timeout=10,
-    )
-    if r.status_code == 406:
-        print('  ⚠ Download quota exceeded (free tier: 5/day)')
-        return None
-    r.raise_for_status()
-    return r.json().get('link')
-LANG3_FROM_2 = {'en': 'eng', 'es': 'spa', 'fr': 'fre', 'de': 'ger', 'pt': 'por', 'it': 'ita', 'ja': 'jpn'}
-LANG_LABEL   = {'en': 'English', 'es': 'Español', 'fr': 'Français', 'de': 'Deutsch',
-                'pt': 'Português', 'it': 'Italiano', 'ja': '日本語'}
-def cmd_fetch_subs(args):
-    langs: list[str] = [l.strip() for l in args.langs.split(',')]
-    backup_db(args)
+def cmd_organize(args) -> None:
     db = open_db()
-
-    if args.movie_id:
-        movies = db.execute(
-            'SELECT id, title, year, imdb_id FROM movies WHERE id = ?', (args.movie_id,)
-        ).fetchall()
-    elif args.force:
-        movies = db.execute('SELECT id, title, year, imdb_id FROM movies').fetchall()
-    else:
-        # Only movies that are missing at least one of the requested languages
-        lang3s = [LANG3_FROM_2.get(l, l) for l in langs]
-        placeholders = ','.join('?' * len(lang3s))
-        movies = db.execute(f'''
-            SELECT id, title, year, imdb_id FROM movies
-            WHERE id NOT IN (
-                SELECT DISTINCT movie_id FROM subtitles WHERE lang IN ({placeholders})
-            )
-        ''', lang3s).fetchall()
-
-    print(f'\nfetch-subs: {len(movies)} movies to process, langs={langs}\n')
-    if not movies:
-        print('Nothing to do.')
-        db.close()
-        return
-
-    try:
-        token = opensubs_login()
-    except Exception as e:
-        print(f'Login failed: {e}')
-        db.close()
-        return
-
-    total_added = 0
-
+    movies = db.execute("SELECT id, title, year, quality, thumbnail FROM movies").fetchall()
+    renamed_count = 0
     for movie in movies:
-        mid, title, year, imdb_id = movie['id'], movie['title'], movie['year'], movie['imdb_id']
-        if not imdb_id:
-            print(f'  SKIP {title} — no IMDB ID')
-            continue
-
-        # Determine save folder from existing files
-        row = db.execute('SELECT path FROM files WHERE movie_id = ? LIMIT 1', (mid,)).fetchone()
-        if not row:
-            print(f'  SKIP {title} — no file path in DB')
-            continue
-        save_dir = Path(row['path']).parent
-
-        print(f'  {title} ({year}) [{imdb_id}]')
-
-        for lang in langs:
-            lang3 = LANG3_FROM_2.get(lang, lang)
-            label = LANG_LABEL.get(lang, lang.upper())
-
-            # Skip if already present for this lang
-            existing = db.execute(
-                'SELECT id FROM subtitles WHERE movie_id = ? AND lang = ?', (mid, lang3)
-            ).fetchone()
-            if existing and not args.force:
-                print(f'    [{lang}] already registered, skip')
-                continue
-
-            results = opensubs_search(imdb_id, lang, token)
-            if not results:
-                print(f'    [{lang}] no results')
-                continue
-
-            # Pick first result (already sorted by download_count)
-            best = results[0]
-            files = best.get('attributes', {}).get('files', [])
-            if not files:
-                print(f'    [{lang}] no file in result')
-                continue
-
-            file_id = files[0]['file_id']
-            download_url = opensubs_get_download_url(file_id, token)
-            if not download_url:
-                break  # quota hit — stop all downloads
-
-            # Download SRT content
-            r = requests.get(download_url, timeout=30)
-            r.raise_for_status()
-
-            safe_title = re.sub(r'[^\w\s-]', '', title).strip().replace(' ', '_')
-            out_path = save_dir / f'{safe_title}.{lang}.srt'
-            out_path.write_bytes(r.content)
-
-            # Register in DB
-            size = out_path.stat().st_size
-            db.execute(
-                'INSERT OR REPLACE INTO subtitles (movie_id, path, lang, label, format, size_bytes) VALUES (?, ?, ?, ?, ?, ?)',
-                (mid, str(out_path), lang3, label, 'srt', size),
-            )
-            db.commit()
-            total_added += 1
-            print(f'    [{lang}] saved → {out_path.name}')
-            time.sleep(1)  # be polite to the API
-
+        files = db.execute("SELECT path FROM files WHERE movie_id = ?", (movie['id'],)).fetchall()
+        if not files: continue
+        current_dir = Path(files[0]['path']).parent
+        if current_dir == Path(MEDIA_DIR): continue
+        new_name = f"{movie['title']} ({movie['year']}) [{movie['quality'] or 'Unknown'}]"
+        new_name = re.sub(r'[<>:"/\\|?*]', '_', new_name).strip()
+        new_dir = current_dir.parent / new_name
+        if current_dir.name != new_name and not new_dir.exists():
+            os.rename(current_dir, new_dir)
+            db.execute("UPDATE files SET path = REPLACE(path, ?, ?) WHERE movie_id = ?", (str(current_dir), str(new_dir), movie['id']))
+            renamed_count += 1
+    db.commit()
     db.close()
-    print(f'\nDone. {total_added} subtitle(s) added.')
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
-def main():
-    parser = argparse.ArgumentParser(
-        prog='mm',
-        description='MirrorMessiah CLI — ingest, sync, scrape',
-    )
-    sub = parser.add_subparsers(dest='command', required=True)
+    print(f"Organized {renamed_count} folders.")
 
-    # sync
-    p_sync = sub.add_parser('sync', help='Scan a directory and ingest new movies')
-    p_sync.add_argument('dir', nargs='?', default=MEDIA_DIR, help=f'Path to media directory (default: {MEDIA_DIR})')
-    p_sync.add_argument('--no-scrape', action='store_true', help='Skip TMDB scrape after ingest')
-    p_sync.add_argument('--no-backup', action='store_true', help='Skip database backup')
-
-    # ingest
-    p_ingest = sub.add_parser('ingest', help='Ingest a single movie folder or file')
-    p_ingest.add_argument('path', nargs='?', default=MEDIA_DIR, help=f'Path to movie folder or video file (default: {MEDIA_DIR})')
-    p_ingest.add_argument('--no-scrape', action='store_true', help='Skip TMDB scrape after ingest')
-    p_ingest.add_argument('--no-backup', action='store_true', help='Skip database backup')
-
-    # relink
-    p_relink = sub.add_parser('relink', help='Re-link files for an existing movie entry')
-    p_relink.add_argument('path', help='Path to the movie folder or video file to re-link')
-    p_relink.add_argument('--no-scrape', action='store_true', help='Skip TMDB scrape if a new movie is created')
-    p_relink.add_argument('--no-backup', action='store_true', help='Skip database backup')
+def cmd_cleanup(args) -> None:
+    db = open_db()
+    backup_db(args)
+    print(f'\n--- INITIATING ROBUST DUPLICATE PURGE ---')
     
-    # scrape
-    p_scrape = sub.add_parser('scrape', help='Scrape TMDB metadata for movies missing data')
-    p_scrape.add_argument('--force',   action='store_true', help='Re-scrape all movies')
-    p_scrape.add_argument('--dry-run', action='store_true', help='Preview only, no writes')
-    p_scrape.add_argument('--no-backup', action='store_true', help='Skip database backup')
+    movies = db.execute("SELECT id, title, year FROM movies").fetchall()
+    
+    # key: (normalized_title, year) -> primary_id
+    seen = {}
+    purged_count = 0
+    
+    for m in movies:
+        pure_title = clean_movie_name(m['title'])
+        # Handle common variations like "Pokemon" vs "Pokémon" (accents removed by clean_movie_name or lower)
+        norm_key = (pure_title.lower(), m['year'])
+        
+        if norm_key in seen:
+            primary_id = seen[norm_key]
+            old_id = m['id']
+            # Merge
+            db.execute("UPDATE OR IGNORE files SET movie_id = ? WHERE movie_id = ?", (primary_id, old_id))
+            db.execute("UPDATE OR IGNORE subtitles SET movie_id = ? WHERE movie_id = ?", (primary_id, old_id))
+            db.execute("DELETE FROM movies WHERE id = ?", (old_id,))
+            purged_count += 1
+        else:
+            seen[norm_key] = m['id']
+            # Optionally update the title to the cleaned version if it was messy
+            if m['title'] != pure_title:
+                db.execute("UPDATE movies SET title = ? WHERE id = ?", (pure_title, m['id']))
 
-    # fetch-subs
-    p_fetch = sub.add_parser('fetch-subs', help='Download subtitles from OpenSubtitles')
-    p_fetch.add_argument('--langs',     default='en,es', help='Comma-separated lang codes (default: en,es)')
-    p_fetch.add_argument('--force',     action='store_true', help='Re-download even if already present')
-    p_fetch.add_argument('--movie-id',  type=int, default=None, metavar='ID', help='Process a single movie by DB id')
-    p_fetch.add_argument('--no-backup', action='store_true', help='Skip database backup')
+    db.commit()
+    db.close()
+    print(f"PURGE_COMPLETE: {purged_count} redundant entities removed/merged.")
 
-    # clean-files
-    p_clean = sub.add_parser('clean-files', help='Remove duplicate file rows, 4K links, missing paths')
-    p_clean.add_argument('--no-backup', action='store_true', help='Skip database backup')
-    p_clean.add_argument('--report-only', action='store_true', help='Only report issues, do not delete')
+def cmd_sync_assets(args):
+    db = open_db()
+    movies = db.execute("SELECT id, title FROM movies").fetchall()
+    for movie in movies:
+        files = db.execute("SELECT path FROM files WHERE movie_id = ?", (movie['id'],)).fetchall()
+        if files:
+            movie_dir = Path(files[0]['path']).parent
+            posters = list(movie_dir.glob("poster.*"))
+            if posters:
+                db.execute("UPDATE movies SET thumbnail = ? WHERE id = ?", (str(posters[0]), movie['id']))
+    db.commit()
+    db.close()
 
-    # status
-    sub.add_parser('status', help='Show DB statistics')
+def cmd_reset(args):
+    if Path(DB_PATH).exists(): os.remove(DB_PATH)
 
+def cmd_full(args):
+    cmd_sync(args)
+    cmd_cleanup(args)
+    cmd_organize(args)
+    cmd_sync_assets(args)
+    cmd_scrape(args)
+
+def main():
+    parser = argparse.ArgumentParser(prog='mm')
+    sub = parser.add_subparsers(dest='command', required=True)
+    p_sync = sub.add_parser('sync')
+    p_sync.add_argument('dir', nargs='?', default=MEDIA_DIR)
+    p_sync.add_argument('--no-scrape', action='store_true')
+    p_sync.add_argument('--no-backup', action='store_true')
+    p_ingest = sub.add_parser('ingest')
+    p_ingest.add_argument('path')
+    p_ingest.add_argument('--no-scrape', action='store_true')
+    p_ingest.add_argument('--no-backup', action='store_true')
+    sub.add_parser('cleanup').add_argument('--no-backup', action='store_true')
+    sub.add_parser('organize').add_argument('--no-backup', action='store_true')
+    p_scrape = sub.add_parser('scrape')
+    p_scrape.add_argument('--force', action='store_true')
+    p_scrape.add_argument('--dry-run', action='store_true')
+    p_scrape.add_argument('--no-backup', action='store_true')
+    sub.add_parser('status')
+    sub.add_parser('sync-assets').add_argument('--lax', action='store_true')
+    sub.add_parser('full').add_argument('--root', dest='dir', default=MEDIA_DIR)
+    sub.add_parser('reset').add_argument('--force', action='store_true')
     args = parser.parse_args()
-
     dispatch = {
-        'sync':        cmd_sync,
-        'ingest':      cmd_ingest,
-        'scrape':      cmd_scrape,
-        'fetch-subs':  cmd_fetch_subs,
-        'clean-files': cmd_clean_files,
-        'status':      cmd_status,
-        'relink':      cmd_relink,
+        'sync': cmd_sync, 'ingest': cmd_ingest, 'scrape': cmd_scrape,
+        'status': cmd_status, 'organize': cmd_organize, 'cleanup': cmd_cleanup,
+        'sync-assets': cmd_sync_assets, 'full': cmd_full, 'reset': cmd_reset,
     }
     dispatch[args.command](args)
-
 
 if __name__ == '__main__':
     main()
