@@ -20,7 +20,8 @@ import {
     AlertCircle,
     ChevronDown,
     Tag,
-    Filter
+    Filter,
+    ShieldAlert
 } from 'lucide-react';
 import { useAdmin } from '@/contexts/AdminContext';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
@@ -62,6 +63,37 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
     (searchParams.get('audience') as any) || ''
   );
   const [sort, setSort] = useState<'title_asc' | 'title_desc'>('title_asc');
+  const [showFilters, setShowFilters] = useState(true);
+  const [isScrolled, setIsScrolled] = useState(false);
+
+  // Minimal scroll track for depth only
+  useEffect(() => {
+    const handleScroll = () => setIsScrolled(window.scrollY > 10);
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Initialize filters toggle from storage
+  useEffect(() => {
+    const saved = localStorage.getItem('mm_show_filters');
+    if (saved !== null) setShowFilters(saved === 'true');
+  }, []);
+
+  const toggleFilters = () => {
+    const newState = !showFilters;
+    setShowFilters(newState);
+    localStorage.setItem('mm_show_filters', String(newState));
+  };
+
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (selectedQuality) count++;
+    if (selectedYear) count++;
+    if (selectedGenre) count++;
+    if (selectedAudience) count++;
+    if (sort !== 'title_asc') count++;
+    return count;
+  }, [selectedQuality, selectedYear, selectedGenre, selectedAudience, sort]);
 
   useEffect(() => {
     const audience = searchParams.get('audience') as 'family' | 'adult' | '';
@@ -166,6 +198,8 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
   }, [searchTerm]);
 
   useEffect(() => {
+    // Scroll to top on filter change for immediate feedback
+    window.scrollTo({ top: 0, behavior: 'instant' });
     fetchMovies(debouncedSearch, selectedQuality, selectedYear, selectedAudience, sort, selectedGenre, true);
   }, [debouncedSearch, selectedQuality, selectedYear, selectedAudience, sort, selectedGenre, fetchMovies]);
 
@@ -193,122 +227,171 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
   const isFiltered = searchTerm || selectedQuality || selectedYear || selectedAudience || selectedGenre || sort !== 'title_asc';
 
   return (
-    <div className="space-y-10 pb-24 pt-6">
-      {/* Search & Filters Section - GLASSMORPHISM CONTAINER */}
-      <div className="sticky top-20 z-50 bg-background/40 backdrop-blur-2xl border-b border-white/[0.05] shadow-2xl py-8">
-        <div className="max-w-7xl mx-auto w-full px-6 flex flex-col gap-8">
+    <div className="space-y-10 pb-24 pt-0">
+      {/* Search & Filters Section - STABLE STICKY CONTAINER */}
+      <div className={`sticky top-20 z-50 bg-background transition-all duration-300 overflow-visible py-6 ${
+        isScrolled ? 'shadow-2xl border-b border-white/[0.04]' : 'border-b border-transparent'
+      }`}>
+        <div className="max-w-7xl mx-auto w-full px-6 flex flex-col gap-6 overflow-visible relative">
+          
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-            <div className="relative flex-1 max-w-3xl group">
-               <div className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground transition-colors group-focus-within:text-primary">
+            {/* Search Input Area */}
+            <div className="relative flex-1 max-w-2xl group">
+               <div className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground/40 transition-colors group-focus-within:text-primary">
                   {loading ? <Loader2 className="h-full w-full animate-spin" /> : <Search className="h-full w-full" />}
                </div>
                <input
                   type="text"
-                  placeholder="Search Registry..."
+                  placeholder="Search by title, director, or year..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full h-12 bg-transparent pl-8 pr-48 text-2xl font-bold tracking-tight placeholder:text-muted-foreground/20 focus:outline-none border-none transition-all"
+                  className="w-full h-11 bg-transparent pl-8 pr-12 font-bold tracking-tight text-lg placeholder:text-muted-foreground/20 focus:outline-none border-b border-border focus:border-primary transition-colors"
                />
-               <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-3 pr-1">
-                  {isFiltered && (
-                     <button 
-                       onClick={clearFilters} 
-                       className="flex items-center gap-1.5 px-3 py-1.5 hover:bg-destructive/10 text-destructive text-[10px] font-black uppercase tracking-widest rounded-lg border border-destructive/20 transition-all active:scale-95"
-                     >
-                        <X className="h-3 w-3" /> Clear
-                     </button>
-                  )}
-                  <span className="text-[10px] font-black uppercase tracking-widest text-primary/60 bg-primary/5 px-3 py-1.5 rounded-lg border border-primary/20 shadow-sm shadow-primary/5">
-                      {totalCount} Archive Entities
-                  </span>
-               </div>
+               {searchTerm && (
+                  <button onClick={() => setSearchTerm('')} className="absolute right-0 top-1/2 -translate-y-1/2 p-2 hover:bg-muted rounded-full transition-colors text-muted-foreground/40 hover:text-foreground">
+                      <X className="h-4 w-4" />
+                  </button>
+               )}
+            </div>
+
+            {/* Action Group */}
+            <div className="shrink-0 flex items-center gap-2">
+                {isFiltered && (
+                   <button 
+                     onClick={clearFilters} 
+                     className="flex items-center gap-1.5 px-4 h-10 bg-destructive/10 border border-destructive/20 text-destructive text-[10px] font-black uppercase tracking-widest rounded-lg hover:bg-destructive hover:text-white transition-all active:scale-95 shadow-lg shadow-destructive/5"
+                   >
+                      <X className="h-3 w-3" /> Clear Filters
+                   </button>
+                )}
+                
+                <div className={`flex items-center bg-muted/20 border border-border/40 rounded-xl p-1 gap-1 transition-all duration-300 ${!showFilters ? 'shadow-lg shadow-primary/5 border-primary/20' : ''}`}>
+                   <button
+                        onClick={toggleFilters}
+                        className={`flex items-center gap-2.5 px-4 h-9 rounded-lg transition-all ${
+                            showFilters 
+                            ? 'bg-white/[0.03] border border-white/[0.08] text-foreground/80 shadow-inner' 
+                            : 'text-muted-foreground/60 hover:text-foreground/80'
+                        }`}
+                    >
+                        <Filter className={`h-3.5 w-3.5 transition-transform duration-500 ${showFilters ? 'rotate-180' : 'text-primary'}`} />
+                        <span className={`text-[10px] font-bold uppercase tracking-widest ${!showFilters ? 'text-primary/70' : ''}`}>
+                            {showFilters ? 'Hide Filters' : 'Show Filters'}
+                        </span>
+                        {activeFilterCount > 0 && !showFilters && (
+                            <span className="flex items-center justify-center min-w-[16px] h-[16px] bg-primary text-primary-foreground text-[8px] rounded-full px-1 shadow-lg animate-pulse">
+                                {activeFilterCount}
+                            </span>
+                        )}
+                    </button>
+
+                    <div className="h-4 w-px bg-border/30 mx-0.5" />
+
+                    <div className="px-4 h-9 flex items-center">
+                        <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/80 whitespace-nowrap flex items-center gap-2.5">
+                            <div className="w-1 h-1 rounded-full bg-primary/40 animate-pulse" />
+                            {totalCount} <span className="hidden sm:inline opacity-60">Movies found</span>
+                            <span className="sm:hidden">Movies</span>
+                        </span>
+                    </div>
+                </div>
             </div>
           </div>
 
-          <LayoutGroup>
-            {/* Filter Row - Horizontally scrollable on mobile */}
-            <div className="flex flex-nowrap lg:flex-wrap items-end gap-5 overflow-x-auto pb-2 -mx-6 px-6 lg:mx-0 lg:px-0 scrollbar-hide">
-               {/* Sort Toggle */}
-               <div className="flex flex-col gap-2 shrink-0">
-                  <span className="text-[10px] uppercase tracking-[0.25em] font-black text-foreground/40 ml-1 leading-none">Sort</span>
-                  <button 
-                      onClick={() => setSort(sort === 'title_asc' ? 'title_desc' : 'title_asc')}
-                      className={`flex items-center gap-2 px-4 h-11 rounded-xl border text-[13px] font-bold transition-all shadow-md active:scale-95 ${
-                        sort === 'title_asc' 
-                          ? 'bg-primary border-primary text-primary-foreground shadow-[0_0_20px_rgba(56,189,248,0.2)] ring-2 ring-primary/10' 
-                          : 'bg-muted/20 border-border/50 hover:border-primary/30 text-foreground/80 hover:bg-muted/40'
-                      }`}
-                  >
-                      {sort === 'title_asc' ? <ArrowDownAZ className="h-3.5 w-3.5" /> : <ArrowUpAZ className="h-3.5 w-3.5" />}
-                      {sort === 'title_asc' ? 'Title A-Z' : 'Title Z-A'}
-                  </button>
-               </div>
+          <AnimatePresence>
+            {showFilters && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2, ease: 'easeOut' }}
+                className="overflow-visible"
+              >
+                <LayoutGroup>
+                    <div className="overflow-visible pt-2">
+                      <div className="flex flex-nowrap lg:flex-wrap items-end gap-5 overflow-x-auto lg:overflow-visible pb-2 -mx-6 px-6 lg:mx-0 lg:px-0 scrollbar-hide">
+                         {/* Sort Toggle */}
+                         <div className="flex flex-col gap-2 shrink-0">
+                            <span className="text-[10px] uppercase tracking-[0.25em] font-black text-foreground/40 ml-1 leading-none">Order</span>
+                            <button 
+                                onClick={() => setSort(sort === 'title_asc' ? 'title_desc' : 'title_asc')}
+                                className={`flex items-center gap-2 px-4 h-11 rounded-xl border text-[12px] font-bold transition-all shadow-md active:scale-95 ${
+                                  sort === 'title_asc' 
+                                    ? 'bg-primary border-primary text-primary-foreground shadow-lg shadow-primary/10' 
+                                    : 'bg-muted/20 border-border/50 hover:border-primary/30 text-foreground/80 hover:bg-muted/40'
+                                }`}
+                            >
+                                {sort === 'title_asc' ? <ArrowDownAZ className="h-3.5 w-3.5" /> : <ArrowUpAZ className="h-3.5 w-3.5" />}
+                                {sort === 'title_asc' ? 'A-Z' : 'Z-A'}
+                            </button>
+                         </div>
 
-               <div className="h-8 w-px bg-border/40 mx-1 hidden lg:block mb-1.5 shrink-0" />
+                         <div className="h-8 w-px bg-border/40 mx-1 hidden lg:block mb-1.5 shrink-0" />
 
-               {/* Audience Selection - SPATIAL PILLS */}
-               <div className="flex flex-col gap-2 shrink-0">
-                  <span className="text-[10px] uppercase tracking-[0.25em] font-black text-foreground/40 ml-1 leading-none">Sector</span>
-                  <div className="flex p-1 bg-muted/20 border border-border/50 rounded-xl relative">
-                    {[
-                      { id: '', label: 'All', icon: null },
-                      { id: 'family', label: 'Family', icon: <div className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" /> },
-                      { id: 'adult', label: 'Adult', icon: <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]" /> }
-                    ].map(cat => (
-                      <button 
-                        key={cat.id}
-                        onClick={() => handleAudienceChange(cat.id)}
-                        className={`relative z-10 flex items-center gap-2 px-5 h-9 rounded-lg text-[12px] font-bold transition-colors ${
-                          selectedAudience === cat.id ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
-                        }`}
-                      >
-                        {selectedAudience === cat.id && (
-                          <motion.div
-                            layoutId="active-audience"
-                            className="absolute inset-0 bg-primary rounded-lg shadow-lg shadow-primary/20 -z-10"
-                            transition={{ type: 'spring', duration: 0.5, bounce: 0.2 }}
-                          />
-                        )}
-                        {cat.icon}
-                        {cat.label}
-                      </button>
-                    ))}
-                  </div>
-               </div>
+                         {/* Sector Pills */}
+                         <div className="flex flex-col gap-2 shrink-0">
+                            <span className="text-[10px] uppercase tracking-[0.25em] font-black text-foreground/40 ml-1 leading-none">Category</span>
+                            <div className="flex p-1 bg-muted/20 border border-border/50 rounded-xl relative h-11">
+                              {[
+                                { id: '', label: 'All', icon: null },
+                                { id: 'family', label: 'Family', icon: <div className="w-1.5 h-1.5 rounded-full bg-green-500" /> },
+                                { id: 'adult', label: 'Adult', icon: <div className="w-1.5 h-1.5 rounded-full bg-red-500" /> }
+                              ].map(cat => (
+                                <button 
+                                  key={cat.id}
+                                  onClick={() => handleAudienceChange(cat.id)}
+                                  className={`relative z-10 flex items-center gap-2 px-5 rounded-lg text-[12px] font-bold transition-colors ${
+                                    selectedAudience === cat.id ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+                                  }`}
+                                >
+                                  {selectedAudience === cat.id && (
+                                    <motion.div
+                                      layoutId="active-audience"
+                                      className="absolute inset-0 bg-primary rounded-lg shadow-md -z-10"
+                                      transition={{ type: 'spring', duration: 0.4, bounce: 0.2 }}
+                                    />
+                                  )}
+                                  {cat.icon}
+                                  {cat.label}
+                                </button>
+                              ))}
+                            </div>
+                         </div>
 
-               <div className="h-8 w-px bg-border/40 mx-1 hidden lg:block mb-1.5 shrink-0" />
+                         <div className="h-8 w-px bg-border/40 mx-1 hidden lg:block mb-1.5 shrink-0" />
 
-               {/* Genre Custom Dropdown */}
-               <Dropdown 
-                 label="Genre"
-                 placeholder="All Genres"
-                 value={selectedGenre}
-                 onChange={handleGenreChange}
-                 options={GENRE_OPTIONS.map(g => ({ value: g, label: g }))}
-                 className="w-44"
-               />
+                         <Dropdown 
+                           label="Genre"
+                           placeholder="All Genres"
+                           value={selectedGenre}
+                           onChange={handleGenreChange}
+                           options={GENRE_OPTIONS.map(g => ({ value: g, label: g }))}
+                           className="w-40"
+                         />
 
-               {/* Quality Custom Dropdown */}
-               <Dropdown 
-                 label="Format"
-                 placeholder="All Resolutions"
-                 value={selectedQuality}
-                 onChange={setSelectedQuality}
-                 options={qualities.map(q => ({ value: q, label: q }))}
-                 className="w-40"
-               />
+                         <Dropdown 
+                           label="Format"
+                           placeholder="All Qualities"
+                           value={selectedQuality}
+                           onChange={setSelectedQuality}
+                           options={qualities.map(q => ({ value: q, label: q }))}
+                           className="w-36"
+                         />
 
-               {/* Year Custom Dropdown */}
-               <Dropdown 
-                 label="Archive"
-                 placeholder="All Eras"
-                 value={selectedYear}
-                 onChange={setSelectedYear}
-                 options={years.slice(0, 50).map(y => ({ value: y, label: y }))}
-                 className="w-36 pr-4 lg:pr-0"
-               />
-            </div>
-          </LayoutGroup>
+                         <Dropdown 
+                           label="Year"
+                           placeholder="All Years"
+                           value={selectedYear}
+                           onChange={setSelectedYear}
+                           options={years.slice(0, 50).map(y => ({ value: y, label: y }))}
+                           className="w-32 pr-4 lg:pr-0"
+                         />
+                      </div>
+                    </div>
+                </LayoutGroup>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
 
@@ -319,19 +402,17 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
             {movies.map((movie, idx) => (
               <motion.div 
                 key={movie.id}
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
                 transition={{ 
-                  type: 'spring', 
-                  duration: 0.5, 
-                  bounce: selectedAudience === 'family' ? 0.4 : 0.2,
+                  duration: 0.4, 
                   delay: (idx % 12) * 0.05 
                 }}
-                whileHover={selectedAudience === 'family' ? { scale: 1.05, rotate: [0, -1, 1, 0] } : { y: -5 }}
+                whileHover={{ scale: 1.02 }}
                 className="flex flex-col gap-4 group"
               >
-                <Link href={"/watch/" + movie.id} className={`block relative aspect-poster bg-muted rounded-lg overflow-hidden content-scale shadow-xl ${
-                  selectedAudience === 'family' ? 'group-hover:shadow-green-500/20 group-hover:border-green-500/30 border-2 border-transparent transition-all' : 'group-hover:shadow-primary/10'
+                <Link href={"/watch/" + movie.id} className={`block relative aspect-poster bg-muted rounded-xl overflow-hidden shadow-xl border-2 border-transparent transition-all duration-300 ${
+                  selectedAudience === 'family' ? 'group-hover:shadow-green-500/10 group-hover:border-green-500/20' : 'group-hover:shadow-primary/10 group-hover:border-primary/20'
                 }`}>
                   <Image
                     src={getPosterUrl(movie.thumbnail)}
@@ -340,7 +421,7 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
                     unoptimized
                     priority={idx < 6}
                     sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 15vw"
-                    className="object-cover transition-transform duration-700 group-hover:scale-110"
+                    className="object-cover transition-transform duration-700 group-hover:scale-105"
                     onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder.svg'; }}
                   />
                   
@@ -358,8 +439,17 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
                     <span className="text-[8px] font-black text-primary uppercase tracking-tighter">{movie.quality || 'HDR'}</span>
                   </div>
 
+                  {movie.needs_repair === 1 && (
+                    <div className="absolute inset-0 bg-destructive/10 backdrop-blur-[2px] flex items-center justify-center">
+                       <div className="px-3 py-1.5 bg-destructive text-destructive-foreground text-[10px] font-black uppercase tracking-[0.2em] rounded-full shadow-2xl shadow-destructive/50 flex items-center gap-2 animate-pulse scale-90 sm:scale-100">
+                          <ShieldAlert className="h-3.5 w-3.5" />
+                          Repair_Required
+                       </div>
+                    </div>
+                  )}
+
                   {selectedAudience === 'family' && (
-                    <div className="absolute top-2 left-2 p-1.5 bg-green-500 rounded-full shadow-lg shadow-green-500/50 animate-bounce">
+                    <div className="absolute top-2 left-2 p-1.5 bg-green-500 rounded-full shadow-lg shadow-green-500/50">
                       <Sparkles className="h-3 w-3 text-white fill-current" />
                     </div>
                   )}
@@ -370,11 +460,14 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
                     {movie.title}
                   </h3>
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold text-muted-foreground/60">{movie.year}</span>
+                    <div className="flex items-center gap-2">
+                       <span className="text-[10px] font-bold text-muted-foreground/60">{movie.year}</span>
+                       <span className="px-1 py-0.5 border border-primary/20 bg-primary/5 rounded-[2px] text-[8px] font-black uppercase tracking-tighter text-primary/60">CC</span>
+                    </div>
                     {movie.audience === 'family' && (
                         <div className="flex items-center gap-1 text-[9px] font-black text-green-500 uppercase tracking-tighter">
                             <Sparkles className="h-2.5 w-2.5" />
-                            Family Friendly
+                            Family
                         </div>
                     )}
                   </div>
@@ -386,7 +479,12 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
           <div className="py-32 text-center space-y-6 animate-in fade-in zoom-in duration-700">
             <div className="relative inline-block">
                {selectedAudience === 'family' ? (
-                 <Sparkles className="h-20 w-20 text-green-500/20 mx-auto animate-pulse" />
+                 <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}
+                 >
+                    <Sparkles className="h-20 w-20 text-green-500/20 mx-auto" />
+                 </motion.div>
                ) : (
                  <Search className="h-20 w-20 text-muted-foreground/10 mx-auto" />
                )}
@@ -394,7 +492,7 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
             </div>
             <div className="space-y-2">
               <h2 className="text-2xl font-bold tracking-tight">
-                {selectedAudience === 'family' ? 'Oh no! The magic is hidden!' : 'No entities found'}
+                {selectedAudience === 'family' ? 'Oh no! The magic is hidden!' : 'No movies found'}
               </h2>
               <p className="text-muted-foreground max-w-xs mx-auto text-sm leading-relaxed">
                 {selectedAudience === 'family' 
@@ -419,7 +517,7 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
           <div className="mt-20 flex justify-center pb-20">
             <div className="flex flex-col items-center gap-4">
               <Loader2 className="h-10 w-10 text-primary animate-spin" />
-              <span className="text-[10px] font-black text-muted-foreground/40 uppercase tracking-[0.3em] animate-pulse">Synchronizing Archives...</span>
+              <span className="text-[10px] font-black text-muted-foreground/40 uppercase tracking-[0.3em] animate-pulse">Syncing movies...</span>
             </div>
           </div>
         )}
