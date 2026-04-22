@@ -544,11 +544,17 @@ def cmd_reset(args):
     if Path(DB_PATH).exists(): os.remove(DB_PATH)
 
 def cmd_full(args):
+    # Ensure all required attributes exist for sub-commands
+    if not hasattr(args, 'no_scrape'): args.no_scrape = False
+    if not hasattr(args, 'no_backup'): args.no_backup = False
+    if not hasattr(args, 'lax'): args.lax = False
+    
     cmd_sync(args)
     cmd_cleanup(args)
     cmd_organize(args)
     cmd_sync_assets(args)
-    cmd_scrape(args)
+    if not args.no_scrape:
+        cmd_scrape(args)
 
 def main():
     parser = argparse.ArgumentParser(prog='mm')
