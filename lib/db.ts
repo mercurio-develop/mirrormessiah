@@ -11,37 +11,55 @@ export function getDb(): Database.Database {
     const isProd = process.env.NODE_ENV === 'production';
     const isBuild = process.env.NEXT_PHASE === 'phase-production-build';
     
-    const devPath = path.join(/* turbopackIgnore: true */ process.cwd(), 'media.db');
+    const devPath = path.join(process.cwd(), 'media.db');
     const prodPath = '/app/data/media.db';
     
-    // In production, we force the mounted path to ensure data synchronization
-    const dbPath = isProd ? prodPath : (process.env.DB_PATH || devPath);
+    // Prioritize DB_PATH env, then prod path, then dev path
+    const dbPath = process.env.DB_PATH || (isProd ? prodPath : devPath);
 
     // Build-phase resilience
     if (isBuild) {
         return new Database(':memory:');
     }
 
+    const absoluteDbPath = path.resolve(dbPath);
+    const dbDir = path.dirname(absoluteDbPath);
+
     try {
         // Ensure parent directory exists
-        const dbDir = path.dirname(dbPath);
         if (!fs.existsSync(dbDir)) {
+            console.log(`[Database] Creating directory: ${dbDir}`);
             fs.mkdirSync(dbDir, { recursive: true });
         }
 
-        db = new Database(dbPath, { readonly: false, timeout: 5000 });
+        // Diagnostic: Check if directory is writable
+        try {
+            fs.accessSync(dbDir, fs.constants.W_OK);
+        } catch (e) {
+            const stats = fs.statSync(dbDir);
+            console.error(`[Database] PERMISSION_ERROR: Directory ${dbDir} is NOT writable.`);
+            console.error(`[Database] Dir UID: ${stats.uid}, GID: ${stats.gid}, Mode: ${stats.mode}`);
+            console.error(`[Database] Process UID: ${process.getuid?.()}, GID: ${process.getgid?.()}`);
+        }
+
+        db = new Database(absoluteDbPath, { 
+            readonly: false, 
+            timeout: 10000,
+            // verbose: console.log 
+        });
         db.pragma('foreign_keys = ON');
         db.pragma('journal_mode = WAL');
         
         // Initial health check - might fail if table doesn't exist yet (migrations will fix it)
         try {
             const count = db.prepare('SELECT COUNT(*) as c FROM movies').get() as { c: number };
-            console.log(`[Database] SYNC_ACTIVE: ${dbPath} | MOVIES: ${count.c}`);
+            console.log(`[Database] SYNC_ACTIVE: ${absoluteDbPath} | MOVIES: ${count.c}`);
         } catch {
-            console.log(`[Database] SYNC_PENDING: ${dbPath} (Table 'movies' not found, awaiting migrations)`);
+            console.log(`[Database] SYNC_PENDING: ${absoluteDbPath} (Awaiting migrations)`);
         }
     } catch (err: any) {
         console.error(`[Database] SYNC_FAILURE: ${err.message}`);
+        console.error(`[Database] Attempted path: ${absoluteDbPath}`);
         throw err;
     }
   }
