@@ -48,7 +48,7 @@ def get_video_metadata(file_path):
 def parse_metadata(text):
     patterns = [
         (r'^(.*?)\s+\((\d{4})\)\s+\[([^\]]+)\]', 1, 2, 3),
-        (r'^([a-zA-Z0-9\.]+)\.(\d{4})\.([a-zA-Z0-9\.]+)', 1, 2, 3),
+        (r'^(.+?)\.(\d{4})\.(.+)', 1, 2, 3),
         (r'^(.*?)\s+\((\d{4})\)', 1, 2, None),
         (r'^(.*?)\s+\[([^\]]+)\]', 1, None, 2),
     ]
@@ -59,9 +59,21 @@ def parse_metadata(text):
             title = match.group(t_idx).replace('.', ' ').strip()
             year = int(match.group(y_idx)) if y_idx and match.group(y_idx) else None
             quality = match.group(q_idx).strip() if q_idx and match.group(q_idx) else "Unknown"
+            
+            if quality != "Unknown":
+                q_match = re.search(r'\b(2160p|1080p|720p|4k|uhd)\b', quality, re.IGNORECASE)
+                if q_match:
+                    q = q_match.group(1).lower()
+                    if q in ['2160p', 'uhd', '4k']:
+                        quality = '4K'
+                    else:
+                        quality = q
+                elif '.' in quality or '-' in quality:
+                    quality = quality.replace('.', ' ').split('-')[0].strip()
+
             return title, year, quality
 
-    return text.strip(), None, "Unknown"
+    return text.strip().replace('.', ' '), None, "Unknown"
 
 class MessiahManager:
     def __init__(self, db_path):
@@ -123,8 +135,7 @@ class MessiahManager:
         self.conn.commit()
 
     def scan(self, root_path, library_name="Main_Registry"):
-        print(f"
---- SCANNING SECTOR: {root_path} ---")
+        print(f"\n--- SCANNING SECTOR: {root_path} ---")
         root = Path(root_path)
         if not root.exists():
             print(f"ERROR: Path {root_path} not found.")
