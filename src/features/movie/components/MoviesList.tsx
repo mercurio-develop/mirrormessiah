@@ -169,15 +169,15 @@ export default function MoviesList({ initialMovies }: MoviesListProps) {
               <div className="flex gap-2 pt-3">
                 <Link
                   href={"/watch/" + movie.id}
-                  className="flex-1 px-3 py-1.5 bg-muted border border-border hover:border-white/20 text-[10px] font-bold uppercase tracking-widest text-foreground hover:bg-white/5 transition-all flex items-center justify-center gap-2 rounded-lg"
+                  className="flex-1 h-10 px-3 bg-muted border border-border hover:border-white/20 text-[10px] font-bold uppercase tracking-widest text-foreground hover:bg-white/5 transition-all flex items-center justify-center gap-2 rounded-lg"
                 >
-                  <Play className="h-2.5 w-2.5 fill-current" /> Play
+                  <Play className="h-3 w-3 fill-current" /> Watch
                 </Link>
                 <Link
                   href={"/admin/movies/" + movie.id}
-                  className="flex-1 px-3 py-1.5 bg-primary/10 border border-primary/20 text-[10px] font-bold uppercase tracking-widest text-primary hover:bg-primary hover:text-primary-foreground transition-all flex items-center justify-center gap-2 rounded-lg"
+                  className="flex-1 h-10 px-3 bg-primary/10 border border-primary/20 text-[10px] font-bold uppercase tracking-widest text-primary hover:bg-primary hover:text-primary-foreground transition-all flex items-center justify-center gap-2 rounded-lg"
                 >
-                  <Edit className="h-2.5 w-2.5" /> Edit
+                  <Edit className="h-3 w-3" /> Manage
                 </Link>
               </div>
             </div>

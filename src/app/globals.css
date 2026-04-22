@@ -120,3 +120,5 @@
 .video-js .vjs-control-bar {
   @apply bg-gradient-to-t from-black/90 to-transparent h-24 items-end pb-6 !important;
 }
+\n.scrollbar-hide::-webkit-scrollbar { display: none; }\n.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+\n/* Mobile Video.js Enhancements */\n@media (max-width: 768px) {\n  .video-js .vjs-big-play-button {\n    width: 4rem !important;\n    height: 4rem !important;\n    margin-left: -2rem !important;\n    margin-top: -2rem !important;\n    font-size: 2.5rem !important;\n    line-height: 4rem !important;\n  }\n  .video-js .vjs-control-bar {\n    height: 3rem !important;\n    pb-4 !important;\n  }\n}

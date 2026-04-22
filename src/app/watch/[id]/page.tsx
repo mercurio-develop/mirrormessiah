@@ -48,7 +48,7 @@ export default async function WatchPage({ params }: WatchPageProps) {
 
       <div className="relative z-10 flex flex-col pt-20">
         {/* Navigation / Back Button */}
-        <div className="max-w-7xl mx-auto w-full px-6 py-6">
+        <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 py-4 lg:py-6">
           <Link 
             href="/" 
             className="inline-flex items-center gap-2 text-muted-foreground hover:text-primary transition-all group"
@@ -59,8 +59,8 @@ export default async function WatchPage({ params }: WatchPageProps) {
         </div>
 
         {/* Player Section */}
-        <section className="w-full max-w-7xl mx-auto px-6 mb-12">
-          <div className="aspect-video w-full bg-black rounded-2xl overflow-hidden shadow-[0_30px_100px_rgba(0,0,0,0.8)] border border-white/5 relative">
+        <section className="w-full max-w-7xl mx-auto px-4 sm:px-6 mb-8 lg:mb-12">
+          <div className="aspect-video w-full bg-black rounded-xl lg:rounded-2xl overflow-hidden shadow-[0_30px_100px_rgba(0,0,0,0.8)] border border-white/5 relative">
             {!movieData ? (
               <div className="absolute top-4 right-4 z-20 flex items-center gap-1.5 px-3 py-1.5 bg-black/70 border border-destructive/60 text-destructive text-[10px] font-black uppercase tracking-widest rounded-full backdrop-blur-sm pointer-events-none">
                 <AlertCircle className="h-3 w-3" />
@@ -75,7 +75,7 @@ export default async function WatchPage({ params }: WatchPageProps) {
             {!movieData ? (
               <div className="w-full h-full flex flex-col items-center justify-center text-center p-12 bg-muted/10">
                 <Activity className="h-16 w-16 text-destructive mb-6 animate-pulse" />
-                <h2 className="text-3xl font-bold tracking-tight">Stream Unavailable</h2>
+                <h2 className="text-2xl md:text-3xl font-bold tracking-tight">Stream Unavailable</h2>
                 <p className="text-muted-foreground text-sm mt-2 max-w-xs">The requested media format is not supported or the file is missing.</p>
               </div>
             ) : (
@@ -92,38 +92,52 @@ export default async function WatchPage({ params }: WatchPageProps) {
         </section>
 
         {/* Content Details */}
-        <main className="max-w-7xl mx-auto w-full px-6 pb-32">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-16">
-            <div className="lg:col-span-8 space-y-12">
+        <main className="max-w-7xl mx-auto w-full px-4 sm:px-6 pb-32">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-16">
+            <div className="lg:col-span-8 space-y-10 lg:space-y-12">
               {/* Header Info */}
               <div className="space-y-6">
-                <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight leading-[1.1]">
-                  {movie.title}
-                </h1>
+                <div className="flex flex-col sm:flex-row gap-6 items-start">
+                   {/* Mobile Poster - only visible on small screens */}
+                   {posterUrl && (
+                     <div className="lg:hidden shrink-0 w-32 sm:w-40 relative aspect-[2/3] rounded-xl overflow-hidden shadow-xl border border-white/10">
+                        <Image
+                            src={posterUrl}
+                            alt={movie.title}
+                            fill
+                            unoptimized
+                            className="object-cover"
+                        />
+                     </div>
+                   )}
+                   <h1 className="text-3xl md:text-5xl lg:text-6xl font-extrabold tracking-tight leading-tight">
+                     {movie.title}
+                   </h1>
+                </div>
                 
-                <div className="flex flex-wrap items-center gap-6 pt-2">
+                <div className="flex flex-nowrap items-center gap-6 pt-2 overflow-x-auto pb-4 scrollbar-hide -mx-2 px-2 shrink-0">
                   {movie.needs_repair ? (
-                    <span className="px-3 py-1 bg-destructive/20 border border-destructive/40 text-destructive text-[10px] font-black uppercase tracking-widest rounded-full flex items-center gap-2 animate-pulse">
+                    <span className="shrink-0 px-3 py-1 bg-destructive/20 border border-destructive/40 text-destructive text-[10px] font-black uppercase tracking-widest rounded-full flex items-center gap-2 animate-pulse">
                       <AlertCircle className="h-3.5 w-3.5" />
                       Repair_Required
                     </span>
                   ) : null}
-                  <div className="flex items-center gap-1.5 text-sm font-bold">
+                  <div className="shrink-0 flex items-center gap-1.5 text-sm font-bold">
                     <Star className="h-5 w-5 text-primary fill-primary" />
                     <span>{movie.rating || '0.0'}</span>
                   </div>
-                  <div className="h-4 w-px bg-border/50" />
-                  <span className="text-sm font-bold text-muted-foreground">{movie.year}</span>
-                  <div className="h-4 w-px bg-border/50" />
-                  <span className="text-sm font-bold text-muted-foreground">{movie.runtime ? movie.runtime + ' min' : 'N/A'}</span>
-                  <div className="h-4 w-px bg-border/50" />
-                  <span className="px-2 py-0.5 border border-muted-foreground/30 rounded text-[10px] font-black uppercase tracking-tighter text-muted-foreground">
+                  <div className="shrink-0 h-4 w-px bg-border/50" />
+                  <span className="shrink-0 text-sm font-bold text-muted-foreground">{movie.year}</span>
+                  <div className="shrink-0 h-4 w-px bg-border/50" />
+                  <span className="shrink-0 text-sm font-bold text-muted-foreground">{movie.runtime ? movie.runtime + ' min' : 'N/A'}</span>
+                  <div className="shrink-0 h-4 w-px bg-border/50" />
+                  <span className="shrink-0 px-2 py-0.5 border border-muted-foreground/30 rounded text-[10px] font-black uppercase tracking-tighter text-muted-foreground">
                     {movie.quality || 'HDR'}
                   </span>
                   {movieData?.subtitles && movieData.subtitles.length > 0 && (
                     <>
-                      <div className="h-4 w-px bg-border/50" />
-                      <span className="px-1.5 py-0.5 border border-primary/20 bg-primary/10 rounded-sm text-[9px] font-extrabold uppercase tracking-widest text-primary flex items-center gap-1 shadow-sm">
+                      <div className="shrink-0 h-4 w-px bg-border/50" />
+                      <span className="shrink-0 px-1.5 py-0.5 border border-primary/20 bg-primary/10 rounded-sm text-[9px] font-extrabold uppercase tracking-widest text-primary flex items-center gap-1 shadow-sm">
                         <Sparkles className="h-2.5 w-2.5 fill-current" />
                         CC
                       </span>
@@ -131,8 +145,8 @@ export default async function WatchPage({ params }: WatchPageProps) {
                   )}
                   {movie.audience && (
                     <>
-                      <div className="h-4 w-px bg-border/50" />
-                      <span className={`px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest text-white flex items-center gap-1.5 shadow-lg ${movie.audience === 'family' ? 'bg-green-600' : 'bg-red-600'}`}>
+                      <div className="shrink-0 h-4 w-px bg-border/50" />
+                      <span className={`shrink-0 px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest text-white flex items-center gap-1.5 shadow-lg ${movie.audience === 'family' ? 'bg-green-600' : 'bg-red-600'}`}>
                         <div className="w-1 h-1 rounded-full bg-white animate-pulse" />
                         {movie.audience}
                       </span>
@@ -141,11 +155,15 @@ export default async function WatchPage({ params }: WatchPageProps) {
                 </div>
               </div>
 
+              <div className="lg:hidden pb-4">
+                 <AdminEditButton movieId={movie.id} />
+              </div>
+
               {/* Synopsis */}
               {movie.plot && (
                 <div className="space-y-4">
                   <h3 className="text-xs font-black uppercase tracking-[0.2em] text-primary">Synopsis</h3>
-                  <p className="text-lg md:text-xl leading-relaxed text-foreground/90 font-medium italic max-w-3xl">
+                  <p className="text-base md:text-lg lg:text-xl leading-relaxed text-foreground/90 font-medium italic max-w-3xl">
                     {movie.plot}
                   </p>
                 </div>
