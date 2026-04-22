@@ -55,6 +55,24 @@ export function runMigrations(): void {
 
       // Migration: Ensure existing movies table has needs_repair column
       const movieColumns = db.prepare("PRAGMA table_info(movies)").all() as any[];
+
+      // Migration: Ensure libraries table has a default entry
+      const libraryCount = db.prepare('SELECT COUNT(*) as count FROM libraries').get() as { count: number };
+      if (libraryCount.count === 0) {
+          console.log('Seeding default library...');
+          db.exec("INSERT INTO libraries (name, root_path) VALUES ('Default', '/')");
+      }
+      const defaultLibraryId = (db.prepare('SELECT id FROM libraries LIMIT 1').get() as { id: number }).id;
+
+      // Migration: Ensure existing movies table has library_id column
+      if (!movieColumns.some(col => col.name === 'library_id')) {
+          console.log('Migrating movies table to add library_id column...');
+          // SQLite doesn't support ADD COLUMN with REFERENCES in a single step for existing tables without complex reconstruction
+          // but we can add it and then update.
+          db.exec(`ALTER TABLE movies ADD COLUMN library_id INTEGER REFERENCES libraries(id) ON DELETE CASCADE`);
+          db.prepare('UPDATE movies SET library_id = ?').run(defaultLibraryId);
+      }
+
       if (!movieColumns.some(col => col.name === 'needs_repair')) {
           console.log('Migrating movies table to add needs_repair column...');
           db.exec("ALTER TABLE movies ADD COLUMN needs_repair INTEGER DEFAULT 0");

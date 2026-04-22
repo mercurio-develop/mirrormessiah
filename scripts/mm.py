@@ -100,7 +100,8 @@ def _ensure_columns(db: sqlite3.Connection) -> None:
         ('plot', 'TEXT'), ('rating', 'REAL'), ('genres', 'TEXT'),
         ('director', 'TEXT'), ('language', 'TEXT'), ('runtime', 'INTEGER'),
         ('thumbnail', 'TEXT'), ('imdb_id', 'TEXT'), ('tmdb_id', 'INTEGER'),
-        ('audience', 'TEXT'),
+        ('audience', 'TEXT'), ('needs_repair', 'INTEGER DEFAULT 0'),
+        ('library_id', 'INTEGER REFERENCES libraries(id) ON DELETE CASCADE'),
     ]
     for col, typ in needed:
         if col not in existing:
