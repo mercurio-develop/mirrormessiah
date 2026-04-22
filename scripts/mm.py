@@ -400,15 +400,18 @@ def ingest_path(db: sqlite3.Connection, path: Path, library_id: int, auto_scrape
 
     meta = parse_folder_name(folder.name)
     existing = db.execute(
-        'SELECT id FROM movies WHERE LOWER(title)=LOWER(?) AND COALESCE(year,0)=COALESCE(?,0)',
-        (meta['title'], meta['year']),
+        'SELECT id FROM movies WHERE LOWER(title)=LOWER(?) AND COALESCE(year,0)=COALESCE(?,0) AND library_id = ?',
+        (meta['title'], meta['year'], library_id),
     ).fetchone()
     
     newly_added = False
     if existing:
         movie_id = existing['id']
     else:
-        cur = db.execute("INSERT INTO movies (title, year, quality) VALUES (?,?,?)", (meta['title'], meta['year'], meta['quality']))
+        cur = db.execute(
+            "INSERT INTO movies (title, year, quality, library_id) VALUES (?,?,?,?)",
+            (meta['title'], meta['year'], meta['quality'], library_id)
+        )
         movie_id = cur.lastrowid
         newly_added = True
 
