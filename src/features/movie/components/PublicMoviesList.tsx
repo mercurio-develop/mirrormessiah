@@ -18,7 +18,8 @@ import {
     Info,
     Sparkles,
     AlertCircle,
-    ChevronDown
+    ChevronDown,
+    Tag
 } from 'lucide-react';
 import { useAdmin } from '@/contexts/AdminContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -28,6 +29,13 @@ interface PublicMoviesListProps {
 }
 
 const ITEMS_PER_LOAD = 24;
+
+const GENRE_OPTIONS = [
+  'Action', 'Adventure', 'Animation', 'Comedy', 'Crime', 
+  'Documentary', 'Drama', 'Family', 'Fantasy', 'History', 
+  'Horror', 'Music', 'Mystery', 'Romance', 'Science Fiction', 
+  'TV Movie', 'Thriller', 'War', 'Western'
+];
 
 const getPosterUrl = (thumbnail: string | null | undefined): string => {
   if (!thumbnail) return '/placeholder.svg';
@@ -47,6 +55,7 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedQuality, setSelectedQuality] = useState('');
   const [selectedYear, setSelectedYear] = useState('');
+  const [selectedGenre, setSelectedGenre] = useState(searchParams.get('genre') || '');
   const [selectedAudience, setSelectedAudience] = useState<'family' | 'adult' | ''>(
     (searchParams.get('audience') as any) || ''
   );
@@ -57,7 +66,11 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
     if (audience !== selectedAudience) {
       setSelectedAudience(audience || '');
     }
-  }, [searchParams, selectedAudience]);
+    const genre = searchParams.get('genre') || '';
+    if (genre !== selectedGenre) {
+      setSelectedGenre(genre);
+    }
+  }, [searchParams, selectedAudience, selectedGenre]);
 
   const handleAudienceChange = (id: string) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -65,6 +78,16 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
       params.set('audience', id);
     } else {
       params.delete('audience');
+    }
+    router.push(`${pathname}?${params.toString()}`, { scroll: false });
+  };
+
+  const handleGenreChange = (genre: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (genre) {
+      params.set('genre', genre);
+    } else {
+      params.delete('genre');
     }
     router.push(`${pathname}?${params.toString()}`, { scroll: false });
   };
@@ -86,7 +109,7 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
     return list;
   }, []);
 
-  const fetchMovies = useCallback(async (search = '', quality = '', year = '', audience = '', sortOrder: 'title_asc' | 'title_desc' = 'title_asc', reset = false) => {
+  const fetchMovies = useCallback(async (search = '', quality = '', year = '', audience = '', sortOrder: 'title_asc' | 'title_desc' = 'title_asc', genre = '', reset = false) => {
     if (loadingRef.current) return;
 
     loadingRef.current = true;
@@ -100,6 +123,7 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
       if (quality) url += "&quality=" + encodeURIComponent(quality);
       if (year) url += "&year=" + encodeURIComponent(year);
       if (audience) url += "&audience=" + encodeURIComponent(audience);
+      if (genre) url += "&genre=" + encodeURIComponent(genre);
       url += "&sort=" + sortOrder;
       
       const res = await fetch(url);
@@ -140,16 +164,16 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
   }, [searchTerm]);
 
   useEffect(() => {
-    fetchMovies(debouncedSearch, selectedQuality, selectedYear, selectedAudience, sort, true);
-  }, [debouncedSearch, selectedQuality, selectedYear, selectedAudience, sort, fetchMovies]);
+    fetchMovies(debouncedSearch, selectedQuality, selectedYear, selectedAudience, sort, selectedGenre, true);
+  }, [debouncedSearch, selectedQuality, selectedYear, selectedAudience, sort, selectedGenre, fetchMovies]);
 
   const handleScroll = useCallback(() => {
     if (loadingRef.current || !hasMore) return;
     const { scrollHeight, scrollTop, clientHeight } = document.documentElement;
     if (scrollTop + clientHeight >= scrollHeight - 800) {
-      fetchMovies(debouncedSearch, selectedQuality, selectedYear, selectedAudience, sort);
+      fetchMovies(debouncedSearch, selectedQuality, selectedYear, selectedAudience, sort, selectedGenre);
     }
-  }, [fetchMovies, hasMore, debouncedSearch, selectedQuality, selectedYear, selectedAudience, sort]);
+  }, [fetchMovies, hasMore, debouncedSearch, selectedQuality, selectedYear, selectedAudience, sort, selectedGenre]);
 
   useEffect(() => {
     window.addEventListener('scroll', handleScroll);
@@ -164,7 +188,7 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
     router.push(pathname, { scroll: false });
   };
 
-  const isFiltered = searchTerm || selectedQuality || selectedYear || selectedAudience || sort !== 'title_asc';
+  const isFiltered = searchTerm || selectedQuality || selectedYear || selectedAudience || selectedGenre || sort !== 'title_asc';
 
   return (
     <div className="space-y-12 pb-24 pt-10">
@@ -237,6 +261,24 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
                     {cat.label}
                   </button>
                 ))}
+              </div>
+           </div>
+
+           <div className="h-12 w-px bg-border/40 mx-2 hidden lg:block mb-1 shrink-0" />
+
+           {/* Genre Dropdown */}
+           <div className="flex flex-col gap-2 shrink-0">
+              <span className="text-[11px] uppercase tracking-[0.2em] font-black text-foreground/50 ml-1">Genre</span>
+              <div className="relative group/select">
+                <select
+                  value={selectedGenre}
+                  onChange={(e) => handleGenreChange(e.target.value)}
+                  className="bg-card border border-border rounded-xl px-6 py-3 text-sm font-extrabold outline-none cursor-pointer hover:border-primary/40 transition-all appearance-none pr-12 shadow-md group-hover/select:bg-muted/50"
+                >
+                  <option value="" className="bg-background">All Genres</option>
+                  {GENRE_OPTIONS.map(g => <option key={g} value={g} className="bg-background">{g}</option>)}
+                </select>
+                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 pointer-events-none text-muted-foreground transition-transform group-hover/select:translate-y-[-40%]" />
               </div>
            </div>
 
