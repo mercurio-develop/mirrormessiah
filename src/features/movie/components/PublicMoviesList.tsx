@@ -19,10 +19,11 @@ import {
     Sparkles,
     AlertCircle,
     ChevronDown,
-    Tag
+    Tag,
+    Filter
 } from 'lucide-react';
 import { useAdmin } from '@/contexts/AdminContext';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import Dropdown from '@/components/ui/Dropdown';
 
 interface PublicMoviesListProps {
@@ -192,117 +193,122 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
   const isFiltered = searchTerm || selectedQuality || selectedYear || selectedAudience || selectedGenre || sort !== 'title_asc';
 
   return (
-    <div className="space-y-10 pb-24 pt-10">
-      {/* Search & Filters Section */}
-      <div className="flex flex-col gap-6 max-w-7xl mx-auto w-full px-6 relative z-[50]">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="relative flex-1 max-w-3xl group">
-             <div className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground transition-colors group-focus-within:text-primary">
-                {loading ? <Loader2 className="h-full w-full animate-spin" /> : <Search className="h-full w-full" />}
-             </div>
-             <input
-                type="text"
-                placeholder="Search database..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full h-14 bg-transparent pl-8 pr-48 text-lg font-semibold placeholder:text-muted-foreground/30 focus:outline-none border-b border-border focus:border-primary transition-all"
-             />
-             <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-2 pr-1">
-                {isFiltered && (
-                   <button 
-                     onClick={clearFilters} 
-                     className="flex items-center gap-1.5 px-3 py-1.5 hover:bg-destructive/10 text-destructive text-[10px] font-black uppercase tracking-widest rounded-lg border border-destructive/20 transition-all active:scale-95"
-                   >
-                      <X className="h-3 w-3" /> Clear
-                   </button>
-                )}
-                <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/40 bg-muted/20 px-3 py-1.5 rounded-lg border border-border/50">
-                    {totalCount} Entries
-                </span>
-             </div>
+    <div className="space-y-10 pb-24 pt-6">
+      {/* Search & Filters Section - GLASSMORPHISM CONTAINER */}
+      <div className="sticky top-20 z-50 bg-background/40 backdrop-blur-2xl border-b border-white/[0.05] shadow-2xl py-8">
+        <div className="max-w-7xl mx-auto w-full px-6 flex flex-col gap-8">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div className="relative flex-1 max-w-3xl group">
+               <div className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground transition-colors group-focus-within:text-primary">
+                  {loading ? <Loader2 className="h-full w-full animate-spin" /> : <Search className="h-full w-full" />}
+               </div>
+               <input
+                  type="text"
+                  placeholder="Search Registry..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full h-12 bg-transparent pl-8 pr-48 text-2xl font-bold tracking-tight placeholder:text-muted-foreground/20 focus:outline-none border-none transition-all"
+               />
+               <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-3 pr-1">
+                  {isFiltered && (
+                     <button 
+                       onClick={clearFilters} 
+                       className="flex items-center gap-1.5 px-3 py-1.5 hover:bg-destructive/10 text-destructive text-[10px] font-black uppercase tracking-widest rounded-lg border border-destructive/20 transition-all active:scale-95"
+                     >
+                        <X className="h-3 w-3" /> Clear
+                     </button>
+                  )}
+                  <span className="text-[10px] font-black uppercase tracking-widest text-primary/60 bg-primary/5 px-3 py-1.5 rounded-lg border border-primary/20 shadow-sm shadow-primary/5">
+                      {totalCount} Archive Entities
+                  </span>
+               </div>
+            </div>
           </div>
-        </div>
 
-        {/* Filter Row - Horizontally scrollable on mobile */}
-        <div className="flex flex-nowrap lg:flex-wrap items-end gap-4 overflow-x-auto pb-4 -mx-6 px-6 lg:mx-0 lg:px-0 scrollbar-hide">
-           {/* Sort Toggle */}
-           <div className="flex flex-col gap-2 shrink-0">
-              <span className="text-[11px] uppercase tracking-[0.2em] font-black text-foreground/50 ml-1">Sort</span>
-              <button 
-                  onClick={() => setSort(sort === 'title_asc' ? 'title_desc' : 'title_asc')}
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-extrabold transition-all shadow-md active:scale-95 ${
-                    sort === 'title_asc' 
-                      ? 'bg-primary border-primary text-primary-foreground shadow-[0_0_20px_rgba(56,189,248,0.3)] ring-2 ring-primary/20' 
-                      : 'bg-card border-border hover:border-primary/40 text-foreground hover:bg-muted/50'
-                  }`}
-              >
-                  {sort === 'title_asc' ? <ArrowDownAZ className="h-4 w-4" /> : <ArrowUpAZ className="h-4 w-4" />}
-                  {sort === 'title_asc' ? 'A-Z' : 'Z-A'}
-              </button>
-           </div>
-
-           <div className="h-10 w-px bg-border/40 mx-1 hidden lg:block mb-1 shrink-0" />
-
-           {/* Audience Selection */}
-           <div className="flex flex-col gap-2 shrink-0">
-              <span className="text-[11px] uppercase tracking-[0.2em] font-black text-foreground/50 ml-1">Classification</span>
-              <div className="flex gap-2">
-                {[
-                  { id: '', label: 'All', icon: null },
-                  { id: 'family', label: 'Family', icon: <div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.8)]" /> },
-                  { id: 'adult', label: 'Adult', icon: <div className="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.8)]" /> }
-                ].map(cat => (
+          <LayoutGroup>
+            {/* Filter Row - Horizontally scrollable on mobile */}
+            <div className="flex flex-nowrap lg:flex-wrap items-end gap-5 overflow-x-auto pb-2 -mx-6 px-6 lg:mx-0 lg:px-0 scrollbar-hide">
+               {/* Sort Toggle */}
+               <div className="flex flex-col gap-2 shrink-0">
+                  <span className="text-[10px] uppercase tracking-[0.25em] font-black text-foreground/40 ml-1 leading-none">Sort</span>
                   <button 
-                    key={cat.id}
-                    onClick={() => handleAudienceChange(cat.id)}
-                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-extrabold transition-all shadow-md active:scale-95 ${
-                      selectedAudience === cat.id 
-                        ? 'bg-primary border-primary text-primary-foreground shadow-[0_0_20px_rgba(56,189,248,0.3)] ring-2 ring-primary/20' 
-                        : 'bg-card border-border hover:border-primary/40 text-foreground hover:bg-muted/50'
-                    }`}
+                      onClick={() => setSort(sort === 'title_asc' ? 'title_desc' : 'title_asc')}
+                      className={`flex items-center gap-2 px-4 h-11 rounded-xl border text-[13px] font-bold transition-all shadow-md active:scale-95 ${
+                        sort === 'title_asc' 
+                          ? 'bg-primary border-primary text-primary-foreground shadow-[0_0_20px_rgba(56,189,248,0.2)] ring-2 ring-primary/10' 
+                          : 'bg-muted/20 border-border/50 hover:border-primary/30 text-foreground/80 hover:bg-muted/40'
+                      }`}
                   >
-                    {cat.icon}
-                    {cat.label}
+                      {sort === 'title_asc' ? <ArrowDownAZ className="h-3.5 w-3.5" /> : <ArrowUpAZ className="h-3.5 w-3.5" />}
+                      {sort === 'title_asc' ? 'Title A-Z' : 'Title Z-A'}
                   </button>
-                ))}
-              </div>
-           </div>
+               </div>
 
-           <div className="h-10 w-px bg-border/40 mx-1 hidden lg:block mb-1 shrink-0" />
+               <div className="h-8 w-px bg-border/40 mx-1 hidden lg:block mb-1.5 shrink-0" />
 
-           {/* Genre Custom Dropdown */}
-           <Dropdown 
-             label="Genre"
-             placeholder="All Genres"
-             value={selectedGenre}
-             onChange={handleGenreChange}
-             options={GENRE_OPTIONS.map(g => ({ value: g, label: g }))}
-             className="w-44"
-           />
+               {/* Audience Selection - SPATIAL PILLS */}
+               <div className="flex flex-col gap-2 shrink-0">
+                  <span className="text-[10px] uppercase tracking-[0.25em] font-black text-foreground/40 ml-1 leading-none">Sector</span>
+                  <div className="flex p-1 bg-muted/20 border border-border/50 rounded-xl relative">
+                    {[
+                      { id: '', label: 'All', icon: null },
+                      { id: 'family', label: 'Family', icon: <div className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" /> },
+                      { id: 'adult', label: 'Adult', icon: <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]" /> }
+                    ].map(cat => (
+                      <button 
+                        key={cat.id}
+                        onClick={() => handleAudienceChange(cat.id)}
+                        className={`relative z-10 flex items-center gap-2 px-5 h-9 rounded-lg text-[12px] font-bold transition-colors ${
+                          selectedAudience === cat.id ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        {selectedAudience === cat.id && (
+                          <motion.div
+                            layoutId="active-audience"
+                            className="absolute inset-0 bg-primary rounded-lg shadow-lg shadow-primary/20 -z-10"
+                            transition={{ type: 'spring', duration: 0.5, bounce: 0.2 }}
+                          />
+                        )}
+                        {cat.icon}
+                        {cat.label}
+                      </button>
+                    ))}
+                  </div>
+               </div>
 
-           <div className="h-10 w-px bg-border/40 mx-1 hidden lg:block mb-1 shrink-0" />
+               <div className="h-8 w-px bg-border/40 mx-1 hidden lg:block mb-1.5 shrink-0" />
 
-           {/* Quality Custom Dropdown */}
-           <Dropdown 
-             label="Resolution"
-             placeholder="All Qualities"
-             value={selectedQuality}
-             onChange={setSelectedQuality}
-             options={qualities.map(q => ({ value: q, label: q }))}
-             className="w-36"
-           />
+               {/* Genre Custom Dropdown */}
+               <Dropdown 
+                 label="Genre"
+                 placeholder="All Genres"
+                 value={selectedGenre}
+                 onChange={handleGenreChange}
+                 options={GENRE_OPTIONS.map(g => ({ value: g, label: g }))}
+                 className="w-44"
+               />
 
-           <div className="h-10 w-px bg-border/40 mx-1 hidden lg:block mb-1 shrink-0" />
+               {/* Quality Custom Dropdown */}
+               <Dropdown 
+                 label="Format"
+                 placeholder="All Resolutions"
+                 value={selectedQuality}
+                 onChange={setSelectedQuality}
+                 options={qualities.map(q => ({ value: q, label: q }))}
+                 className="w-40"
+               />
 
-           {/* Year Custom Dropdown */}
-           <Dropdown 
-             label="Release Year"
-             placeholder="All Eras"
-             value={selectedYear}
-             onChange={setSelectedYear}
-             options={years.slice(0, 50).map(y => ({ value: y, label: y }))}
-             className="w-36 pr-4 lg:pr-0"
-           />
+               {/* Year Custom Dropdown */}
+               <Dropdown 
+                 label="Archive"
+                 placeholder="All Eras"
+                 value={selectedYear}
+                 onChange={setSelectedYear}
+                 options={years.slice(0, 50).map(y => ({ value: y, label: y }))}
+                 className="w-36 pr-4 lg:pr-0"
+               />
+            </div>
+          </LayoutGroup>
         </div>
       </div>
 
