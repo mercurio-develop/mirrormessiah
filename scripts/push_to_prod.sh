@@ -88,4 +88,7 @@ echo "[5/5] Purging temporary transfer files..."
 rm "$SQL_DUMP"
 docker exec "$CONTAINER_NAME" rm -f "$PROD_SQL_PATH"
 
+echo "--- Restarting production service to load new registry ---"
+docker compose restart web
+
 echo "--- DEPLOYMENT COMPLETE ---"
