@@ -43,55 +43,57 @@ export default function Dropdown({
   }, []);
 
   return (
-    <div className={`flex flex-col gap-2 shrink-0 ${className}`} ref={containerRef}>
-      <span className="text-[11px] uppercase tracking-[0.2em] font-black text-foreground/50 ml-1">{label}</span>
+    <div className={`flex flex-col gap-1.5 shrink-0 ${className}`} ref={containerRef}>
+      <span className="text-[10px] uppercase tracking-[0.25em] font-black text-foreground/40 ml-1 leading-none">{label}</span>
       
       <div className="relative">
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}
-          className={`w-full flex items-center justify-between gap-3 px-4 py-2.5 bg-card border border-border rounded-xl text-sm font-extrabold transition-all shadow-md hover:border-primary/40 text-left active:scale-[0.98] ${
-            isOpen ? 'ring-4 ring-primary/5 border-primary/40' : ''
+          className={`w-full flex items-center justify-between gap-3 px-4 h-11 bg-muted/20 hover:bg-muted/40 border border-border/50 rounded-xl text-[13px] font-bold transition-all shadow-sm hover:border-primary/30 text-left active:scale-[0.98] ${
+            isOpen ? 'ring-4 ring-primary/5 border-primary/40 bg-muted/40' : ''
           }`}
         >
-          <span className={!selectedOption ? 'text-muted-foreground/50' : 'text-foreground'}>
+          <span className={`truncate ${!selectedOption ? 'text-muted-foreground/50' : 'text-foreground/90'}`}>
             {selectedOption ? selectedOption.label : placeholder}
           </span>
-          <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
+          <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground/60 transition-transform duration-500 ease-out ${isOpen ? 'rotate-180' : ''}`} />
         </button>
 
         <AnimatePresence>
           {isOpen && (
             <motion.div
-              initial={{ opacity: 0, y: -10, scale: 0.95 }}
+              initial={{ opacity: 0, y: 4, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -10, scale: 0.95 }}
-              transition={{ duration: 0.15, ease: 'easeOut' }}
-              className="absolute z-[150] left-0 right-0 mt-2 bg-card border border-border rounded-2xl shadow-2xl overflow-hidden py-2"
+              exit={{ opacity: 0, y: 4, scale: 0.98 }}
+              transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
+              className="absolute z-[150] left-0 right-0 mt-2 bg-card/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden py-2"
             >
-              <div className="max-h-64 overflow-y-auto scrollbar-hide">
+              <div className="max-h-60 overflow-y-auto custom-scrollbar">
                 <button
                   type="button"
                   onClick={() => { onChange(''); setIsOpen(false); }}
-                  className={`w-full px-5 py-3 flex items-center justify-between text-xs font-bold transition-colors hover:bg-muted ${
-                    value === '' ? 'text-primary' : 'text-muted-foreground'
+                  className={`w-full px-4 py-2.5 flex items-center justify-between text-[12px] font-bold transition-all hover:bg-primary/10 group ${
+                    value === '' ? 'text-primary' : 'text-muted-foreground/70 hover:text-foreground'
                   }`}
                 >
-                  {placeholder}
-                  {value === '' && <Check className="h-3 w-3" />}
+                  <span className="truncate">{placeholder}</span>
+                  {value === '' && <Check className="h-3 w-3 stroke-[3]" />}
                 </button>
                 
+                <div className="h-px bg-border/40 mx-2 my-1" />
+
                 {options.map((opt) => (
                   <button
                     key={opt.value}
                     type="button"
                     onClick={() => { onChange(opt.value); setIsOpen(false); }}
-                    className={`w-full px-5 py-3 flex items-center justify-between text-xs font-bold transition-colors hover:bg-muted ${
-                      value === opt.value ? 'text-primary' : 'text-foreground'
+                    className={`w-full px-4 py-2.5 flex items-center justify-between text-[12px] font-bold transition-all hover:bg-primary/10 group ${
+                      value === opt.value ? 'text-primary' : 'text-foreground/80 hover:text-foreground'
                     }`}
                   >
-                    {opt.label}
-                    {value === opt.value && <Check className="h-3 w-3" />}
+                    <span className="truncate">{opt.label}</span>
+                    {value === opt.value && <Check className="h-3 w-3 stroke-[3]" />}
                   </button>
                 ))}
               </div>
