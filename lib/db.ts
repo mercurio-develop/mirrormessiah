@@ -22,24 +22,24 @@ export function getDb(): Database.Database {
         return new Database(':memory:');
     }
 
-    if (!fs.existsSync(dbPath)) {
-        console.error(`[Database] ERROR: File not found at ${dbPath}`);
-        
-        // Fallback for dev only
-        if (!isProd && fs.existsSync(devPath)) {
-            return new Database(devPath);
-        }
-        
-        throw new Error(`Registry Connection Failure: ${dbPath} not found.`);
-    }
-
     try {
+        // Ensure parent directory exists
+        const dbDir = path.dirname(dbPath);
+        if (!fs.existsSync(dbDir)) {
+            fs.mkdirSync(dbDir, { recursive: true });
+        }
+
         db = new Database(dbPath, { readonly: false, timeout: 5000 });
         db.pragma('foreign_keys = ON');
         db.pragma('journal_mode = WAL');
         
-        const count = db.prepare('SELECT COUNT(*) as c FROM movies').get() as { c: number };
-        console.log(`[Database] SYNC_ACTIVE: ${dbPath} | MOVIES: ${count.c}`);
+        // Initial health check - might fail if table doesn't exist yet (migrations will fix it)
+        try {
+            const count = db.prepare('SELECT COUNT(*) as c FROM movies').get() as { c: number };
+            console.log(`[Database] SYNC_ACTIVE: ${dbPath} | MOVIES: ${count.c}`);
+        } catch {
+            console.log(`[Database] SYNC_PENDING: ${dbPath} (Table 'movies' not found, awaiting migrations)`);
+        }
     } catch (err: any) {
         console.error(`[Database] SYNC_FAILURE: ${err.message}`);
         throw err;
