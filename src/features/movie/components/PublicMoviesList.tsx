@@ -160,11 +160,11 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
     setSearchTerm('');
     setSelectedQuality('');
     setSelectedYear('');
-    handleAudienceChange('');
     setSort('title_asc');
+    router.push(pathname, { scroll: false });
   };
 
-  const isFiltered = searchTerm || selectedQuality || selectedYear || (selectedAudience && !searchParams.get('audience'));
+  const isFiltered = searchTerm || selectedQuality || selectedYear || selectedAudience || sort !== 'title_asc';
 
   return (
     <div className="space-y-12 pb-24 pt-10">

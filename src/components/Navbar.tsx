@@ -86,7 +86,9 @@ export default function Navbar() {
             >
               <Sparkles className="w-4 h-4" /> {isFamilyMode ? 'Family Active' : 'Family Mode'}
             </button>
-            {mounted && isAdmin && isDevelopment && (
+            
+            {/* Admin Link - Desktop */}
+            {mounted && isDevelopment && isAdmin && (
                <Link 
                 href="/admin" 
                 className={`text-sm font-semibold transition-colors hover:text-primary ${pathname.startsWith('/admin') ? 'text-primary' : 'text-muted-foreground'}`}
@@ -99,6 +101,7 @@ export default function Navbar() {
 
         <div className="flex items-center gap-1 sm:gap-6">
           <div className="hidden sm:flex items-center gap-2">
+            {/* Admin Toggle - Desktop */}
             {mounted && isDevelopment && (
                <button 
                 onClick={handleAdminToggle}
@@ -162,24 +165,27 @@ export default function Navbar() {
             </button>
           </div>
 
+          {/* Admin Actions - Mobile */}
           {mounted && isDevelopment && (
-            <button 
-              onClick={handleAdminToggle}
-              className={`w-full flex items-center justify-center gap-3 p-4 rounded-2xl border font-bold uppercase tracking-[0.2em] text-[10px] transition-all ${isAdmin ? 'bg-primary/10 border-primary text-primary shadow-[0_0_20px_rgba(56,189,248,0.1)]' : 'bg-muted/50 border-border text-muted-foreground'}`}
-            >
-              <Shield className="w-5 h-5" />
-              {isAdmin ? 'Exit Administrative Sector' : 'Enter Administrative Sector'}
-            </button>
-          )}
+            <div className="space-y-4">
+              <button 
+                onClick={handleAdminToggle}
+                className={`w-full flex items-center justify-center gap-3 p-4 rounded-2xl border font-bold uppercase tracking-[0.2em] text-[10px] transition-all ${isAdmin ? 'bg-primary/10 border-primary text-primary shadow-[0_0_20px_rgba(56,189,248,0.1)]' : 'bg-muted/50 border-border text-muted-foreground'}`}
+              >
+                <Shield className="w-5 h-5" />
+                {isAdmin ? 'Exit Administrative Sector' : 'Enter Administrative Sector'}
+              </button>
 
-          {mounted && isAdmin && isDevelopment && (
-            <Link 
-                href="/admin" 
-                className={`w-full flex items-center justify-center gap-3 p-4 rounded-2xl border font-bold uppercase tracking-[0.2em] text-[10px] transition-all ${pathname.startsWith('/admin') ? 'bg-primary/10 border-primary text-primary' : 'bg-muted/50 border-border text-muted-foreground'}`}
-            >
-              <Terminal className="w-5 h-5" />
-              Command Center Dashboard
-            </Link>
+              {isAdmin && (
+                <Link 
+                    href="/admin" 
+                    className={`w-full flex items-center justify-center gap-3 p-4 rounded-2xl border font-bold uppercase tracking-[0.2em] text-[10px] transition-all ${pathname.startsWith('/admin') ? 'bg-primary/10 border-primary text-primary' : 'bg-muted/50 border-border text-muted-foreground'}`}
+                >
+                  <Terminal className="w-5 h-5" />
+                  Command Center Dashboard
+                </Link>
+              )}
+            </div>
           )}
         </div>
       </div>
