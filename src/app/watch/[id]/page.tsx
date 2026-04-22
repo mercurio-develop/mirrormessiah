@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
+import { cookies } from 'next/headers';
 import MediaPlayer from '@/features/movie/components/MediaPlayer';
 import HeroBackdrop from '@/components/HeroBackdrop';
 import {ChevronLeft, Star, Calendar, Hash, Clock, Info, Activity, Globe, User, Edit, Sparkles, AlertCircle} from 'lucide-react';
@@ -35,6 +36,19 @@ export default async function WatchPage({ params }: WatchPageProps) {
 
   const movieData = getMoviePlayback(movieId);
   const posterUrl = getPosterUrl(movie.thumbnail);
+  
+  const cookieStore = await cookies();
+  const gateToken = cookieStore.get('mm_gate_token')?.value;
+
+  if (movieData && gateToken) {
+    movieData.source.src += `&t=${gateToken}`;
+    if (movieData.subtitles) {
+      movieData.subtitles = movieData.subtitles.map(s => ({
+        ...s,
+        src: s.src + `&t=${gateToken}`
+      }));
+    }
+  }
 
   return (
     <div className="min-h-screen bg-background text-foreground font-sans selection:bg-primary selection:text-white">

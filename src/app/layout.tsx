@@ -5,6 +5,7 @@ import { ThemeProvider } from '@/contexts/ThemeContext'
 import { AdminProvider } from '@/contexts/AdminContext'
 import Navbar from '@/components/Navbar'
 import { Suspense } from 'react'
+import Script from 'next/script'
 
 export const metadata: Metadata = {
   title: 'MirrorMessiah | Premium Media Registry',
@@ -18,6 +19,12 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="h-full">
+      <head>
+        <Script 
+          src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1" 
+          strategy="beforeInteractive" 
+        />
+      </head>
       <body className="h-full font-sans">
         <ThemeProvider>
           <AdminProvider>
