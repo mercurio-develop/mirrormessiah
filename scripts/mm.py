@@ -373,13 +373,20 @@ def scrape_one(db: sqlite3.Connection, movie: dict, dry_run: bool = False) -> st
                     details.get('runtime'), thumbnail, audience, year, movie['id'],
                 ),
             )
+            
+            # Sync to categories table for UI
+            if audience == 'family':
+                db.execute("INSERT OR IGNORE INTO categories (name) VALUES ('Family')")
+                cat_id = db.execute("SELECT id FROM categories WHERE name = 'Family'").fetchone()[0]
+                db.execute("INSERT OR IGNORE INTO movie_categories (movie_id, category_id) VALUES (?, ?)", (movie['id'], cat_id))
+            
             db.commit()
         return 'ok'
     except Exception as e:
         print(f'  ERROR: {e}')
         return 'error'
 
-def ingest_path(db: sqlite3.Connection, path: Path, library_id: int, auto_scrape: bool = True) -> bool:
+def ingest_path(db: sqlite3.Connection, path: Path, library_id: int, auto_scrape: bool = True, category: str = None) -> bool:
     if path.is_file():
         folder = path.parent
         video_files = [path] if path.suffix.lower() in VIDEO_EXT else []
@@ -415,6 +422,14 @@ def ingest_path(db: sqlite3.Connection, path: Path, library_id: int, auto_scrape
         movie_id = cur.lastrowid
         newly_added = True
 
+    # Link category if provided
+    if category:
+        db.execute("INSERT OR IGNORE INTO categories (name) VALUES (?)", (category,))
+        cat_id = db.execute("SELECT id FROM categories WHERE name = ?", (category,)).fetchone()[0]
+        db.execute("INSERT OR IGNORE INTO movie_categories (movie_id, category_id) VALUES (?, ?)", (movie_id, cat_id))
+        if category.lower() == 'family':
+            db.execute("UPDATE movies SET audience = 'family' WHERE id = ?", (movie_id,))
+
     files_added = 0
     for vf in video_files:
         size = vf.stat().st_size
@@ -448,7 +463,7 @@ def cmd_sync(args):
     library_id = get_library_id(db)
     folders = sorted(p for p in media_dir.iterdir() if p.is_dir())
     for folder in folders:
-        ingest_path(db, folder, library_id, auto_scrape=not args.no_scrape)
+        ingest_path(db, folder, library_id, auto_scrape=not args.no_scrape, category=args.category)
     db.close()
 
 def cmd_ingest(args):
@@ -456,7 +471,7 @@ def cmd_ingest(args):
     backup_db(args)
     db = open_db()
     library_id = get_library_id(db)
-    ingest_path(db, path, library_id, auto_scrape=not args.no_scrape)
+    ingest_path(db, path, library_id, auto_scrape=not args.no_scrape, category=args.category)
     db.close()
 
 def cmd_scrape(args):
@@ -474,6 +489,26 @@ def cmd_status(args):
     files = db.execute("SELECT COUNT(*) FROM files").fetchone()[0]
     subs = db.execute("SELECT COUNT(*) FROM subtitles").fetchone()[0]
     print(f"Movies: {movies}\nFiles: {files}\nSubtitles: {subs}")
+    
+    # Show categories
+    cats = db.execute("""
+        SELECT c.name, COUNT(mc.movie_id) as count 
+        FROM categories c 
+        LEFT JOIN movie_categories mc ON c.id = mc.category_id 
+        GROUP BY c.name
+    """).fetchall()
+    if cats:
+        print("\nCategories:")
+        for cat in cats:
+            print(f"  {cat['name']}: {cat['count']}")
+            
+    # Show audience
+    audiences = db.execute("SELECT audience, COUNT(*) as count FROM movies GROUP BY audience").fetchall()
+    if audiences:
+        print("\nAudience:")
+        for aud in audiences:
+            print(f"  {aud['audience'] or 'Uncategorized'}: {aud['count']}")
+            
     db.close()
 
 def cmd_organize(args) -> None:
@@ -558,6 +593,7 @@ def cmd_full(args):
     if not hasattr(args, 'lax'): args.lax = False
     if not hasattr(args, 'force'): args.force = False
     if not hasattr(args, 'dry_run'): args.dry_run = False
+    if not hasattr(args, 'category'): args.category = None
     
     cmd_sync(args)
     cmd_cleanup(args)
@@ -569,23 +605,35 @@ def cmd_full(args):
 def main():
     parser = argparse.ArgumentParser(prog='mm')
     sub = parser.add_subparsers(dest='command', required=True)
+    
     p_sync = sub.add_parser('sync')
     p_sync.add_argument('dir', nargs='?', default=MEDIA_DIR)
+    p_sync.add_argument('--category', help='Assign category to ingested movies')
     p_sync.add_argument('--no-scrape', action='store_true')
     p_sync.add_argument('--no-backup', action='store_true')
+    
     p_ingest = sub.add_parser('ingest')
     p_ingest.add_argument('path')
+    p_ingest.add_argument('--category', help='Assign category to movie')
     p_ingest.add_argument('--no-scrape', action='store_true')
     p_ingest.add_argument('--no-backup', action='store_true')
+    
     sub.add_parser('cleanup').add_argument('--no-backup', action='store_true')
     sub.add_parser('organize').add_argument('--no-backup', action='store_true')
+    
     p_scrape = sub.add_parser('scrape')
     p_scrape.add_argument('--force', action='store_true')
     p_scrape.add_argument('--dry-run', action='store_true')
     p_scrape.add_argument('--no-backup', action='store_true')
+    
     sub.add_parser('status')
     sub.add_parser('sync-assets').add_argument('--lax', action='store_true')
-    sub.add_parser('full').add_argument('--root', dest='dir', default=MEDIA_DIR)
+    
+    p_full = sub.add_parser('full')
+    p_full.add_argument('--root', dest='dir', default=MEDIA_DIR)
+    p_full.add_argument('--category', help='Default category for this run')
+    p_full.add_argument('--lax', action='store_true')
+    
     sub.add_parser('reset').add_argument('--force', action='store_true')
     args = parser.parse_args()
     dispatch = {
