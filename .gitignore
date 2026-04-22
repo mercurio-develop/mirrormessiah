@@ -66,3 +66,4 @@ MANIFEST
 media.db
 media.db-shm
 media.db-wal
+*.db.bak
