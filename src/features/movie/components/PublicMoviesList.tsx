@@ -194,7 +194,7 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
   return (
     <div className="space-y-10 pb-24 pt-10">
       {/* Search & Filters Section */}
-      <div className="flex flex-col gap-6 max-w-7xl mx-auto w-full px-6">
+      <div className="flex flex-col gap-6 max-w-7xl mx-auto w-full px-6 relative z-[50]">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="relative flex-1 max-w-3xl group">
              <div className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground transition-colors group-focus-within:text-primary">
