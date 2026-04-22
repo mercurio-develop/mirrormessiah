@@ -67,14 +67,14 @@ export async function POST(request: NextRequest) {
       response.cookies.set('mm_admin_token', adminToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
+        sameSite: 'strict',
         maxAge: 60 * 60 * 24,
       });
 
       response.cookies.set('mm_gate_token', gateToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
+        sameSite: 'strict',
         maxAge: 60 * 60 * 24 * 30,
       });
 
@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
       response.cookies.set('mm_gate_token', gateToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
+        sameSite: 'strict',
         maxAge: 60 * 60 * 24 * 30,
       });
 
