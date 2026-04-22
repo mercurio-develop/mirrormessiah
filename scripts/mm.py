@@ -489,9 +489,14 @@ def cmd_organize(args) -> None:
         new_name = re.sub(r'[<>:"/\\|?*]', '_', new_name).strip()
         new_dir = current_dir.parent / new_name
         if current_dir.name != new_name and not new_dir.exists():
-            os.rename(current_dir, new_dir)
-            db.execute("UPDATE files SET path = REPLACE(path, ?, ?) WHERE movie_id = ?", (str(current_dir), str(new_dir), movie['id']))
-            renamed_count += 1
+            try:
+                os.rename(current_dir, new_dir)
+                db.execute("UPDATE files SET path = REPLACE(path, ?, ?) WHERE movie_id = ?", (str(current_dir), str(new_dir), movie['id']))
+                renamed_count += 1
+            except PermissionError:
+                print(f"  [!] PERMISSION DENIED: Cannot rename {current_dir.name}. Skipping organization for this item.")
+            except Exception as e:
+                print(f"  [!] ERROR: Could not rename {current_dir.name}: {e}")
     db.commit()
     db.close()
     print(f"Organized {renamed_count} folders.")
