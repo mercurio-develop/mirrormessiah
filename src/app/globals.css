@@ -60,7 +60,7 @@
 
 @layer base {
   * { 
-    @apply border-border;
+    @apply border-transparent;
   }
   body { 
     @apply bg-background text-foreground antialiased selection:bg-primary/30 selection:text-foreground; 
@@ -140,3 +140,4 @@
     @apply pb-4 !important;
   }
 }
+\n.custom-scrollbar::-webkit-scrollbar { width: 4px; }\n.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }\n.custom-scrollbar::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 10px; }\n.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: hsl(var(--primary) / 0.5); }

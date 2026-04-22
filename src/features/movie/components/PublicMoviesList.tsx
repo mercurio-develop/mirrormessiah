@@ -402,17 +402,17 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
             {movies.map((movie, idx) => (
               <motion.div 
                 key={movie.id}
-                initial={{ opacity: 0, y: 10 }}
+                initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ 
-                  duration: 0.4, 
-                  delay: (idx % 12) * 0.05 
+                  duration: 0.3, 
+                  delay: (idx % 12) * 0.03,
+                  ease: 'easeOut'
                 }}
-                whileHover={{ scale: 1.02 }}
-                className="flex flex-col gap-4 group"
+                className="flex flex-col gap-3 group"
               >
-                <Link href={"/watch/" + movie.id} className={`block relative aspect-poster bg-muted rounded-xl overflow-hidden shadow-xl border-2 border-transparent transition-all duration-300 ${
-                  selectedAudience === 'family' ? 'group-hover:shadow-green-500/10 group-hover:border-green-500/20' : 'group-hover:shadow-primary/10 group-hover:border-primary/20'
+                <Link href={"/watch/" + movie.id} className={`block relative aspect-poster bg-muted rounded-xl overflow-hidden shadow-md border border-white/[0.03] transition-all duration-500 ${
+                  selectedAudience === 'family' ? 'group-hover:shadow-green-500/5 group-hover:border-green-500/10' : 'group-hover:shadow-primary/5 group-hover:border-primary/10'
                 }`}>
                   <Image
                     src={getPosterUrl(movie.thumbnail)}
@@ -421,24 +421,13 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
                     unoptimized
                     priority={idx < 6}
                     sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 15vw"
-                    className="object-cover transition-transform duration-700 group-hover:scale-105"
+                    className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"
                     onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder.svg'; }}
                   />
                   
-                  {/* Subtle Overlays */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                  {/* Subtle Overlays - Hover only */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                   
-                  {/* Rating Badge */}
-                  <div className="absolute top-2 right-2 px-1.5 py-0.5 bg-black/60 backdrop-blur-md rounded border border-white/10 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-[-10px] group-hover:translate-y-0">
-                    <Star className="h-2.5 w-2.5 text-primary fill-primary" />
-                    <span className="text-[10px] font-bold text-white">{movie.rating || '0.0'}</span>
-                  </div>
-
-                  {/* Quality Badge */}
-                  <div className="absolute bottom-2 left-2 px-1.5 py-0.5 bg-primary/20 backdrop-blur-md rounded border border-primary/30 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-[10px] group-hover:translate-y-0">
-                    <span className="text-[8px] font-black text-primary uppercase tracking-tighter">{movie.quality || 'HDR'}</span>
-                  </div>
-
                   {movie.needs_repair === 1 && (
                     <div className="absolute inset-0 bg-destructive/10 backdrop-blur-[2px] flex items-center justify-center">
                        <div className="px-3 py-1.5 bg-destructive text-destructive-foreground text-[10px] font-black uppercase tracking-[0.2em] rounded-full shadow-2xl shadow-destructive/50 flex items-center gap-2 animate-pulse scale-90 sm:scale-100">
@@ -455,18 +444,29 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
                   )}
                 </Link>
 
-                <div className="space-y-1">
-                  <h3 className="text-sm font-bold text-foreground truncate group-hover:text-primary transition-colors leading-tight">
-                    {movie.title}
-                  </h3>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                       <span className="text-[10px] font-bold text-muted-foreground/60">{movie.year}</span>
-                       <span className="px-1 py-0.5 border border-primary/20 bg-primary/5 rounded-[2px] text-[8px] font-black uppercase tracking-tighter text-primary/60">CC</span>
+                <div className="space-y-1.5 px-1.5 pt-1">
+                  <div className="flex items-start justify-between gap-3">
+                    <h3 className="text-[13px] font-black text-foreground/90 truncate group-hover:text-primary transition-colors leading-none pt-0.5">
+                      {movie.title}
+                    </h3>
+                    <div className="flex items-center gap-1 text-[11px] font-black text-amber-500 shrink-0">
+                       <Star className="h-3 w-3 fill-current" />
+                       {movie.rating ? movie.rating.toFixed(1) : '0.0'}
                     </div>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground/50 uppercase tracking-tight">
+                       <span>{movie.year}</span>
+                       <span className="opacity-30">•</span>
+                       <span className="tracking-tighter">{movie.quality || 'HDR'}</span>
+                       <span className="opacity-30">•</span>
+                       <span className="text-[9px] font-black tracking-widest text-primary/40">CC</span>
+                    </div>
+
                     {movie.audience === 'family' && (
-                        <div className="flex items-center gap-1 text-[9px] font-black text-green-500 uppercase tracking-tighter">
-                            <Sparkles className="h-2.5 w-2.5" />
+                        <div className="flex items-center gap-1.5 text-[9px] font-black text-green-500 uppercase tracking-[0.1em]">
+                            <div className="w-1 h-1 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" />
                             Family
                         </div>
                     )}
