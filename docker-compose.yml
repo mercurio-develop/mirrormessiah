@@ -15,7 +15,7 @@ services:
       - DB_PATH=/app/data/media.db
       - MEDIA_DIR=${MEDIA_DIR}
     volumes:
-      - ./data:/app/data
+      - mm-data:/app/data
       # MEDIA_DIR: Path to your movie collection. Mounted as rw for poster management by mm.py
       - "${MEDIA_DIR:?MEDIA_DIR is not set.}:${MEDIA_DIR}"
     networks:
@@ -43,3 +43,7 @@ services:
 networks:
   internal-net:
     driver: bridge
+
+volumes:
+  mm-data:
+    name: mm-data
