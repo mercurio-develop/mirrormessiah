@@ -181,11 +181,12 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
              />
           </div>
 
-          <div className="flex items-center gap-6 text-sm font-bold text-muted-foreground/40">
+          <div className="flex items-center gap-6 text-sm font-bold text-muted-foreground/60">
              <span>{totalCount} Total Entries</span>
              {(searchTerm || selectedQuality || selectedYear || selectedAudience) && (
-               <button onClick={clearFilters} className="text-primary hover:text-primary/80 flex items-center gap-1.5 transition-colors">
-                  <X className="h-4 w-4" /> Reset
+               <button onClick={clearFilters} className="text-primary hover:text-primary/80 flex items-center gap-1.5 transition-colors group/reset">
+                  <X className="h-4 w-4 group-hover/reset:rotate-90 transition-transform duration-300" /> 
+                  <span className="border-b border-primary/20">Reset Filters</span>
                </button>
              )}
           </div>
@@ -208,7 +209,7 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
 
            {/* Audience Selection */}
            <div className="flex items-center gap-2">
-              <span className="text-[10px] uppercase tracking-widest font-black mr-2 opacity-30 text-foreground/50">Category:</span>
+              <span className="text-[10px] uppercase tracking-widest font-black mr-2 text-muted-foreground/80">Category:</span>
               <div className="flex gap-2">
                 {[
                   { id: '', label: 'All', icon: null },
@@ -218,7 +219,11 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
                   <button 
                     key={cat.id}
                     onClick={() => setSelectedAudience(cat.id as any)}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-full border text-xs font-bold transition-all ${selectedAudience === cat.id ? 'bg-primary border-primary text-primary-foreground' : 'bg-white/5 border-white/10 hover:border-white/20'}`}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-full border text-xs font-bold transition-all ${
+                      selectedAudience === cat.id 
+                        ? 'bg-primary border-primary text-primary-foreground' 
+                        : 'bg-muted/50 border-border hover:bg-muted hover:border-muted-foreground/30 text-muted-foreground hover:text-foreground'
+                    }`}
                   >
                     {cat.icon}
                     {cat.label}
@@ -231,11 +236,15 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
 
            {/* Quality Pills */}
            <div className="flex items-center gap-2">
-              <span className="text-[10px] uppercase tracking-widest font-black mr-2 opacity-30">Quality:</span>
+              <span className="text-[10px] uppercase tracking-widest font-black mr-2 text-muted-foreground/80">Quality:</span>
               <div className="flex gap-2">
                 <button 
                   onClick={() => setSelectedQuality('')}
-                  className={`px-4 py-2 rounded-full border text-xs font-bold transition-all ${!selectedQuality ? 'bg-white text-black' : 'bg-white/5 border-white/10 hover:border-white/20'}`}
+                  className={`px-4 py-2 rounded-full border text-xs font-bold transition-all ${
+                    !selectedQuality 
+                      ? 'bg-foreground text-background border-foreground shadow-lg shadow-foreground/5' 
+                      : 'bg-muted/50 border-border hover:bg-muted hover:border-muted-foreground/30 text-muted-foreground hover:text-foreground'
+                  }`}
                 >
                   All
                 </button>
@@ -243,7 +252,11 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
                   <button 
                     key={q}
                     onClick={() => setSelectedQuality(q)}
-                    className={`px-4 py-2 rounded-full border text-xs font-bold transition-all ${selectedQuality === q ? 'bg-white text-black' : 'bg-white/5 border-white/10 hover:border-white/20'}`}
+                    className={`px-4 py-2 rounded-full border text-xs font-bold transition-all ${
+                      selectedQuality === q 
+                        ? 'bg-foreground text-background border-foreground shadow-lg shadow-foreground/5' 
+                        : 'bg-muted/50 border-border hover:bg-muted hover:border-muted-foreground/30 text-muted-foreground hover:text-foreground'
+                    }`}
                   >
                     {q}
                   </button>
