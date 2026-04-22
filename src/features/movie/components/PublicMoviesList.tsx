@@ -6,22 +6,19 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { MovieWithFile } from '@/lib/types';
 import { b64urlEncode } from '@/lib/b64url';
-import {
-    Search,
-    Play,
-    Edit,
-    Loader2,
-    Filter,
-    X,
-    ChevronDown,
-    Monitor,
-    ArrowDownAZ,
-    ArrowUpAZ,
-    Clock,
-    Star,
+import { 
+    Search, 
+    Loader2, 
+    X, 
+    ArrowDownAZ, 
+    ArrowUpAZ, 
+    Star, 
+    Clock, 
+    Play, 
     Info,
     Sparkles,
-    AlertCircle
+    AlertCircle,
+    ChevronDown
 } from 'lucide-react';
 import { useAdmin } from '@/contexts/AdminContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -35,17 +32,15 @@ const ITEMS_PER_LOAD = 24;
 const getPosterUrl = (thumbnail: string | null | undefined): string => {
   if (!thumbnail) return '/placeholder.svg';
   if (thumbnail.startsWith('http')) return thumbnail;
-  
   const [basePath, query] = thumbnail.split('?');
   let url = "/api/images?path=" + b64urlEncode(basePath);
   if (query) url += "&" + query;
-  
   return url;
 };
 
 export default function PublicMoviesList({ initialMovies }: PublicMoviesListProps) {
-  const { isAdmin } = useAdmin();
   const searchParams = useSearchParams();
+  const { isAdmin } = useAdmin();
   
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedQuality, setSelectedQuality] = useState('');
@@ -125,7 +120,6 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
 
   const [debouncedSearch, setDebouncedSearch] = useState('');
 
-  // Debounce search term only
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(searchTerm);
@@ -133,18 +127,13 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  // Fetch movies when any filter (including debounced search) changes
   useEffect(() => {
     fetchMovies(debouncedSearch, selectedQuality, selectedYear, selectedAudience, sort, true);
   }, [debouncedSearch, selectedQuality, selectedYear, selectedAudience, sort, fetchMovies]);
 
   const handleScroll = useCallback(() => {
     if (loadingRef.current || !hasMore) return;
-
-    const scrollHeight = document.documentElement.scrollHeight;
-    const scrollTop = document.documentElement.scrollTop;
-    const clientHeight = document.documentElement.clientHeight;
-
+    const { scrollHeight, scrollTop, clientHeight } = document.documentElement;
     if (scrollTop + clientHeight >= scrollHeight - 800) {
       fetchMovies(debouncedSearch, selectedQuality, selectedYear, selectedAudience, sort);
     }
@@ -163,6 +152,8 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
     setSort('title_asc');
   };
 
+  const isFiltered = searchTerm || selectedQuality || selectedYear || (selectedAudience && !searchParams.get('audience'));
+
   return (
     <div className="space-y-12 pb-24 pt-10">
       {/* Search & Filters Section */}
@@ -177,18 +168,18 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
                 placeholder="Search by title, director, year..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full h-12 bg-transparent pl-8 pr-6 text-lg font-semibold placeholder:text-muted-foreground/30 focus:outline-none border-b border-border focus:border-primary transition-all"
+                className="w-full h-14 bg-transparent pl-8 pr-40 text-lg font-semibold placeholder:text-muted-foreground/30 focus:outline-none border-b border-border focus:border-primary transition-all"
              />
-          </div>
-
-          <div className="flex items-center gap-6 text-sm font-bold text-muted-foreground/60">
-             <span>{totalCount} Total Entries</span>
-             {(searchTerm || selectedQuality || selectedYear || selectedAudience) && (
-               <button onClick={clearFilters} className="text-primary hover:text-primary/80 flex items-center gap-1.5 transition-colors group/reset">
-                  <X className="h-4 w-4 group-hover/reset:rotate-90 transition-transform duration-300" /> 
-                  <span className="border-b border-primary/20">Reset Filters</span>
-               </button>
-             )}
+             <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-3 pr-2">
+                <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/40 bg-muted/20 px-3 py-1.5 rounded-lg border border-border/50">
+                    {totalCount} Entries
+                </span>
+                {searchTerm && (
+                    <button onClick={() => setSearchTerm('')} className="p-2 hover:bg-muted rounded-full transition-colors text-muted-foreground/40 hover:text-foreground">
+                        <X className="h-4 w-4" />
+                    </button>
+                )}
+             </div>
           </div>
         </div>
 
@@ -286,6 +277,19 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
                 <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 pointer-events-none text-muted-foreground transition-transform group-hover/select:translate-y-[-40%]" />
               </div>
            </div>
+
+           {isFiltered && (
+             <div className="flex flex-col gap-2 shrink-0 pb-[1px] pr-6 lg:pr-0">
+                <span className="text-[11px] uppercase tracking-[0.2em] font-black text-transparent ml-1">.</span>
+                <button 
+                    onClick={clearFilters} 
+                    className="h-[46px] px-6 bg-destructive/10 border border-destructive/20 hover:bg-destructive hover:text-destructive-foreground text-destructive text-sm font-black uppercase tracking-widest rounded-xl transition-all flex items-center gap-2 group/reset shadow-lg shadow-destructive/5 active:scale-95"
+                >
+                    <X className="h-4 w-4 group-hover/reset:rotate-90 transition-transform duration-300" /> 
+                    Reset
+                </button>
+             </div>
+           )}
         </div>
       </div>
 
@@ -313,103 +317,68 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
                     onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder.svg'; }}
                   />
                   
-                  {/* Audience Badge */}
-                  <div className="absolute top-3 left-3 z-30 flex flex-col gap-2">
-                    {movie.audience === 'family' && (
-                      <span className="bg-green-600/90 backdrop-blur-md text-white text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest flex items-center gap-1.5 shadow-xl">
-                        <div className="w-1 h-1 rounded-full bg-white animate-pulse" />
-                        Family
-                      </span>
-                    )}
-                    {movie.audience === 'adult' && (
-                      <span className="bg-red-600/90 backdrop-blur-md text-white text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest flex items-center gap-1.5 shadow-xl">
-                        <div className="w-1 h-1 rounded-full bg-white animate-pulse" />
-                        Adult
-                      </span>
-                    )}
-                    {movie.needs_repair ? (
-                      <span className="bg-destructive/90 backdrop-blur-md text-white text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest flex items-center gap-1.5 shadow-xl animate-pulse">
-                        <AlertCircle className="h-3 w-3" />
-                        Repair
-                      </span>
-                    ) : null}
-                    {(movie as any).has_subtitles === 1 && (
-                      <span className="bg-primary/10 backdrop-blur-md text-primary text-[8px] font-extrabold px-1.5 py-0.5 rounded-sm uppercase tracking-widest border border-primary/20 flex items-center gap-1 shadow-sm">
-                        <Sparkles className="h-2 w-2 fill-current" />
-                        CC
-                      </span>
-                    )}
+                  {/* Subtle Overlays */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                  
+                  {/* Rating Badge */}
+                  <div className="absolute top-2 right-2 px-1.5 py-0.5 bg-black/60 backdrop-blur-md rounded border border-white/10 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-[-10px] group-hover:translate-y-0">
+                    <Star className="h-2.5 w-2.5 text-primary fill-primary" />
+                    <span className="text-[10px] font-bold text-white">{movie.rating || '0.0'}</span>
                   </div>
 
-                  {/* Subtle hover overlay */}
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
-                    <div className="w-14 h-14 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center scale-75 group-hover:scale-100 transition-transform duration-500">
-                      <Play className="h-6 w-6 text-white fill-current ml-0.5" />
-                    </div>
-                  </div>
-
-                  <div className="absolute top-3 right-3 z-30">
-                    <span className="bg-black/60 backdrop-blur-md text-[9px] font-black text-white px-2 py-0.5 rounded-sm uppercase tracking-tighter">
-                      {movie.quality || 'FHD'}
-                    </span>
+                  {/* Quality Badge */}
+                  <div className="absolute bottom-2 left-2 px-1.5 py-0.5 bg-primary/20 backdrop-blur-md rounded border border-primary/30 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-[10px] group-hover:translate-y-0">
+                    <span className="text-[8px] font-black text-primary uppercase tracking-tighter">{movie.quality || 'HDR'}</span>
                   </div>
                 </Link>
 
-                <div className="space-y-1 px-0.5">
-                   <h3 className="font-bold text-sm leading-snug text-foreground group-hover:text-primary transition-colors truncate">
+                <div className="space-y-1">
+                  <h3 className="text-sm font-bold text-foreground truncate group-hover:text-primary transition-colors leading-tight">
                     {movie.title}
                   </h3>
-                  <div className="flex items-center gap-3 text-[11px] font-semibold text-muted-foreground/60">
-                    <span>{movie.year || 'N/A'}</span>
-                    <div className="h-1 w-1 rounded-full bg-border" />
-                    <span className="flex items-center gap-1 font-bold text-primary/70">
-                      <Star className="h-2.5 w-2.5 fill-current" /> {movie.rating || '0.0'}
-                    </span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-muted-foreground/60">{movie.year}</span>
+                    {movie.audience === 'family' && (
+                        <div className="flex items-center gap-1 text-[9px] font-black text-green-500 uppercase tracking-tighter">
+                            <Sparkles className="h-2.5 w-2.5" />
+                            Family
+                        </div>
+                    )}
                   </div>
-                  
-                  {isAdmin && (
-                    <Link 
-                      href={"/admin/movies/" + movie.id}
-                      className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase text-primary/40 hover:text-primary transition-all pt-2"
-                    >
-                      <Edit className="h-3 w-3" /> Edit Entry
-                    </Link>
-                  )}
                 </div>
               </motion.div>
             ))}
           </div>
         ) : (
-          !loading && (
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="flex flex-col items-center justify-center py-48 text-center"
-            >
-              <div className="p-10 bg-white/5 rounded-full mb-8">
-                <Info className="h-16 w-16 text-muted-foreground/20" />
-              </div>
-              <h3 className="text-2xl font-bold text-foreground mb-3">No movies found</h3>
-              <p className="text-muted-foreground max-w-sm mx-auto mb-10 leading-relaxed">
+          <div className="py-32 text-center space-y-6 animate-in fade-in zoom-in duration-700">
+            <div className="relative inline-block">
+               <Search className="h-20 w-20 text-muted-foreground/10 mx-auto" />
+               <div className="absolute inset-0 bg-primary/5 blur-3xl rounded-full" />
+            </div>
+            <div className="space-y-2">
+              <h2 className="text-2xl font-bold tracking-tight">No entities found</h2>
+              <p className="text-muted-foreground max-w-xs mx-auto text-sm leading-relaxed">
                 We couldn't find any movies matching your current search parameters.
               </p>
-              <button 
-                onClick={clearFilters}
-                className="px-10 py-3.5 bg-primary text-primary-foreground text-sm font-bold rounded-full hover:scale-105 active:scale-95 transition-all"
-              >
-                Clear all filters
-              </button>
-            </motion.div>
-          )
+            </div>
+            <button
+              onClick={clearFilters}
+              className="px-8 py-3 bg-primary text-primary-foreground text-xs font-black uppercase tracking-widest rounded-full hover:scale-105 active:scale-95 transition-all shadow-xl shadow-primary/20"
+            >
+              Reset All Filters
+            </button>
+          </div>
+        )}
+        
+        {hasMore && (
+          <div className="mt-20 flex justify-center pb-20">
+            <div className="flex flex-col items-center gap-4">
+              <Loader2 className="h-10 w-10 text-primary animate-spin" />
+              <span className="text-[10px] font-black text-muted-foreground/40 uppercase tracking-[0.3em] animate-pulse">Synchronizing Archives...</span>
+            </div>
+          </div>
         )}
       </div>
-
-      {loading && (
-        <div className="flex flex-col items-center justify-center py-20 gap-4">
-          <Loader2 className="h-10 w-10 text-primary animate-spin" />
-          <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest animate-pulse">Loading amazing content...</span>
-        </div>
-      )}
     </div>
   );
 }
