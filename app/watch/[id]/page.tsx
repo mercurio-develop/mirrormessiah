@@ -204,6 +204,7 @@ export default async function WatchPage({ params }: WatchPageProps) {
                       alt={movie.title}
                       fill
                       unoptimized
+                      priority
                       className="object-cover group-hover:scale-105 transition-transform duration-700"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent opacity-60" />

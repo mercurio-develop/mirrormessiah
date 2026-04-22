@@ -289,6 +289,7 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
                     alt={movie.title}
                     fill
                     unoptimized
+                    priority={idx < 6}
                     sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 15vw"
                     className="object-cover transition-transform duration-700 group-hover:scale-110"
                     onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder.svg'; }}
