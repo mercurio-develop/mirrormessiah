@@ -172,7 +172,7 @@ export default function Navbar() {
             </button>
           )}
 
-          {isAdmin && isDevelopment && (
+          {mounted && isAdmin && isDevelopment && (
             <Link 
                 href="/admin" 
                 className={`w-full flex items-center justify-center gap-3 p-4 rounded-2xl border font-bold uppercase tracking-[0.2em] text-[10px] transition-all ${pathname.startsWith('/admin') ? 'bg-primary/10 border-primary text-primary' : 'bg-muted/50 border-border text-muted-foreground'}`}
