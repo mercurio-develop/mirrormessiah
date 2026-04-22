@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft, Save, Film, Tag, Globe, Info, Loader2, Sparkles, User, Clock, ChevronDown } from 'lucide-react';
+import { createMovieAction } from '@/features/movie/actions/create-movie';
 
 interface Category {
   id: number;
@@ -12,7 +13,7 @@ interface Category {
 
 export default function NewMoviePage() {
   const router = useRouter();
-  const [loading, setLoading] = useState(false);
+  const [isPending, startTransition] = useTransition();
   const [categories, setCategories] = useState<Category[]>([]);
 
   const [formData, setFormData] = useState({
@@ -63,31 +64,15 @@ export default function NewMoviePage() {
     e.preventDefault();
     if (!formData.title.trim()) return;
 
-    setLoading(true);
-    try {
-      const response = await fetch('/api/movies', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...formData,
-          year: formData.year ? parseInt(formData.year) : null,
-          tmdb_id: formData.tmdb_id ? parseInt(formData.tmdb_id) : null,
-          runtime: formData.runtime ? parseInt(formData.runtime) : null,
-        })
-      });
+    startTransition(async () => {
+        const result = await createMovieAction(formData);
 
-      if (response.ok) {
-        router.push('/admin/movies');
-        router.refresh();
-      } else {
-        const error = await response.json();
-        alert("Registration Failed: " + (error.error || 'Server error'));
-      }
-    } catch (error) {
-      console.error('Sync failure:', error);
-    } finally {
-      setLoading(false);
-    }
+        if (result.status === 'success') {
+            router.push('/admin/movies');
+        } else {
+            alert("Registration Failed: " + (result.message || 'Server error'));
+        }
+    });
   };
 
   return (
@@ -267,10 +252,10 @@ export default function NewMoviePage() {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={isPending}
             className="w-full h-16 bg-primary text-primary-foreground font-extrabold uppercase tracking-widest text-sm hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-primary/20 flex items-center justify-center gap-3 group disabled:opacity-50 rounded-2xl"
           >
-            {loading ? <Loader2 className="h-6 w-6 animate-spin" /> : <><Save className="h-6 w-6" /> Save Movie</>}
+            {isPending ? <Loader2 className="h-6 w-6 animate-spin" /> : <><Save className="h-6 w-6" /> Save Movie</>}
           </button>
 
           <div className="p-6 bg-muted/20 border border-border rounded-2xl text-center">

@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useTransition } from 'react';
 import { X, Trash2, FolderOpen, Database, AlertTriangle, Loader2, Info } from 'lucide-react';
+import { deleteMovieAction } from '../actions/delete-movie';
 
 interface DeleteMovieModalProps {
   movie: { id: number, title: string };
@@ -11,7 +12,7 @@ interface DeleteMovieModalProps {
 }
 
 export default function DeleteMovieModal({ movie, isOpen, onClose, onDeleted }: DeleteMovieModalProps) {
-  const [loading, setLoading] = useState(false);
+  const [isPending, startTransition] = useTransition();
   const [conflictCheck, setConflictCheck] = useState<{ shared: boolean, count: number } | null>(null);
   const [checkLoading, setCheckCheckLoading] = useState(true);
 
@@ -43,27 +44,18 @@ export default function DeleteMovieModal({ movie, isOpen, onClose, onDeleted }: 
   }, [isOpen, movie.id]);
 
   const handleDelete = async (mode: 'registry' | 'full') => {
-    setLoading(true);
-    try {
-      const response = await fetch(`/api/movies/${movie.id}`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          deleteFiles: mode === 'full',
-          deleteDirectory: mode === 'full' 
-        })
-      });
+    startTransition(async () => {
+        const result = await deleteMovieAction(movie.id, { 
+            deleteFiles: mode === 'full',
+            deleteDirectory: mode === 'full' 
+        });
 
-      if (response.ok) {
-        onDeleted();
-      } else {
-        alert('Purge Protocol Failed');
-      }
-    } catch (error) {
-      console.error('Delete error:', error);
-    } finally {
-      setLoading(false);
-    }
+        if (result.status === 'success') {
+            onDeleted();
+        } else {
+            alert(result.message || 'Purge Protocol Failed');
+        }
+    });
   };
 
   if (!isOpen) return null;
@@ -95,7 +87,7 @@ export default function DeleteMovieModal({ movie, isOpen, onClose, onDeleted }: 
             {/* Option 1: Registry Only */}
             <button
               onClick={() => handleDelete('registry')}
-              disabled={loading}
+              disabled={isPending}
               className="w-full p-6 border border-border bg-muted/20 hover:bg-muted/40 rounded-2xl flex items-center gap-5 transition-all text-left group"
             >
               <div className="p-3 bg-background border border-border rounded-xl group-hover:border-primary/40 transition-colors">
@@ -110,7 +102,7 @@ export default function DeleteMovieModal({ movie, isOpen, onClose, onDeleted }: 
             {/* Option 2: Full Purge */}
             <button
               onClick={() => handleDelete('full')}
-              disabled={loading}
+              disabled={isPending}
               className="w-full p-6 border border-destructive/20 bg-destructive/5 hover:bg-destructive/10 rounded-2xl flex items-center gap-5 transition-all text-left group"
             >
               <div className="p-3 bg-background border border-destructive/20 rounded-xl group-hover:border-destructive/50 transition-colors">
@@ -160,7 +152,7 @@ export default function DeleteMovieModal({ movie, isOpen, onClose, onDeleted }: 
         </div>
       </div>
       
-      {loading && (
+      {isPending && (
         <div className="absolute inset-0 z-[210] bg-background/60 backdrop-blur-sm flex flex-col items-center justify-center gap-4">
            <Loader2 className="h-12 w-12 text-primary animate-spin" />
            <p className="text-[10px] font-black uppercase tracking-[0.5em] text-primary animate-pulse">Executing_Purge...</p>

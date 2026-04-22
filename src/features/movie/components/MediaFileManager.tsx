@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useTransition } from 'react';
 import {
   Video,
   ScanSearch,
@@ -17,6 +17,9 @@ import {
   Folder
 } from 'lucide-react';
 import FileBrowser from '@/components/FileBrowser';
+import { scanMovieFilesAction } from '../actions/scan-files';
+import { relinkMovieAction } from '../actions/relink-movie';
+import { deleteMovieFileAction } from '../actions/delete-file';
 
 interface MediaFile {
   id: number;
@@ -29,7 +32,7 @@ interface MediaFile {
 export default function MediaFileManager({ movieId }: { movieId: number }) {
   const [files, setFiles] = useState<MediaFile[]>([]);
   const [loading, setLoading] = useState(true);
-  const [scanning, setScanning] = useState(false);
+  const [isPending, startTransition] = useTransition();
   const [isBrowserOpen, setIsBrowserOpen] = useState(false);
   const [isDirBrowserOpen, setIsDirBrowserOpen] = useState(false);
   const [status, setStatus] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
@@ -60,63 +63,43 @@ export default function MediaFileManager({ movieId }: { movieId: number }) {
 
   const handleManualRelink = async () => {
     if (!manualPath.trim()) return;
-    try {
-      const res = await fetch(`/api/movies/${movieId}/relink`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ directoryPath: manualPath.trim() })
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        showStatus('error', data.error ?? 'Manual link failed');
-        return;
-      }
-      showStatus('success', 'Directory linked and scanned successfully');
-      setShowManualInput(false);
-      setManualPath('');
-      fetchFiles();
-    } catch {
-      showStatus('error', 'Manual link request failed');
-    }
+    startTransition(async () => {
+        const result = await relinkMovieAction(movieId, { directoryPath: manualPath.trim() });
+        if (result.status === 'success') {
+            showStatus('success', 'Directory linked and scanned successfully');
+            setShowManualInput(false);
+            setManualPath('');
+            fetchFiles();
+        } else {
+            showStatus('error', result.message || 'Manual link failed');
+        }
+    });
   };
 
   const handleScan = async () => {
-    setScanning(true);
-    try {
-      const res = await fetch(`/api/movies/${movieId}/scan-files`, { method: 'POST' });
-      const data = await res.json();
-      if (!res.ok) {
-        showStatus('error', data.error ?? 'Scan failed');
-        if (res.status === 404) setShowManualInput(true);
-        return;
-      }
-      showStatus('success', `Scanning complete: ${data.added} new files linked`);
-      fetchFiles();
-    } catch {
-      showStatus('error', 'Communication failure during scan');
-    } finally {
-      setScanning(false);
-    }
+    startTransition(async () => {
+        const result = await scanMovieFilesAction(movieId);
+        if (result.status === 'success') {
+            showStatus('success', result.message || 'Scanning complete');
+            fetchFiles();
+        } else {
+            showStatus('error', result.message || 'Scan failed');
+            if (result.message?.includes('No existing files')) setShowManualInput(true);
+        }
+    });
   };
 
   const handleRelink = async (filePath: string) => {
     setIsBrowserOpen(false);
-    try {
-      const res = await fetch(`/api/movies/${movieId}/relink`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filePath })
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        showStatus('error', data.error ?? 'Relink failed');
-        return;
-      }
-      showStatus('success', 'New media source synchronized');
-      fetchFiles();
-    } catch {
-      showStatus('error', 'Relink request failed');
-    }
+    startTransition(async () => {
+        const result = await relinkMovieAction(movieId, { filePath });
+        if (result.status === 'success') {
+            showStatus('success', 'New media source synchronized');
+            fetchFiles();
+        } else {
+            showStatus('error', result.message || 'Relink failed');
+        }
+    });
   };
 
   const handleDelete = async (fileId: number) => {
@@ -126,17 +109,15 @@ export default function MediaFileManager({ movieId }: { movieId: number }) {
     }
     if (!confirm('Are you sure you want to detach this file from the registry?')) return;
 
-    try {
-      const res = await fetch(`/api/movies/${movieId}/files/${fileId}`, { method: 'DELETE' });
-      if (!res.ok) {
-        showStatus('error', 'De-linking failed');
-        return;
-      }
-      setFiles(prev => prev.filter(f => f.id !== fileId));
-      showStatus('success', 'Media source detached from registry');
-    } catch {
-      showStatus('error', 'Delete request failed');
-    }
+    startTransition(async () => {
+        const result = await deleteMovieFileAction(movieId, fileId);
+        if (result.status === 'success') {
+            setFiles(prev => prev.filter(f => f.id !== fileId));
+            showStatus('success', 'Media source detached from registry');
+        } else {
+            showStatus('error', result.message || 'Delete request failed');
+        }
+    });
   };
 
   return (
@@ -162,11 +143,11 @@ export default function MediaFileManager({ movieId }: { movieId: number }) {
           <button
             type="button"
             onClick={handleScan}
-            disabled={scanning}
+            disabled={isPending}
             title="Scan the current directory for any new video files"
             className="h-10 px-4  hover:bg-zinc-700 text-white text-xs font-bold rounded-xl flex items-center gap-2 transition-all disabled:opacity-50"
           >
-            {scanning ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanSearch className="h-4 w-4" />}
+            {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanSearch className="h-4 w-4" />}
             <span className="hidden sm:inline text-[10px] uppercase tracking-widest">Refresh</span>
           </button>
           
