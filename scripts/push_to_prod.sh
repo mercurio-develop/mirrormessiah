@@ -55,14 +55,18 @@ try:
         conn.executescript(f.read())
     conn.commit()
     conn.close()
-    print('SUCCESS: Production database updated and verified.')
+    print('SUCCESS: Production database updated.')
 except Exception as e:
     print(f'FAILURE: Could not reconstruct DB: {e}')
     sys.exit(1)
 "
 
-# 6. Cleanup
-echo "[4/4] Cleaning up temporary files..."
+# 6. Ensure schema is current (runs migrations)
+echo "[4/5] Synchronizing registry schema..."
+docker exec "$CONTAINER_NAME" python3 scripts/mm.py status > /dev/null
+
+# 7. Cleanup
+echo "[5/5] Cleaning up temporary files..."
 rm "$SQL_DUMP"
 docker exec "$CONTAINER_NAME" rm -f "$PROD_SQL_PATH"
 
