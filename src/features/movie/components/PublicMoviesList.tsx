@@ -239,20 +239,28 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
 
            <div className="h-12 w-px bg-border/40 mx-2 hidden lg:block mb-1 shrink-0" />
 
-           {/* Audience Selection Dropdown */}
+           {/* Audience Selection */}
            <div className="flex flex-col gap-2 shrink-0">
               <span className="text-[11px] uppercase tracking-[0.2em] font-black text-foreground/50 ml-1">Classification</span>
-              <div className="relative group/select">
-                <select
-                  value={selectedAudience}
-                  onChange={(e) => handleAudienceChange(e.target.value)}
-                  className="bg-card border border-border rounded-xl px-6 py-3 text-sm font-extrabold outline-none cursor-pointer hover:border-primary/40 transition-all appearance-none pr-12 shadow-md group-hover/select:bg-muted/50"
-                >
-                  <option value="" className="bg-background">All Access</option>
-                  <option value="family" className="bg-background text-green-500">Family Mode</option>
-                  <option value="adult" className="bg-background text-red-500">Adult Only</option>
-                </select>
-                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 pointer-events-none text-muted-foreground transition-transform group-hover/select:translate-y-[-40%]" />
+              <div className="flex gap-2.5">
+                {[
+                  { id: '', label: 'All', icon: null },
+                  { id: 'family', label: 'Family', icon: <div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.8)]" /> },
+                  { id: 'adult', label: 'Adult', icon: <div className="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.8)]" /> }
+                ].map(cat => (
+                  <button 
+                    key={cat.id}
+                    onClick={() => handleAudienceChange(cat.id)}
+                    className={`flex items-center gap-2.5 px-6 py-3 rounded-xl border text-sm font-extrabold transition-all shadow-md active:scale-95 ${
+                      selectedAudience === cat.id 
+                        ? 'bg-primary border-primary text-primary-foreground shadow-[0_0_20px_rgba(56,189,248,0.3)] ring-2 ring-primary/20' 
+                        : 'bg-card border-border hover:border-primary/40 text-foreground hover:bg-muted/50'
+                    }`}
+                  >
+                    {cat.icon}
+                    {cat.label}
+                  </button>
+                ))}
               </div>
            </div>
 
