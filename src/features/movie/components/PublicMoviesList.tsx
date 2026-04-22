@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { useAdmin } from '@/contexts/AdminContext';
 import { motion, AnimatePresence } from 'framer-motion';
+import Dropdown from '@/components/ui/Dropdown';
 
 interface PublicMoviesListProps {
   initialMovies: MovieWithFile[];
@@ -266,57 +267,39 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
 
            <div className="h-12 w-px bg-border/40 mx-2 hidden lg:block mb-1 shrink-0" />
 
-           {/* Genre Dropdown */}
-           <div className="flex flex-col gap-2 shrink-0">
-              <span className="text-[11px] uppercase tracking-[0.2em] font-black text-foreground/50 ml-1">Genre</span>
-              <div className="relative group/select">
-                <select
-                  value={selectedGenre}
-                  onChange={(e) => handleGenreChange(e.target.value)}
-                  className="bg-card border border-border rounded-xl px-6 py-3 text-sm font-extrabold outline-none cursor-pointer hover:border-primary/40 transition-all appearance-none pr-12 shadow-md group-hover/select:bg-muted/50"
-                >
-                  <option value="" className="bg-background">All Genres</option>
-                  {GENRE_OPTIONS.map(g => <option key={g} value={g} className="bg-background">{g}</option>)}
-                </select>
-                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 pointer-events-none text-muted-foreground transition-transform group-hover/select:translate-y-[-40%]" />
-              </div>
-           </div>
+           {/* Genre Custom Dropdown */}
+           <Dropdown 
+             label="Genre"
+             placeholder="All Genres"
+             value={selectedGenre}
+             onChange={handleGenreChange}
+             options={GENRE_OPTIONS.map(g => ({ value: g, label: g }))}
+             className="w-48"
+           />
 
            <div className="h-12 w-px bg-border/40 mx-2 hidden lg:block mb-1 shrink-0" />
 
-           {/* Quality Dropdown */}
-           <div className="flex flex-col gap-2 shrink-0">
-              <span className="text-[11px] uppercase tracking-[0.2em] font-black text-foreground/50 ml-1">Resolution</span>
-              <div className="relative group/select">
-                <select
-                  value={selectedQuality}
-                  onChange={(e) => setSelectedQuality(e.target.value)}
-                  className="bg-card border border-border rounded-xl px-6 py-3 text-sm font-extrabold outline-none cursor-pointer hover:border-primary/40 transition-all appearance-none pr-12 shadow-md group-hover/select:bg-muted/50"
-                >
-                  <option value="" className="bg-background">All Qualities</option>
-                  {qualities.map(q => <option key={q} value={q} className="bg-background">{q}</option>)}
-                </select>
-                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 pointer-events-none text-muted-foreground transition-transform group-hover/select:translate-y-[-40%]" />
-              </div>
-           </div>
+           {/* Quality Custom Dropdown */}
+           <Dropdown 
+             label="Resolution"
+             placeholder="All Qualities"
+             value={selectedQuality}
+             onChange={setSelectedQuality}
+             options={qualities.map(q => ({ value: q, label: q }))}
+             className="w-40"
+           />
 
            <div className="h-12 w-px bg-border/40 mx-2 hidden lg:block mb-1 shrink-0" />
 
-           {/* Year Dropdown */}
-           <div className="flex flex-col gap-2 shrink-0 pr-4 lg:pr-0">
-              <span className="text-[11px] uppercase tracking-[0.2em] font-black text-foreground/50 ml-1">Release Year</span>
-              <div className="relative group/select">
-                <select
-                  value={selectedYear}
-                  onChange={(e) => setSelectedYear(e.target.value)}
-                  className="bg-card border border-border rounded-xl px-6 py-3 text-sm font-extrabold outline-none cursor-pointer hover:border-primary/40 transition-all appearance-none pr-12 shadow-md group-hover/select:bg-muted/50"
-                >
-                  <option value="" className="bg-background">All Eras</option>
-                  {years.slice(0, 50).map(y => <option key={y} value={y} className="bg-background">{y}</option>)}
-                </select>
-                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 pointer-events-none text-muted-foreground transition-transform group-hover/select:translate-y-[-40%]" />
-              </div>
-           </div>
+           {/* Year Custom Dropdown */}
+           <Dropdown 
+             label="Release Year"
+             placeholder="All Eras"
+             value={selectedYear}
+             onChange={setSelectedYear}
+             options={years.slice(0, 50).map(y => ({ value: y, label: y }))}
+             className="w-40 pr-4 lg:pr-0"
+           />
 
            {isFiltered && (
              <div className="flex flex-col gap-2 shrink-0 pb-[1px] pr-6 lg:pr-0">
