@@ -192,58 +192,61 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
   const isFiltered = searchTerm || selectedQuality || selectedYear || selectedAudience || selectedGenre || sort !== 'title_asc';
 
   return (
-    <div className="space-y-12 pb-24 pt-10">
+    <div className="space-y-10 pb-24 pt-10">
       {/* Search & Filters Section */}
-      <div className="flex flex-col gap-8 max-w-7xl mx-auto w-full px-6">
+      <div className="flex flex-col gap-6 max-w-7xl mx-auto w-full px-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="relative flex-1 max-w-2xl group">
+          <div className="relative flex-1 max-w-3xl group">
              <div className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground transition-colors group-focus-within:text-primary">
                 {loading ? <Loader2 className="h-full w-full animate-spin" /> : <Search className="h-full w-full" />}
              </div>
              <input
                 type="text"
-                placeholder="Search by title, director, year..."
+                placeholder="Search database..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full h-14 bg-transparent pl-8 pr-40 text-lg font-semibold placeholder:text-muted-foreground/30 focus:outline-none border-b border-border focus:border-primary transition-all"
+                className="w-full h-14 bg-transparent pl-8 pr-48 text-lg font-semibold placeholder:text-muted-foreground/30 focus:outline-none border-b border-border focus:border-primary transition-all"
              />
-             <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-3 pr-2">
+             <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-2 pr-1">
+                {isFiltered && (
+                   <button 
+                     onClick={clearFilters} 
+                     className="flex items-center gap-1.5 px-3 py-1.5 hover:bg-destructive/10 text-destructive text-[10px] font-black uppercase tracking-widest rounded-lg border border-destructive/20 transition-all active:scale-95"
+                   >
+                      <X className="h-3 w-3" /> Clear
+                   </button>
+                )}
                 <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/40 bg-muted/20 px-3 py-1.5 rounded-lg border border-border/50">
                     {totalCount} Entries
                 </span>
-                {searchTerm && (
-                    <button onClick={() => setSearchTerm('')} className="p-2 hover:bg-muted rounded-full transition-colors text-muted-foreground/40 hover:text-foreground">
-                        <X className="h-4 w-4" />
-                    </button>
-                )}
              </div>
           </div>
         </div>
 
         {/* Filter Row - Horizontally scrollable on mobile */}
-        <div className="flex flex-nowrap lg:flex-wrap items-end gap-6 overflow-x-auto pb-4 -mx-6 px-6 lg:mx-0 lg:px-0 scrollbar-hide">
+        <div className="flex flex-nowrap lg:flex-wrap items-end gap-4 overflow-x-auto pb-4 -mx-6 px-6 lg:mx-0 lg:px-0 scrollbar-hide">
            {/* Sort Toggle */}
            <div className="flex flex-col gap-2 shrink-0">
-              <span className="text-[11px] uppercase tracking-[0.2em] font-black text-foreground/50 ml-1">Sort Order</span>
+              <span className="text-[11px] uppercase tracking-[0.2em] font-black text-foreground/50 ml-1">Sort</span>
               <button 
                   onClick={() => setSort(sort === 'title_asc' ? 'title_desc' : 'title_asc')}
-                  className={`flex items-center gap-2.5 px-6 py-3 rounded-xl border text-sm font-extrabold transition-all shadow-md active:scale-95 ${
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-extrabold transition-all shadow-md active:scale-95 ${
                     sort === 'title_asc' 
                       ? 'bg-primary border-primary text-primary-foreground shadow-[0_0_20px_rgba(56,189,248,0.3)] ring-2 ring-primary/20' 
                       : 'bg-card border-border hover:border-primary/40 text-foreground hover:bg-muted/50'
                   }`}
               >
                   {sort === 'title_asc' ? <ArrowDownAZ className="h-4 w-4" /> : <ArrowUpAZ className="h-4 w-4" />}
-                  {sort === 'title_asc' ? 'Title A-Z' : 'Title Z-A'}
+                  {sort === 'title_asc' ? 'A-Z' : 'Z-A'}
               </button>
            </div>
 
-           <div className="h-12 w-px bg-border/40 mx-2 hidden lg:block mb-1 shrink-0" />
+           <div className="h-10 w-px bg-border/40 mx-1 hidden lg:block mb-1 shrink-0" />
 
            {/* Audience Selection */}
            <div className="flex flex-col gap-2 shrink-0">
               <span className="text-[11px] uppercase tracking-[0.2em] font-black text-foreground/50 ml-1">Classification</span>
-              <div className="flex gap-2.5">
+              <div className="flex gap-2">
                 {[
                   { id: '', label: 'All', icon: null },
                   { id: 'family', label: 'Family', icon: <div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.8)]" /> },
@@ -252,7 +255,7 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
                   <button 
                     key={cat.id}
                     onClick={() => handleAudienceChange(cat.id)}
-                    className={`flex items-center gap-2.5 px-6 py-3 rounded-xl border text-sm font-extrabold transition-all shadow-md active:scale-95 ${
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-extrabold transition-all shadow-md active:scale-95 ${
                       selectedAudience === cat.id 
                         ? 'bg-primary border-primary text-primary-foreground shadow-[0_0_20px_rgba(56,189,248,0.3)] ring-2 ring-primary/20' 
                         : 'bg-card border-border hover:border-primary/40 text-foreground hover:bg-muted/50'
@@ -265,7 +268,7 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
               </div>
            </div>
 
-           <div className="h-12 w-px bg-border/40 mx-2 hidden lg:block mb-1 shrink-0" />
+           <div className="h-10 w-px bg-border/40 mx-1 hidden lg:block mb-1 shrink-0" />
 
            {/* Genre Custom Dropdown */}
            <Dropdown 
@@ -274,10 +277,10 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
              value={selectedGenre}
              onChange={handleGenreChange}
              options={GENRE_OPTIONS.map(g => ({ value: g, label: g }))}
-             className="w-48"
+             className="w-44"
            />
 
-           <div className="h-12 w-px bg-border/40 mx-2 hidden lg:block mb-1 shrink-0" />
+           <div className="h-10 w-px bg-border/40 mx-1 hidden lg:block mb-1 shrink-0" />
 
            {/* Quality Custom Dropdown */}
            <Dropdown 
@@ -286,10 +289,10 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
              value={selectedQuality}
              onChange={setSelectedQuality}
              options={qualities.map(q => ({ value: q, label: q }))}
-             className="w-40"
+             className="w-36"
            />
 
-           <div className="h-12 w-px bg-border/40 mx-2 hidden lg:block mb-1 shrink-0" />
+           <div className="h-10 w-px bg-border/40 mx-1 hidden lg:block mb-1 shrink-0" />
 
            {/* Year Custom Dropdown */}
            <Dropdown 
@@ -298,21 +301,8 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
              value={selectedYear}
              onChange={setSelectedYear}
              options={years.slice(0, 50).map(y => ({ value: y, label: y }))}
-             className="w-40 pr-4 lg:pr-0"
+             className="w-36 pr-4 lg:pr-0"
            />
-
-           {isFiltered && (
-             <div className="flex flex-col gap-2 shrink-0 pb-[1px] pr-6 lg:pr-0">
-                <span className="text-[11px] uppercase tracking-[0.2em] font-black text-transparent ml-1">.</span>
-                <button 
-                    onClick={clearFilters} 
-                    className="h-[46px] px-6 bg-destructive/10 border border-destructive/20 hover:bg-destructive hover:text-destructive-foreground text-destructive text-sm font-black uppercase tracking-widest rounded-xl transition-all flex items-center gap-2 group/reset shadow-lg shadow-destructive/5 active:scale-95"
-                >
-                    <X className="h-4 w-4 group-hover/reset:rotate-90 transition-transform duration-300" /> 
-                    Reset
-                </button>
-             </div>
-           )}
         </div>
       </div>
 

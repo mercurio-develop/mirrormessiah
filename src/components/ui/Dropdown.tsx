@@ -50,7 +50,7 @@ export default function Dropdown({
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}
-          className={`w-full flex items-center justify-between gap-4 px-6 py-3 bg-card border border-border rounded-xl text-sm font-extrabold transition-all shadow-md hover:border-primary/40 text-left active:scale-[0.98] ${
+          className={`w-full flex items-center justify-between gap-3 px-4 py-2.5 bg-card border border-border rounded-xl text-sm font-extrabold transition-all shadow-md hover:border-primary/40 text-left active:scale-[0.98] ${
             isOpen ? 'ring-4 ring-primary/5 border-primary/40' : ''
           }`}
         >
