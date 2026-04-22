@@ -147,11 +147,22 @@ class MessiahManager:
 
         video_extensions = {'.mkv', '.mp4', '.avi', '.mov', '.m4v', '.webm'}
         found_count = 0
+        skip_quality = re.compile(r'2160p|4K|UHD|BLURAY|BRRIP|BDRIP', re.IGNORECASE)
 
         for folder in root.rglob('*'):
             if folder.is_dir() and folder != root:
                 videos = [f for f in folder.iterdir() if f.is_file() and f.suffix.lower() in video_extensions]
                 if not videos: continue
+
+                if skip_quality.search(folder.name):
+                    # Workaround: allow BLURAY/BRRIP if it's 1080p and contains a .mp4 file
+                    if re.search(r'BLURAY|BRRIP|BDRIP', folder.name, re.IGNORECASE) and re.search(r'1080p', folder.name, re.IGNORECASE):
+                        if not any(f.suffix.lower() == '.mp4' for f in videos):
+                            print(f"  [SKIP] Quality filter (No 1080p MP4): {folder.name}")
+                            continue
+                    else:
+                        print(f"  [SKIP] Quality filter: {folder.name}")
+                        continue
 
                 title, year, quality = parse_metadata(folder.name)
                 

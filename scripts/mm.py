@@ -294,8 +294,14 @@ def ingest_path(db: sqlite3.Connection, path: Path, library_id: int, auto_scrape
 
     # Skip 4K/2160p folders
     if SKIP_QUALITY.search(folder.name):
-        print(f'  Skipping 4K: {folder.name}')
-        return False
+        # Workaround: allow BLURAY/BRRIP if it's 1080p and contains a .mp4 file
+        if re.search(r'BLURAY|BRRIP|BDRIP', folder.name, re.IGNORECASE) and re.search(r'1080p', folder.name, re.IGNORECASE):
+            if not any(f.suffix.lower() == '.mp4' for f in video_files):
+                print(f'  Skipping 4K/Bluray (No 1080p MP4): {folder.name}')
+                return False
+        else:
+            print(f'  Skipping 4K: {folder.name}')
+            return False
 
     meta = parse_folder_name(folder.name)
 
