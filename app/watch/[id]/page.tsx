@@ -1,13 +1,13 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import MediaPlayer from '@/components/MediaPlayer';
+import MediaPlayer from '@/features/movie/components/MediaPlayer';
 import HeroBackdrop from '@/components/HeroBackdrop';
 import {ChevronLeft, Star, Calendar, Hash, Clock, Info, Activity, Globe, User, Edit, Sparkles, AlertCircle} from 'lucide-react';
 import { getMovie } from '@/features/movie/queries/get-movie';
 import { getMoviePlayback } from '@/features/movie/queries/get-movie-playback';
 import { b64urlEncode } from '@/lib/b64url';
 import Image from 'next/image';
-import AdminEditButton from '@/components/AdminEditButton';
+import AdminEditButton from '@/features/movie/components/AdminEditButton';
 
 interface WatchPageProps {
   params: Promise<{ id: string }>;
