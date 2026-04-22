@@ -35,7 +35,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && rm -rf /var/lib/apt/lists/*
 
 # Install CLI dependencies
-RUN pip3 install --no-cache-dir requests python-dotenv beautifulsoup4 --break-system-packages
+RUN pip3 install --no-cache-dir --root-user-action=ignore requests python-dotenv beautifulsoup4 --break-system-packages
 
 RUN addgroup --system --gid 1001 nodejs \
   && adduser --system --uid 1001 nextjs
