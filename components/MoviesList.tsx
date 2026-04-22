@@ -132,7 +132,7 @@ export default function MoviesList({ initialMovies }: MoviesListProps) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-        {movies.map((movie) => (
+        {movies.map((movie, idx) => (
           <div key={movie.id} className="bg-muted/20 border border-border/50 p-4 flex gap-5 group hover:bg-muted/40 hover:border-border transition-all duration-300 rounded-2xl">
             <div className="w-20 shrink-0 relative aspect-poster bg-muted rounded-lg overflow-hidden shadow-md">
                <Image
@@ -140,6 +140,7 @@ export default function MoviesList({ initialMovies }: MoviesListProps) {
                   alt={movie.title}
                   fill
                   unoptimized
+                  priority={idx < 4}
                   className="object-cover transition-transform duration-500 group-hover:scale-110"
                   sizes="80px"
                   onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder.svg'; }}
