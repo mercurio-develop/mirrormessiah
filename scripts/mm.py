@@ -556,6 +556,8 @@ def cmd_full(args):
     if not hasattr(args, 'no_scrape'): args.no_scrape = False
     if not hasattr(args, 'no_backup'): args.no_backup = False
     if not hasattr(args, 'lax'): args.lax = False
+    if not hasattr(args, 'force'): args.force = False
+    if not hasattr(args, 'dry_run'): args.dry_run = False
     
     cmd_sync(args)
     cmd_cleanup(args)
