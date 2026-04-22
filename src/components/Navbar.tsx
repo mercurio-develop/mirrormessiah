@@ -82,9 +82,14 @@ export default function Navbar() {
             </Link>
             <button 
               onClick={toggleFamilyMode}
-              className={`text-sm font-bold transition-all px-4 py-1.5 rounded-full border flex items-center gap-2 ${isFamilyMode ? 'bg-green-600 border-green-500 text-white shadow-[0_0_15px_rgba(22,163,74,0.4)]' : 'bg-green-600/10 border-green-600/20 text-green-500 hover:bg-green-600/20'}`}
+              className={`text-sm font-bold transition-all px-5 py-2 rounded-full border flex items-center gap-2.5 active:scale-95 ${
+                isFamilyMode 
+                ? 'bg-green-500 border-green-400 text-white shadow-[0_0_25px_rgba(34,197,94,0.4)] animate-in zoom-in-95' 
+                : 'bg-green-500/10 border-green-500/20 text-green-500 hover:bg-green-500/20'
+              }`}
             >
-              <Sparkles className="w-4 h-4" /> {isFamilyMode ? 'Family Active' : 'Family Mode'}
+              <Sparkles className={`w-4 h-4 ${isFamilyMode ? 'animate-pulse' : ''}`} /> 
+              {isFamilyMode ? 'Magic Active' : 'Family Mode'}
             </button>
             
             {/* Admin Link - Desktop */}
@@ -158,10 +163,14 @@ export default function Navbar() {
             </Link>
             <button 
               onClick={toggleFamilyMode}
-              className={`flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border transition-all ${isFamilyMode ? 'bg-green-600/10 border-green-500 text-green-500' : 'bg-muted/50 border-border text-muted-foreground'}`}
+              className={`flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border transition-all active:scale-95 ${
+                isFamilyMode 
+                ? 'bg-green-500/10 border-green-500 text-green-500 shadow-[0_0_20px_rgba(34,197,94,0.1)]' 
+                : 'bg-muted/50 border-border text-muted-foreground'
+              }`}
             >
-              <Sparkles className="w-6 h-6" />
-              <span className="text-xs font-bold uppercase tracking-widest">{isFamilyMode ? 'Family On' : 'Family Off'}</span>
+              <Sparkles className={`w-6 h-6 ${isFamilyMode ? 'animate-bounce' : ''}`} />
+              <span className="text-xs font-bold uppercase tracking-widest">{isFamilyMode ? 'Magic On' : 'Family Off'}</span>
             </button>
           </div>
 

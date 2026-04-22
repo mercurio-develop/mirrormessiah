@@ -319,12 +319,20 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
             {movies.map((movie, idx) => (
               <motion.div 
                 key={movie.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4, delay: (idx % 12) * 0.05 }}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ 
+                  type: 'spring', 
+                  duration: 0.5, 
+                  bounce: selectedAudience === 'family' ? 0.4 : 0.2,
+                  delay: (idx % 12) * 0.05 
+                }}
+                whileHover={selectedAudience === 'family' ? { scale: 1.05, rotate: [0, -1, 1, 0] } : { y: -5 }}
                 className="flex flex-col gap-4 group"
               >
-                <Link href={"/watch/" + movie.id} className="block relative aspect-poster bg-muted rounded-lg overflow-hidden content-scale shadow-xl group-hover:shadow-primary/10">
+                <Link href={"/watch/" + movie.id} className={`block relative aspect-poster bg-muted rounded-lg overflow-hidden content-scale shadow-xl ${
+                  selectedAudience === 'family' ? 'group-hover:shadow-green-500/20 group-hover:border-green-500/30 border-2 border-transparent transition-all' : 'group-hover:shadow-primary/10'
+                }`}>
                   <Image
                     src={getPosterUrl(movie.thumbnail)}
                     alt={movie.title}
@@ -349,6 +357,12 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
                   <div className="absolute bottom-2 left-2 px-1.5 py-0.5 bg-primary/20 backdrop-blur-md rounded border border-primary/30 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-[10px] group-hover:translate-y-0">
                     <span className="text-[8px] font-black text-primary uppercase tracking-tighter">{movie.quality || 'HDR'}</span>
                   </div>
+
+                  {selectedAudience === 'family' && (
+                    <div className="absolute top-2 left-2 p-1.5 bg-green-500 rounded-full shadow-lg shadow-green-500/50 animate-bounce">
+                      <Sparkles className="h-3 w-3 text-white fill-current" />
+                    </div>
+                  )}
                 </Link>
 
                 <div className="space-y-1">
@@ -360,7 +374,7 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
                     {movie.audience === 'family' && (
                         <div className="flex items-center gap-1 text-[9px] font-black text-green-500 uppercase tracking-tighter">
                             <Sparkles className="h-2.5 w-2.5" />
-                            Family
+                            Family Friendly
                         </div>
                     )}
                   </div>
@@ -371,20 +385,32 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
         ) : (
           <div className="py-32 text-center space-y-6 animate-in fade-in zoom-in duration-700">
             <div className="relative inline-block">
-               <Search className="h-20 w-20 text-muted-foreground/10 mx-auto" />
+               {selectedAudience === 'family' ? (
+                 <Sparkles className="h-20 w-20 text-green-500/20 mx-auto animate-pulse" />
+               ) : (
+                 <Search className="h-20 w-20 text-muted-foreground/10 mx-auto" />
+               )}
                <div className="absolute inset-0 bg-primary/5 blur-3xl rounded-full" />
             </div>
             <div className="space-y-2">
-              <h2 className="text-2xl font-bold tracking-tight">No entities found</h2>
+              <h2 className="text-2xl font-bold tracking-tight">
+                {selectedAudience === 'family' ? 'Oh no! The magic is hidden!' : 'No entities found'}
+              </h2>
               <p className="text-muted-foreground max-w-xs mx-auto text-sm leading-relaxed">
-                We couldn't find any movies matching your current search parameters.
+                {selectedAudience === 'family' 
+                  ? "We couldn't find any magic movies with those search words. Try something else!"
+                  : "We couldn't find any movies matching your current search parameters."}
               </p>
             </div>
             <button
               onClick={clearFilters}
-              className="px-8 py-3 bg-primary text-primary-foreground text-xs font-black uppercase tracking-widest rounded-full hover:scale-105 active:scale-95 transition-all shadow-xl shadow-primary/20"
+              className={`px-8 py-3 text-xs font-black uppercase tracking-widest rounded-full hover:scale-105 active:scale-95 transition-all shadow-xl ${
+                selectedAudience === 'family' 
+                ? 'bg-green-600 text-white shadow-green-500/20 hover:bg-green-500' 
+                : 'bg-primary text-primary-foreground shadow-primary/20'
+              }`}
             >
-              Reset All Filters
+              {selectedAudience === 'family' ? 'See All Magic Movies' : 'Reset All Filters'}
             </button>
           </div>
         )}
