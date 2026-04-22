@@ -133,17 +133,24 @@ export async function requireGateKey(request: Request): Promise<void> {
     throw new AuthError('Gate key not configured on server', 500);
   }
 
+  const url = new URL(request.url);
+  const tokenQuery = url.searchParams.get('t');
+
   const cookie = request.headers.get('cookie');
+  let tokenMatch = null;
   if (cookie) {
-    const tokenMatch = cookie.match(/mm_gate_token=([^;]+)/);
-    if (tokenMatch) {
-      try {
-        const SECRET_KEY = new TextEncoder().encode(gateKey);
-        await jwtVerify(tokenMatch[1], SECRET_KEY);
-        return; // Valid session
-      } catch (e) {
-        // Fall through to error
-      }
+    tokenMatch = cookie.match(/mm_gate_token=([^;]+)/);
+  }
+
+  const token = tokenQuery || (tokenMatch ? tokenMatch[1] : null);
+
+  if (token) {
+    try {
+      const SECRET_KEY = new TextEncoder().encode(gateKey);
+      await jwtVerify(token, SECRET_KEY);
+      return; // Valid session
+    } catch (e) {
+      // Fall through to error
     }
   }
 

@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import videojs from 'video.js';
 import 'video.js/dist/video-js.css';
+import '@silvermine/videojs-chromecast/dist/silvermine-videojs-chromecast.css';
+import '@silvermine/videojs-airplay/dist/silvermine-videojs-airplay.css';
 import { AlertCircle, RefreshCcw } from 'lucide-react';
 
 interface SubtitleTrack {
@@ -52,10 +54,24 @@ export default function MediaPlayer({
 
       videoRef.current.appendChild(videoElement);
 
+      if (typeof window !== 'undefined') {
+        if (!videojs.getPlugin('chromecast')) {
+          require('@silvermine/videojs-chromecast')(videojs, { preloadWebComponents: true });
+        }
+        if (!videojs.getPlugin('airPlay')) {
+          require('@silvermine/videojs-airplay')(videojs);
+        }
+      }
+
       const player = videojs(videoElement, {
         controls: true,
         responsive: true,
         fill: true,
+        techOrder: ['chromecast', 'html5'],
+        plugins: {
+          chromecast: {},
+          airPlay: {}
+        },
         playbackRates: [0.5, 1, 1.25, 1.5, 2],
         html5: {
           vhs: {
