@@ -167,7 +167,7 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
       if (genre) url += "&genre=" + encodeURIComponent(genre);
       url += "&sort=" + sortOrder;
       
-      const res = await fetch(url);
+      const res = await fetch(url, { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
         const newMovies = data.movies || [];
@@ -204,11 +204,78 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
+  const [restored, setRestored] = useState({ done: false, didRestore: false });
+
   useEffect(() => {
-    // Scroll to top on filter change for immediate feedback
+    let didRestore = false;
+    const saved = sessionStorage.getItem('mm_movies_state');
+    if (saved) {
+      try {
+        const state = JSON.parse(saved);
+        setSearchTerm(state.searchTerm || '');
+        setDebouncedSearch(state.searchTerm || '');
+        setSelectedQuality(state.selectedQuality || '');
+        setSelectedYear(state.selectedYear || '');
+        setSort(state.sort || 'title_asc');
+        
+        setMovies(state.movies || initialMovies);
+        offsetRef.current = state.offset || initialMovies.length;
+        setHasMore(state.hasMore ?? (initialMovies.length >= ITEMS_PER_LOAD));
+        setTotalCount(state.totalCount || 0);
+
+        didRestore = true;
+
+        setTimeout(() => {
+          window.scrollTo({ top: state.scrollY || 0, behavior: 'instant' });
+          sessionStorage.removeItem('mm_movies_state');
+        }, 100);
+      } catch (e) {}
+    }
+    
+    setRestored({ done: true, didRestore });
+  }, [initialMovies]);
+
+  const isInitialMount = useRef(true);
+  const lastStateString = useRef('');
+
+  useEffect(() => {
+    if (!restored.done) return;
+
+    const currentStateString = JSON.stringify({
+      debouncedSearch, selectedQuality, selectedYear, selectedAudience, sort, selectedGenre
+    });
+
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      lastStateString.current = currentStateString;
+      
+      if (!restored.didRestore) {
+         fetchMovies(debouncedSearch, selectedQuality, selectedYear, selectedAudience, sort, selectedGenre, true);
+      }
+      return;
+    }
+
+    if (currentStateString === lastStateString.current) return;
+
+    lastStateString.current = currentStateString;
     window.scrollTo({ top: 0, behavior: 'instant' });
     fetchMovies(debouncedSearch, selectedQuality, selectedYear, selectedAudience, sort, selectedGenre, true);
-  }, [debouncedSearch, selectedQuality, selectedYear, selectedAudience, sort, selectedGenre, fetchMovies]);
+  }, [debouncedSearch, selectedQuality, selectedYear, selectedAudience, sort, selectedGenre, restored, fetchMovies]);
+
+  const saveStateAndScroll = () => {
+    const state = {
+      movies,
+      offset: offsetRef.current,
+      hasMore,
+      totalCount,
+      scrollY: window.scrollY,
+      searchTerm,
+      selectedQuality,
+      selectedYear,
+      sort
+    };
+    sessionStorage.setItem('mm_movies_state', JSON.stringify(state));
+  };
 
   const handleScroll = useCallback(() => {
     if (loadingRef.current || !hasMore) return;
@@ -412,9 +479,13 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
                 whileHover={{ scale: 1.02 }}
                 className="flex flex-col gap-4 group"
               >
-                <Link href={"/watch/" + movie.id} className={`block relative aspect-poster bg-muted rounded-xl overflow-hidden shadow-xl border-2 border-transparent transition-all duration-300 ${
-                  selectedAudience === 'family' ? 'group-hover:shadow-green-500/10 group-hover:border-green-500/20' : 'group-hover:shadow-primary/10 group-hover:border-primary/20'
-                }`}>
+                <Link 
+                  href={"/watch/" + movie.id} 
+                  onClick={saveStateAndScroll}
+                  className={`block relative aspect-poster bg-muted rounded-xl overflow-hidden shadow-xl border-2 border-transparent transition-all duration-300 ${
+                    selectedAudience === 'family' ? 'group-hover:shadow-green-500/10 group-hover:border-green-500/20' : 'group-hover:shadow-primary/10 group-hover:border-primary/20'
+                  }`}
+                >
                   <Image
                     src={getPosterUrl(movie.thumbnail)}
                     alt={movie.title}
