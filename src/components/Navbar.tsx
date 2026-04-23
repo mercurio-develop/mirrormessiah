@@ -90,7 +90,7 @@ export default function Navbar() {
             >
               <Sparkles className="w-4 h-4" />
               Family Mode
-            </button>            
+            </button>
             {/* Admin Link - Desktop */}
             {mounted && isDevelopment && isAdmin && (
                <Link 
@@ -169,7 +169,7 @@ export default function Navbar() {
               }`}
             >
               <Sparkles className="w-6 h-6" />
-              <span className="text-xs font-bold uppercase tracking-widest">{isFamilyMode ? 'Magic Mode On' : 'Magic Mode Off'}</span>
+              <span className="text-xs font-bold uppercase tracking-widest">Family Mode</span>
             </button>
           </div>
 
