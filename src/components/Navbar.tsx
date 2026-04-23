@@ -80,18 +80,17 @@ export default function Navbar() {
             >
               Browse
             </Link>
-            <button 
+            <button
               onClick={toggleFamilyMode}
               className={`text-sm font-bold transition-all px-5 py-2 rounded-full border flex items-center gap-2.5 active:scale-95 ${
-                isFamilyMode 
-                ? 'bg-green-500 border-green-400 text-white shadow-[0_0_25px_rgba(34,197,94,0.4)]' 
+                isFamilyMode
+                ? 'bg-green-500 border-green-400 text-white shadow-[0_0_25px_rgba(34,197,94,0.4)]'
                 : 'bg-green-500/10 border-green-500/20 text-green-500 hover:bg-green-600/20'
               }`}
             >
-              <Sparkles className="w-4 h-4" /> 
-              {isFamilyMode ? 'Magic Active' : 'Family Mode'}
-            </button>
-            
+              <Sparkles className="w-4 h-4" />
+              Family Mode
+            </button>            
             {/* Admin Link - Desktop */}
             {mounted && isDevelopment && isAdmin && (
                <Link 
@@ -170,7 +169,7 @@ export default function Navbar() {
               }`}
             >
               <Sparkles className="w-6 h-6" />
-              <span className="text-xs font-bold uppercase tracking-widest">{isFamilyMode ? 'Magic On' : 'Family Off'}</span>
+              <span className="text-xs font-bold uppercase tracking-widest">{isFamilyMode ? 'Magic Mode On' : 'Magic Mode Off'}</span>
             </button>
           </div>
 
