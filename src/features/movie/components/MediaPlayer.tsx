@@ -219,21 +219,6 @@ export default function MediaPlayer({
            </div>
            
            <div className="flex flex-col sm:flex-row items-center gap-4 mt-10">
-             {id && (
-               <a 
-                    href={`/api/movies/${id}/vlc.m3u`}
-                    className="px-6 py-3 bg-orange-500 text-white hover:bg-orange-600 text-xs font-black uppercase tracking-widest rounded-full transition-all flex items-center gap-2 shadow-xl"
-               >
-                  Play in VLC
-               </a>
-             )}
-             <a 
-                  href={src}
-                  download
-                  className="px-6 py-3 bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-black uppercase tracking-widest rounded-full transition-all flex items-center gap-2 shadow-xl"
-             >
-                Download File
-             </a>
              <button 
                   onClick={() => window.location.reload()}
                   className="px-6 py-3 bg-white/10 text-white hover:bg-white/20 border border-white/20 text-xs font-black uppercase tracking-widest rounded-full transition-all flex items-center gap-2"

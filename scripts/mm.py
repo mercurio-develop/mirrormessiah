@@ -59,9 +59,9 @@ DELAY     = 0.25
 VIDEO_EXT = {'.mp4', '.mkv', '.avi', '.mov', '.wmv', '.m4v', '.webm', '.flv'}
 SUB_EXT   = {'.srt', '.vtt', '.ass', '.ssa'}
 
-# Folder naming pattern: "Title (Year) [Quality] [...]"
+# Folder naming pattern: "Title (Year) [Quality]" or "Title.Year.Quality"
 FOLDER_RE = re.compile(
-    r'^(?P<title>.+?)\s*\((?P<year>\d{4})\)(?:\s*\[(?P<quality>[^\]]+)\])?',
+    r'^(?P<title>.+?)(?:\s*[\(\.]|\s+)(?P<year>(?:19|20)\d{2})(?:[\)\.]?\s*(?:\[(?P<quality>[^\]]+)\]|(?P<quality2>\d{3,4}p|4K|2160p|720p|1080p))?)?',
     re.IGNORECASE,
 )
 
