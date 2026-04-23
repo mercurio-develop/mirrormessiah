@@ -18,7 +18,14 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '24');
 
     const result = getMovies({ q, genre, quality, year, audience, sort, hasThumbnail, offset, limit });
-    return NextResponse.json(result);
+    
+    return NextResponse.json(result, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+      },
+    });
   } catch (error: any) {
     return NextResponse.json({ error: 'Failed to fetch treasury entities' }, { status: 500 });
   }
