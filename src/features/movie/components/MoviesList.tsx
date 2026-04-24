@@ -6,29 +6,31 @@ import Image from 'next/image';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { MovieWithFile } from '@/lib/types';
 import { b64urlEncode } from '@/lib/b64url';
-import { 
-    Search, 
-    Play, 
-    Edit, 
-    Loader2, 
-    Calendar, 
-    Hash, 
-    Activity, 
-    Film, 
-    X, 
-    AlertCircle, 
-    ImageOff,
-    CheckCircle2,
-    RefreshCw,
-    Trash2,
-    CheckSquare,
-    Square,
-    Zap
+import {
+  Search,
+  Play,
+  Edit,
+  Loader2,
+  Calendar,
+  Hash,
+  Activity,
+  Film,
+  X,
+  AlertCircle,
+  ImageOff,
+  CheckCircle2,
+  RefreshCw,
+  Trash2,
+  CheckSquare,
+  Square,
+  Zap,
+  ShieldAlert, Sparkles
 } from 'lucide-react';
 import Dropdown from '@/components/ui/Dropdown';
 import { validateThumbnailsAction } from '../actions/validate-thumbnails';
 import { deleteMoviesAction } from '../actions/delete-movies';
 import { scrapeMoviesAction } from '../actions/scrape-movies';
+import { updateAudienceAction } from '../actions/update-audience';
 import ValidateAssetsModal from './ValidateAssetsModal';
 
 interface MoviesListProps {
@@ -65,6 +67,7 @@ export default function MoviesList({ initialMovies }: MoviesListProps) {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   
   const currentSort = searchParams.get('sort') || 'title_asc';
+  const currentAudience = (searchParams.get('audience') || '') as 'family' | 'adult' | '';
 
   const [movies, setMovies] = useState<MovieWithFile[]>(initialMovies);
   const [loading, setLoading] = useState(false);
@@ -136,6 +139,7 @@ export default function MoviesList({ initialMovies }: MoviesListProps) {
     const state = {
         search: debouncedSearch,
         sort: currentSort,
+        audience: currentAudience,
         scrollY: window.scrollY,
         movies: movies,
         offset: offsetRef.current,
@@ -154,7 +158,7 @@ export default function MoviesList({ initialMovies }: MoviesListProps) {
     router.push(`${pathname}?${params.toString()}`, { scroll: false });
   }, [pathname, router, searchParams]);
 
-  const fetchMovies = useCallback(async (search = '', sort = currentSort, reset = false) => {
+  const fetchMovies = useCallback(async (search = '', sort = currentSort, audience = currentAudience, reset = false) => {
     if (loadingRef.current) return;
 
     loadingRef.current = true;
@@ -164,6 +168,7 @@ export default function MoviesList({ initialMovies }: MoviesListProps) {
       const currentOffset = reset ? 0 : offsetRef.current;
       let url = `/api/movies?offset=${currentOffset}&limit=${ITEMS_PER_LOAD}&sort=${sort}`;
       if (search) url += "&q=" + encodeURIComponent(search);
+      if (audience) url += "&audience=" + audience;
       
       const res = await fetch(url);
       if (res.ok) {
@@ -191,7 +196,7 @@ export default function MoviesList({ initialMovies }: MoviesListProps) {
       setLoading(false);
       loadingRef.current = false;
     }
-  }, [currentSort]);
+  }, [currentSort, currentAudience]);
 
   const handleValidateAssets = async () => {
     setValidating(true);
@@ -200,7 +205,7 @@ export default function MoviesList({ initialMovies }: MoviesListProps) {
       if (res.status === 'success') {
         setSuccessMessage(res.message);
         setTimeout(() => setSuccessMessage(null), 5000);
-        fetchMovies(debouncedSearch, currentSort, true);
+        fetchMovies(debouncedSearch, currentSort, currentAudience, true);
       } else {
         alert('Validation failed: ' + res.message);
       }
@@ -226,7 +231,7 @@ export default function MoviesList({ initialMovies }: MoviesListProps) {
             setSuccessMessage(result.message);
             setTimeout(() => setSuccessMessage(null), 5000);
             setSelectedIds(new Set());
-            fetchMovies(debouncedSearch, currentSort, true);
+            fetchMovies(debouncedSearch, currentSort, currentAudience, true);
         } else {
             alert(result.message);
         }
@@ -243,9 +248,36 @@ export default function MoviesList({ initialMovies }: MoviesListProps) {
             setSuccessMessage(result.message);
             setTimeout(() => setSuccessMessage(null), 5000);
             setSelectedIds(new Set());
-            fetchMovies(debouncedSearch, currentSort, true);
+            fetchMovies(debouncedSearch, currentSort, currentAudience, true);
         } else {
             alert(result.message);
+        }
+    });
+  };
+
+  const handleBulkAudienceUpdate = async (audience: 'family' | 'adult' | null) => {
+    const count = selectedIds.size;
+    if (count === 0) return;
+
+    startTransition(async () => {
+        const result = await updateAudienceAction(Array.from(selectedIds), audience);
+        if (result.status === 'success') {
+            setSuccessMessage(result.message);
+            setTimeout(() => setSuccessMessage(null), 5000);
+            setSelectedIds(new Set());
+            fetchMovies(debouncedSearch, currentSort, currentAudience, true);
+        } else {
+            alert(result.message);
+        }
+    });
+  };
+
+  const handleToggleAudience = async (movieId: number, audience: string | null) => {
+    const newAudience = audience === 'family' ? 'adult' : 'family';
+    startTransition(async () => {
+        const result = await updateAudienceAction([movieId], newAudience);
+        if (result.status === 'success') {
+            fetchMovies(debouncedSearch, currentSort, currentAudience as any, true);
         }
     });
   };
@@ -280,8 +312,8 @@ export default function MoviesList({ initialMovies }: MoviesListProps) {
   const lastStateKey = useRef('');
   useEffect(() => {
     if (!restored.done) return;
-    
-    const currentKey = JSON.stringify({ search: debouncedSearch, sort: currentSort });
+
+    const currentKey = JSON.stringify({ search: debouncedSearch, sort: currentSort, audience: currentAudience });
     if (lastStateKey.current === '') {
         lastStateKey.current = currentKey;
         // If we restored movies, don't fetch immediately
@@ -290,9 +322,9 @@ export default function MoviesList({ initialMovies }: MoviesListProps) {
 
     if (lastStateKey.current !== currentKey) {
         lastStateKey.current = currentKey;
-        fetchMovies(debouncedSearch, currentSort, true);
+        fetchMovies(debouncedSearch, currentSort, currentAudience, true);
     }
-  }, [debouncedSearch, currentSort, fetchMovies, restored.done, restored.didRestore]);
+  }, [debouncedSearch, currentSort, currentAudience, fetchMovies, restored.done, restored.didRestore]);
 
   // Infinite Scroll
   useEffect(() => {
@@ -300,12 +332,12 @@ export default function MoviesList({ initialMovies }: MoviesListProps) {
       if (loadingRef.current || !hasMore) return;
       const { scrollTop, scrollHeight, clientHeight } = document.documentElement;
       if (scrollTop + clientHeight >= scrollHeight - 800) {
-        fetchMovies(debouncedSearch, currentSort);
+        fetchMovies(debouncedSearch, currentSort, currentAudience);
       }
     };
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
-  }, [fetchMovies, hasMore, debouncedSearch, currentSort]);
+  }, [fetchMovies, hasMore, debouncedSearch, currentSort, currentAudience]);
 
   const clearSearch = () => {
     setSearchTerm('');
@@ -358,6 +390,19 @@ export default function MoviesList({ initialMovies }: MoviesListProps) {
                 className="w-48"
             />
 
+            {/* Audience Filter Dropdown */}
+            <Dropdown 
+                label="Category"
+                value={currentAudience}
+                onChange={(val) => updateParams({ audience: val || null })}
+                options={[
+                    { value: '', label: 'All' },
+                    { value: 'family', label: 'Family' },
+                    { value: 'adult', label: 'Adult' }
+                ]}
+                className="w-36"
+            />
+
             {/* Condition Filters */}
             <div className="flex items-end gap-2 relative">
                 {successMessage && (
@@ -390,6 +435,24 @@ export default function MoviesList({ initialMovies }: MoviesListProps) {
         <div className="shrink-0 flex items-center gap-4">
             {selectedIds.size > 0 && (
                 <div className="flex items-center gap-2 animate-in slide-in-from-right-4">
+                    <button
+                        onClick={() => handleBulkAudienceUpdate('family')}
+                        disabled={isPending}
+                        className="h-11 px-6 bg-green-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-green-700 transition-all flex items-center gap-2 shadow-lg shadow-green-500/20 active:scale-95"
+                    >
+                        {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4 fill-current" />}
+                        Mark Family
+                    </button>
+                    
+                    <button
+                        onClick={() => handleBulkAudienceUpdate('adult')}
+                        disabled={isPending}
+                        className="h-11 px-6 bg-red-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-red-700 transition-all flex items-center gap-2 shadow-lg shadow-red-500/20 active:scale-95"
+                    >
+                        {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldAlert className="h-4 w-4" />}
+                        Mark Adult
+                    </button>
+
                     <button
                         onClick={handleBulkScrape}
                         disabled={isPending}
@@ -476,13 +539,34 @@ export default function MoviesList({ initialMovies }: MoviesListProps) {
               <div className="space-y-1">
                 <div className="flex justify-between items-center text-[9px] font-black text-muted-foreground/40 uppercase tracking-[0.15em]">
                    <span className="font-mono">ID_{movie.id}</span>
-                   {movie.needs_repair ? (
-                     <span className="flex items-center gap-1 text-destructive bg-destructive/5 px-1.5 py-0.5 rounded border border-destructive/10 animate-pulse">
-                        <AlertCircle className="h-2.5 w-2.5" /> REPAIR_REQUIRED
-                     </span>
-                   ) : (
-                     <span className="flex items-center gap-1 text-primary/40"><Activity className="h-2.5 w-2.5" /> REGISTRY_SYNCED</span>
-                   )}
+                   <div className="flex items-center gap-1.5">
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                handleToggleAudience(movie.id, movie.audience);
+                            }}
+                            className={`flex items-center gap-1 px-1.5 py-0.5 rounded border transition-all hover:scale-105 active:scale-95 ${
+                                movie.audience === 'family' 
+                                ? 'text-green-500 bg-green-500/5 border-green-500/10' 
+                                : 'text-red-500 bg-red-500/5 border-red-500/10'
+                            }`}
+                            title={`Click to mark as ${movie.audience === 'family' ? 'Adult' : 'Family'}`}
+                        >
+                            {movie.audience === 'family' ? (
+                                <><Sparkles className="h-2.5 w-2.5 fill-current" /> FAMILY</>
+                            ) : (
+                                <><ShieldAlert className="h-2.5 w-2.5" /> ADULT</>
+                            )}
+                        </button>
+
+                        {movie.needs_repair ? (
+                            <span className="flex items-center gap-1 text-destructive bg-destructive/5 px-1.5 py-0.5 rounded border border-destructive/10 animate-pulse">
+                                <AlertCircle className="h-2.5 w-2.5" /> REPAIR_REQUIRED
+                            </span>
+                        ) : (
+                            <span className="flex items-center gap-1 text-primary/40"><Activity className="h-2.5 w-2.5" /> REGISTRY_SYNCED</span>
+                        )}
+                   </div>
                 </div>
                 <h3 className="text-sm font-black text-foreground/90 truncate group-hover:text-primary transition-colors pr-8">
                   {movie.title}

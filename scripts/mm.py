@@ -736,30 +736,43 @@ def cmd_cleanup(args) -> None:
     backup_db(args)
     print(f'\n--- INITIATING ROBUST DUPLICATE PURGE ---')
     
-    movies = db.execute("SELECT id, title, year FROM movies").fetchall()
-    
-    # key: (normalized_title, year) -> primary_id
-    seen = {}
     purged_count = 0
+
+    # Pass 1: Merge by Title and Year
+    movies = db.execute("SELECT id, title, year FROM movies").fetchall()
+    seen_naming = {} # key: (normalized_title, year) -> primary_id
     
     for m in movies:
         pure_title = clean_movie_name(m['title'])
-        # Handle common variations like "Pokemon" vs "Pokémon" (accents removed by clean_movie_name or lower)
         norm_key = (pure_title.lower(), m['year'])
         
-        if norm_key in seen:
-            primary_id = seen[norm_key]
+        if norm_key in seen_naming:
+            primary_id = seen_naming[norm_key]
             old_id = m['id']
-            # Merge
             db.execute("UPDATE OR IGNORE files SET movie_id = ? WHERE movie_id = ?", (primary_id, old_id))
             db.execute("UPDATE OR IGNORE subtitles SET movie_id = ? WHERE movie_id = ?", (primary_id, old_id))
             db.execute("DELETE FROM movies WHERE id = ?", (old_id,))
             purged_count += 1
         else:
-            seen[norm_key] = m['id']
-            # Optionally update the title to the cleaned version if it was messy
+            seen_naming[norm_key] = m['id']
             if m['title'] != pure_title:
                 db.execute("UPDATE movies SET title = ? WHERE id = ?", (pure_title, m['id']))
+
+    # Pass 2: Merge by TMDB ID (catches duplicates discovered during scraping)
+    movies = db.execute("SELECT id, tmdb_id FROM movies WHERE tmdb_id IS NOT NULL").fetchall()
+    seen_tmdb = {} # key: tmdb_id -> primary_id
+    
+    for m in movies:
+        tid = m['tmdb_id']
+        if tid in seen_tmdb:
+            primary_id = seen_tmdb[tid]
+            old_id = m['id']
+            db.execute("UPDATE OR IGNORE files SET movie_id = ? WHERE movie_id = ?", (primary_id, old_id))
+            db.execute("UPDATE OR IGNORE subtitles SET movie_id = ? WHERE movie_id = ?", (primary_id, old_id))
+            db.execute("DELETE FROM movies WHERE id = ?", (old_id,))
+            purged_count += 1
+        else:
+            seen_tmdb[tid] = m['id']
 
     db.commit()
     db.close()
