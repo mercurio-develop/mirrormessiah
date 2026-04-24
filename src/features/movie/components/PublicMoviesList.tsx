@@ -131,6 +131,8 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
       params.delete('audience');
     }
     router.push(`${pathname}?${params.toString()}`, { scroll: false });
+    // Auto-close filters after selection
+    setTimeout(() => setShowFilters(false), 300);
   };
 
   const handleGenreChange = (genre: string) => {
@@ -141,6 +143,8 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
       params.delete('genre');
     }
     router.push(`${pathname}?${params.toString()}`, { scroll: false });
+    // Auto-close filters after selection
+    setTimeout(() => setShowFilters(false), 300);
   };
   
   const [movies, setMovies] = useState<MovieWithFile[]>(initialMovies);
@@ -365,83 +369,90 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
             </div>
           </div>
 
-          <AnimatePresence>
+          <AnimatePresence initial={false}>
             {showFilters && (
               <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.2, ease: 'easeOut' }}
-                className="overflow-visible"
+                initial={{ height: 0, opacity: 0, scale: 0.98 }}
+                animate={{ height: 'auto', opacity: 1, scale: 1 }}
+                exit={{ height: 0, opacity: 0, scale: 0.98 }}
+                transition={{ duration: 0.25, ease: [0.23, 1, 0.32, 1] }}
+                className="absolute top-full left-0 right-0 z-[110] overflow-hidden"
               >
-                <LayoutGroup>
-                    <div className="overflow-visible pt-2">
-                      <div className="flex flex-wrap items-end gap-x-4 gap-y-6 lg:gap-5 pb-2">
-                         {/* Sort Dropdown */}
-                         <Dropdown 
-                           label="Order"
-                           value={sort}
-                           onChange={(val) => setSort(val as any)}
-                           options={SORT_OPTIONS}
-                           className="w-44"
-                         />
+                <div className="mt-4 p-6 bg-background/95 backdrop-blur-3xl border border-white/10 rounded-2xl shadow-[0_30px_100px_rgba(0,0,0,0.8)] mx-6 lg:mx-0">
+                    <div className="flex flex-wrap items-end gap-x-4 gap-y-6 lg:gap-5">
+                        {/* Sort Dropdown */}
+                        <Dropdown 
+                          label="Order"
+                          value={sort}
+                          onChange={(val) => {
+                            setSort(val as any);
+                            setTimeout(() => setShowFilters(false), 300);
+                          }}
+                          options={SORT_OPTIONS}
+                          className="w-44"
+                        />
 
-                         <div className="h-8 w-px bg-border/40 mx-1 hidden lg:block mb-1.5 shrink-0" />
+                        <div className="h-8 w-px bg-border/40 mx-1 hidden lg:block mb-1.5 shrink-0" />
 
-                         {/* Sector Dropdown */}
-                         <Dropdown 
-                           label="Category"
-                           placeholder="All Categories"
-                           value={selectedAudience}
-                           onChange={handleAudienceChange}
-                           options={[
-                             { value: 'family', label: 'Family' },
-                             { value: 'adult', label: 'Adult' }
-                           ]}
-                           className="w-44"
-                         />
+                        {/* Sector Dropdown */}
+                        <Dropdown 
+                          label="Category"
+                          placeholder="All Categories"
+                          value={selectedAudience}
+                          onChange={handleAudienceChange}
+                          options={[
+                            { value: 'family', label: 'Family' },
+                            { value: 'adult', label: 'Adult' }
+                          ]}
+                          className="w-44"
+                        />
 
-                         <div className="h-8 w-px bg-border/40 mx-1 hidden lg:block mb-1.5 shrink-0" />
+                        <div className="h-8 w-px bg-border/40 mx-1 hidden lg:block mb-1.5 shrink-0" />
 
-                         <Dropdown 
-                           label="Genre"
-                           placeholder="All Genres"
-                           value={selectedGenre}
-                           onChange={handleGenreChange}
-                           options={GENRE_OPTIONS.map(g => ({ value: g, label: g }))}
-                           className="w-40"
-                         />
+                        <Dropdown 
+                          label="Genre"
+                          placeholder="All Genres"
+                          value={selectedGenre}
+                          onChange={handleGenreChange}
+                          options={GENRE_OPTIONS.map(g => ({ value: g, label: g }))}
+                          className="w-40"
+                        />
 
-                         <Dropdown 
-                           label="Format"
-                           placeholder="All Qualities"
-                           value={selectedQuality}
-                           onChange={setSelectedQuality}
-                           options={qualities.map(q => ({ value: q, label: q }))}
-                           className="w-36"
-                         />
+                        <Dropdown 
+                          label="Format"
+                          placeholder="All Qualities"
+                          value={selectedQuality}
+                          onChange={(val) => {
+                            setSelectedQuality(val);
+                            setTimeout(() => setShowFilters(false), 300);
+                          }}
+                          options={qualities.map(q => ({ value: q, label: q }))}
+                          className="w-36"
+                        />
 
-                         <Dropdown 
-                           label="Year"
-                           placeholder="All Years"
-                           value={selectedYear}
-                           onChange={setSelectedYear}
-                           options={years.slice(0, 50).map(y => ({ value: y, label: y }))}
-                           className="w-40"
-                         />
+                        <Dropdown 
+                          label="Year"
+                          placeholder="All Years"
+                          value={selectedYear}
+                          onChange={(val) => {
+                            setSelectedYear(val);
+                            setTimeout(() => setShowFilters(false), 300);
+                          }}
+                          options={years.slice(0, 50).map(y => ({ value: y, label: y }))}
+                          className="w-40"
+                        />
 
-                         {activeFilterCount > 0 && (
-                            <button
-                                onClick={clearFilters}
-                                className="h-11 px-6 bg-destructive/10 border border-destructive/20 text-destructive text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-destructive hover:text-white transition-all active:scale-95 shadow-lg shadow-destructive/5 mb-0.5 shrink-0"
-                            >
-                                <X className="h-3.5 w-3.5 mr-2 inline-block" />
-                                Reset All Filters
-                            </button>
-                         )}
-                      </div>
+                        {activeFilterCount > 0 && (
+                          <button
+                              onClick={clearFilters}
+                              className="h-11 px-6 bg-destructive/10 border border-destructive/20 text-destructive text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-destructive hover:text-white transition-all active:scale-95 shadow-lg shadow-destructive/5 mb-0.5 shrink-0"
+                          >
+                              <X className="h-3.5 w-3.5 mr-2 inline-block" />
+                              Reset All Filters
+                          </button>
+                        )}
                     </div>
-                </LayoutGroup>
+                </div>
               </motion.div>
             )}
           </AnimatePresence>
