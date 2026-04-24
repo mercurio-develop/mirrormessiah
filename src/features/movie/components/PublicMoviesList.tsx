@@ -92,15 +92,25 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
     localStorage.setItem('mm_show_filters', String(newState));
   };
 
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
   const activeFilterCount = useMemo(() => {
     let count = 0;
+    if (debouncedSearch) count++;
     if (selectedQuality) count++;
     if (selectedYear) count++;
     if (selectedGenre) count++;
     if (selectedAudience) count++;
     if (sort !== 'title_asc') count++;
     return count;
-  }, [selectedQuality, selectedYear, selectedGenre, selectedAudience, sort]);
+  }, [debouncedSearch, selectedQuality, selectedYear, selectedGenre, selectedAudience, sort]);
 
   useEffect(() => {
     const audience = searchParams.get('audience') as 'family' | 'adult' | '';
@@ -195,15 +205,6 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
     }
   }, []);
 
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(searchTerm);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [searchTerm]);
-
   const [restored, setRestored] = useState({ done: false, didRestore: false });
 
   useEffect(() => {
@@ -294,8 +295,9 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
     setSearchTerm('');
     setSelectedQuality('');
     setSelectedYear('');
+    setSelectedGenre('');
+    handleAudienceChange('');
     setSort('title_asc');
-    router.push(pathname, { scroll: false });
   };
 
   const isFiltered = searchTerm || selectedQuality || selectedYear || selectedAudience || selectedGenre || sort !== 'title_asc';
@@ -330,15 +332,6 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
 
             {/* Action Group */}
             <div className="shrink-0 flex items-center gap-2">
-                {isFiltered && (
-                   <button 
-                     onClick={clearFilters} 
-                     className="flex items-center gap-1.5 px-4 h-10 bg-destructive/10 border border-destructive/20 text-destructive text-[10px] font-black uppercase tracking-widest rounded-lg hover:bg-destructive hover:text-white transition-all active:scale-95 shadow-lg shadow-destructive/5"
-                   >
-                      <X className="h-3 w-3" /> Clear Filters
-                   </button>
-                )}
-                
                 <div className={`flex items-center bg-muted/20 border border-border/40 rounded-xl p-1 gap-1 transition-all duration-300 ${!showFilters ? 'shadow-lg shadow-primary/5 border-primary/20' : ''}`}>
                    <button
                         onClick={toggleFilters}
@@ -383,7 +376,7 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
               >
                 <LayoutGroup>
                     <div className="overflow-visible pt-2">
-                      <div className="flex flex-nowrap lg:flex-wrap items-end gap-5 overflow-x-auto lg:overflow-visible pb-2 -mx-6 px-6 lg:mx-0 lg:px-0 scrollbar-hide">
+                      <div className="flex flex-wrap items-end gap-x-4 gap-y-6 lg:gap-5 pb-2">
                          {/* Sort Dropdown */}
                          <Dropdown 
                            label="Order"
@@ -395,35 +388,18 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
 
                          <div className="h-8 w-px bg-border/40 mx-1 hidden lg:block mb-1.5 shrink-0" />
 
-                         {/* Sector Pills */}
-                         <div className="flex flex-col gap-2 shrink-0">
-                            <span className="text-[10px] uppercase tracking-[0.25em] font-black text-foreground/40 ml-1 leading-none">Category</span>
-                            <div className="flex p-1 bg-muted/20 border border-border/50 rounded-xl relative h-11">
-                              {[
-                                { id: '', label: 'All', icon: null },
-                                { id: 'family', label: 'Family', icon: <div className="w-1.5 h-1.5 rounded-full bg-green-500" /> },
-                                { id: 'adult', label: 'Adult', icon: <div className="w-1.5 h-1.5 rounded-full bg-red-500" /> }
-                              ].map(cat => (
-                                <button 
-                                  key={cat.id}
-                                  onClick={() => handleAudienceChange(cat.id)}
-                                  className={`relative z-10 flex items-center gap-2 px-5 rounded-lg text-[12px] font-bold transition-colors ${
-                                    selectedAudience === cat.id ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
-                                  }`}
-                                >
-                                  {selectedAudience === cat.id && (
-                                    <motion.div
-                                      layoutId="active-audience"
-                                      className="absolute inset-0 bg-primary rounded-lg shadow-md -z-10"
-                                      transition={{ type: 'spring', duration: 0.4, bounce: 0.2 }}
-                                    />
-                                  )}
-                                  {cat.icon}
-                                  {cat.label}
-                                </button>
-                              ))}
-                            </div>
-                         </div>
+                         {/* Sector Dropdown */}
+                         <Dropdown 
+                           label="Category"
+                           placeholder="All Categories"
+                           value={selectedAudience}
+                           onChange={handleAudienceChange}
+                           options={[
+                             { value: 'family', label: 'Family' },
+                             { value: 'adult', label: 'Adult' }
+                           ]}
+                           className="w-44"
+                         />
 
                          <div className="h-8 w-px bg-border/40 mx-1 hidden lg:block mb-1.5 shrink-0" />
 
@@ -451,8 +427,18 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
                            value={selectedYear}
                            onChange={setSelectedYear}
                            options={years.slice(0, 50).map(y => ({ value: y, label: y }))}
-                           className="w-32 pr-4 lg:pr-0"
+                           className="w-40"
                          />
+
+                         {activeFilterCount > 0 && (
+                            <button
+                                onClick={clearFilters}
+                                className="h-11 px-6 bg-destructive/10 border border-destructive/20 text-destructive text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-destructive hover:text-white transition-all active:scale-95 shadow-lg shadow-destructive/5 mb-0.5 shrink-0"
+                            >
+                                <X className="h-3.5 w-3.5 mr-2 inline-block" />
+                                Reset All Filters
+                            </button>
+                         )}
                       </div>
                     </div>
                 </LayoutGroup>

@@ -48,6 +48,24 @@ export async function updateMovieAction(
       `UPDATE movies SET ${updates.join(', ')}, updated_at = datetime('now') WHERE id = ?`
     ).run(...values);
 
+    // If title, year, or quality changed, trigger a filesystem sync
+    const needsRename = ['title', 'year', 'quality'].some(f => formData[f] !== undefined);
+    if (needsRename) {
+        try {
+            const { exec } = require('child_process');
+            const { promisify } = require('util');
+            const execAsync = promisify(exec);
+            
+            // Run organize command via the unified CLI
+            // We use --no-backup for speed as this is a surgical rename
+            const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
+            execAsync(`${pythonCmd} scripts/mm.py organize --no-backup`)
+                .catch((err: Error) => console.error('[updateMovieAction] Post-update organize failed:', err));
+        } catch (e) {
+            console.error('[updateMovieAction] Failed to trigger rename script:', e);
+        }
+    }
+
     revalidatePath(`/admin/movies/${movieId}`);
     revalidatePath('/admin/movies');
     revalidatePath('/');

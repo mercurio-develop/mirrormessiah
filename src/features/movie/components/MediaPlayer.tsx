@@ -133,11 +133,20 @@ export default function MediaPlayer({
       
       // Clear error on new source
       player.on('loadstart', () => setError(null));
+
+      // NEW: Clear repair flag on successful playback
+      player.on('playing', () => {
+        const currentCtx = ctx.current;
+        if (currentCtx.id) {
+          fetch(`/api/movies/${currentCtx.id}/repair`, { method: 'DELETE' })
+            .catch(err => console.error('[MediaPlayer] Failed to clear repair flag:', err));
+        }
+      });
       
       // Initialize source
       player.src({ src, type: mimeType });
     }
-  }, []);
+  }, [src, mimeType]); // Re-run if source changes to re-init properly if needed
 
   // Handle source and mimeType changes
   useEffect(() => {
