@@ -56,7 +56,7 @@ TMDB_BASE = 'https://api.themoviedb.org/3'
 IMG_BASE  = 'https://image.tmdb.org/t/p/w500'
 DELAY     = 0.25
 
-VIDEO_EXT = {'.mp4', '.mkv', '.avi', '.mov', '.wmv', '.m4v', '.webm', '.flv'}
+VIDEO_EXT = {'.mp4'}
 SUB_EXT   = {'.srt', '.vtt', '.ass', '.ssa'}
 
 # Folder naming pattern: "Title (Year) [Quality]" or "Title.Year.Quality"
@@ -177,14 +177,15 @@ def clean_movie_name(name: str) -> str:
     name = name.replace(".", " ").replace("_", " ").replace("-", " ")
     name = re.sub(r"[\(\)\[\]]", " ", name)
     name = re.sub(r"\s+", " ", name)
-    return name.strip()
+    return name.strip().title()
 
 
 def parse_folder_name(name: str) -> dict:
-    """Extract title, year, quality from folder names."""
+    """Extract title, year, quality from folder names with extreme prejudice against noise."""
+    # Try the standard regex first
     m = FOLDER_RE.match(name)
     if m:
-        quality = m.group('quality') or None
+        quality = m.group('quality') or m.group('quality2') or None
         if quality:
             for token in quality.split(']')[0].split():
                 if re.match(r'\d{3,4}p|2160p|4K|UHD|1080|720', token, re.I):
@@ -197,14 +198,22 @@ def parse_folder_name(name: str) -> dict:
             'quality': quality,
         }
     
+    # Fallback: scan for year anywhere in the name
     year_match = re.search(r"\b(19|20)\d{2}\b", name)
     year = int(year_match.group()) if year_match else None
+    
+    # Clean the title aggressively
     title = clean_movie_name(name)
     if year:
-        title = title.replace(str(year), "").strip()
+        # Remove the year from the title if it's there
+        title = re.sub(rf"\b{year}\b", " ", title, flags=re.IGNORECASE).strip()
     
+    # Final quality scan
     quality_match = re.search(r"\b(1080p|720p|4K|2160p)\b", name, re.IGNORECASE)
     quality = quality_match.group().upper() if quality_match else None
+
+    # Final cleanup to remove literal "None" string if it leaked in
+    title = re.sub(r"\bNone\b", "", title, flags=re.IGNORECASE).strip()
 
     return {'title': title, 'year': year, 'quality': quality}
 
@@ -287,9 +296,13 @@ def tmdb_get(endpoint: str, **params) -> dict:
 def _clean(title: str) -> str:
     return re.sub(r'[^\w\s]', ' ', title).strip()
 
-def tmdb_search(title: str, year: int | None) -> dict | None:
+def tmdb_search(title: str, year: int | str | None) -> dict | None:
     search_queries = [title, _clean(title)]
     
+    # Clean the 'None' string if it passed through
+    if year and str(year).lower() == 'none':
+        year = None
+
     # Add short title fallback for long titles with subtitles
     if ',' in title or ':' in title:
         short = re.split(r'[,:]', title)[0].strip()
@@ -298,10 +311,14 @@ def tmdb_search(title: str, year: int | None) -> dict | None:
             search_queries.append(_clean(short))
 
     for query in search_queries:
+        # Try with year first, then without
         for params in [{'query': query, 'year': year}, {'query': query}]:
+            # Skip searching with year if it's missing or None
             if 'year' in params and not params.get('year'):
                 continue
-            filtered = {k: v for k, v in params.items() if v is not None}
+            
+            # Final verification of parameters
+            filtered = {k: v for k, v in params.items() if v is not None and str(v).lower() != 'none'}
             try:
                 data = tmdb_get('/search/movie', **filtered)
                 if data.get('results'):
@@ -366,6 +383,10 @@ def scrape_one(db: sqlite3.Connection, movie: dict, dry_run: bool = False) -> st
         director = next((c['name'] for c in crew if c.get('job') == 'Director'), None)
         release  = details.get('release_date') or ''
         year     = int(release[:4]) if len(release) >= 4 else movie['year']
+        
+        # If the movie record has no year but we found one in metadata, use it
+        if not year and details.get('year'): # YTS fallback provides 'year' directly
+            year = details.get('year')
 
         audience = None
         genre_names = [g['name'] for g in details.get('genres', [])]
@@ -427,8 +448,17 @@ def ingest_path(db: sqlite3.Connection, path: Path, library_id: int, auto_scrape
 
     if not video_files:
         return False
+    
+    # Extreme Strictness: Ensure we actually have an MP4 file
+    if not any(f.suffix.lower() == '.mp4' for f in video_files):
+        return False
 
-    if not FOLDER_RE.match(folder.name):
+    meta = parse_folder_name(folder.name)
+    if not meta['title']:
+        # If we can't even get a title, use the folder name as title
+        meta['title'] = clean_movie_name(folder.name)
+    
+    if not meta['title']:
         return False
 
     if SKIP_QUALITY.search(folder.name):
@@ -494,6 +524,7 @@ def cmd_sync(args):
     db = open_db()
     library_id = get_library_id(db)
     
+    # 1. Add new movies
     folders = sorted(p for p in media_dir.iterdir() if p.is_dir())
     added = 0
     total = len(folders)
@@ -503,9 +534,31 @@ def cmd_sync(args):
         if is_new:
             print(f"  [{i}/{total}] [+] Added: {folder.name}")
             added += 1
+    
+    # 2. Purge missing files/movies
+    print(f"\n--- PHASE: Purging Missing Entities ---")
+    files = db.execute("SELECT id, movie_id, path FROM files").fetchall()
+    deleted_files = 0
+    for f in files:
+        if not Path(f['path']).exists():
+            db.execute("DELETE FROM files WHERE id = ?", (f['id'],))
+            deleted_files += 1
+    
+    # Remove movies that have no files left
+    movies_to_remove = db.execute("""
+        SELECT id, title FROM movies 
+        WHERE id NOT IN (SELECT DISTINCT movie_id FROM files)
+    """).fetchall()
+    
+    for m in movies_to_remove:
+        print(f"  [-] Removed: {m['title']} (File not found)")
+        db.execute("DELETE FROM movies WHERE id = ?", (m['id'],))
+        db.execute("DELETE FROM subtitles WHERE movie_id = ?", (m['id'],))
+        db.execute("DELETE FROM movie_categories WHERE movie_id = ?", (m['id'],))
             
+    db.commit()
     db.close()
-    print(f"SYNC_COMPLETE: {added} new movies added to registry.")
+    print(f"SYNC_COMPLETE: {added} added, {deleted_files} files purged.")
 
 def cmd_ingest(args):
     path = Path(args.path)
@@ -574,12 +627,23 @@ def cmd_organize(args) -> None:
         current_path = Path(files[0]['path'])
         current_dir = current_path.parent
         
+        # Skip if folder doesn't exist
+        if not current_dir.exists():
+            continue
+        
         # Skip if it's already in the root media dir (shouldn't happen with standardized folders)
         if current_dir == Path(MEDIA_DIR): continue
         
         # Generate standardized name
-        quality_str = f" [{movie['quality']}]" if movie['quality'] else ""
-        new_name = f"{movie['title']} ({movie['year']}){quality_str}"
+        year_str = ""
+        if movie['year'] and str(movie['year']).lower() != "none":
+            year_str = f" ({movie['year']})"
+            
+        quality_str = ""
+        if movie['quality'] and str(movie['quality']).lower() != "none":
+            quality_str = f" [{movie['quality']}]"
+            
+        new_name = f"{movie['title']}{year_str}{quality_str}"
         new_name = re.sub(r'[<>:"/\\|?*]', '_', new_name).strip()
         
         new_dir = current_dir.parent / new_name
@@ -832,6 +896,9 @@ def cmd_full(args):
     
     if not args.no_scrape:
         cmd_scrape(args)
+        # Second organize pass: if scraping found missing years, apply them to the filesystem
+        print(f"\n--- PHASE: Final Folder Alignment ---")
+        cmd_organize(args)
     
     print(f"\n==========================================")
     print(f"   INTEGRATION COMPLETE")

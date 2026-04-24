@@ -278,14 +278,22 @@ export default function MediaFileManager({ movieId }: { movieId: number }) {
                 
                 <div className="flex-1 min-w-0 space-y-2">
                   <div className="flex items-center gap-3">
-                     <p className="text-base font-bold text-foreground truncate">{file.path.split('/').pop()}</p>
+                     <p 
+                        className="text-base font-bold text-foreground truncate cursor-help"
+                        title={file.path.split('/').pop() || ''}
+                     >
+                        {file.path.split('/').pop()}
+                     </p>
                      <div className="h-1.5 w-1.5 rounded-full bg-border" />
                      <span className="text-[10px] font-black text-muted-foreground/40 uppercase tracking-widest">Source_0{idx + 1}</span>
                   </div>
                   
                   <div className="flex flex-wrap items-center gap-4">
-                    <span className="text-[11px] font-mono text-muted-foreground/50 truncate max-w-lg block bg-background/50 px-2 py-0.5 rounded border border-border/30">
-                        {file.path}
+                    <span 
+                        className="text-[11px] font-mono text-muted-foreground/50 truncate max-w-lg block bg-background/50 px-2 py-0.5 rounded border border-border/30 cursor-help"
+                        title={file.path.replace('/media/tushita/TUSHITA_W11_DATA/movies/', '')}
+                    >
+                        {file.path.replace('/media/tushita/TUSHITA_W11_DATA/movies/', '')}
                     </span>
                     {file.size_bytes && (
                       <span className="text-[10px] font-bold text-primary/60 flex items-center gap-1.5 bg-primary/5 px-2 py-0.5 rounded-full border border-primary/10">

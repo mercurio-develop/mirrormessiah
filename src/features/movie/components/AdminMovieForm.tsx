@@ -347,7 +347,7 @@ export default function AdminMovieForm({ movie }: AdminMovieFormProps) {
                 <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 ml-1">Thumbnail Path</label>
                 <input
                   name="thumbnail"
-                  value={formData.thumbnail}
+                  value={formData.thumbnail.replace('/media/tushita/TUSHITA_W11_DATA/movies/', '')}
                   onChange={handleInputChange}
                   className="w-full h-10 bg-muted/30 border border-border rounded-lg px-4 text-[10px] font-mono text-primary/60 focus:border-primary outline-none transition-all"
                 />

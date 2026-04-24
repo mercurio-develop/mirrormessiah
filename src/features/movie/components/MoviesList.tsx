@@ -76,6 +76,74 @@ export default function MoviesList({ initialMovies }: MoviesListProps) {
 
   const loadingRef = useRef(false);
   const offsetRef = useRef(initialMovies.length);
+  const [restored, setRestored] = useState({ done: false, didRestore: false });
+  const scrollRestored = useRef(false);
+
+  // 1. Restore state on mount
+  useEffect(() => {
+    const saved = sessionStorage.getItem('mm_admin_movies_state');
+    if (saved) {
+      try {
+        const state = JSON.parse(saved);
+        setSearchTerm(state.search || '');
+        setDebouncedSearch(state.search || '');
+        
+        if (state.movies && state.movies.length > 0) {
+            setMovies(state.movies);
+            offsetRef.current = state.offset || state.movies.length;
+            setHasMore(state.hasMore ?? true);
+            setTotalCount(state.totalCount || 0);
+        }
+
+        if (state.sort && state.sort !== currentSort) {
+            updateParams({ sort: state.sort });
+        }
+        
+        setRestored({ done: true, didRestore: true });
+      } catch (e) {
+        setRestored({ done: true, didRestore: false });
+      }
+    } else {
+      setRestored({ done: true, didRestore: false });
+    }
+  }, []);
+
+  // Separate scroll restoration to wait for DOM stability
+  useEffect(() => {
+    if (restored.didRestore && movies.length > 0 && !scrollRestored.current) {
+        const saved = sessionStorage.getItem('mm_admin_movies_state');
+        if (saved) {
+            try {
+                const state = JSON.parse(saved);
+                if (state.scrollY) {
+                    scrollRestored.current = true;
+                    // Short delay to ensure browser layout is ready
+                    const timer = setTimeout(() => {
+                        window.scrollTo({ top: state.scrollY, behavior: 'instant' });
+                        // Clear the specific scroll data so it doesn't jump on next mount
+                        // But keep filters in mind if we want them to persist across fresh visits? 
+                        // Actually, we remove it to keep it fresh for next click.
+                        sessionStorage.removeItem('mm_admin_movies_state');
+                    }, 100);
+                    return () => clearTimeout(timer);
+                }
+            } catch (e) {}
+        }
+    }
+  }, [restored.didRestore, movies.length]);
+
+  const saveStateAndScroll = () => {
+    const state = {
+        search: debouncedSearch,
+        sort: currentSort,
+        scrollY: window.scrollY,
+        movies: movies,
+        offset: offsetRef.current,
+        hasMore: hasMore,
+        totalCount: totalCount
+    };
+    sessionStorage.setItem('mm_admin_movies_state', JSON.stringify(state));
+  };
 
   const updateParams = useCallback((updates: Record<string, string | null>) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -209,9 +277,22 @@ export default function MoviesList({ initialMovies }: MoviesListProps) {
   }, [searchTerm, searchParams, updateParams]);
 
   // Trigger fetch on filter change
+  const lastStateKey = useRef('');
   useEffect(() => {
-    fetchMovies(debouncedSearch, currentSort, true);
-  }, [debouncedSearch, currentSort, fetchMovies]);
+    if (!restored.done) return;
+    
+    const currentKey = JSON.stringify({ search: debouncedSearch, sort: currentSort });
+    if (lastStateKey.current === '') {
+        lastStateKey.current = currentKey;
+        // If we restored movies, don't fetch immediately
+        if (restored.didRestore) return;
+    }
+
+    if (lastStateKey.current !== currentKey) {
+        lastStateKey.current = currentKey;
+        fetchMovies(debouncedSearch, currentSort, true);
+    }
+  }, [debouncedSearch, currentSort, fetchMovies, restored.done, restored.didRestore]);
 
   // Infinite Scroll
   useEffect(() => {
@@ -242,9 +323,9 @@ export default function MoviesList({ initialMovies }: MoviesListProps) {
       />
 
       <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-8">
-        <div className="flex flex-1 flex-wrap items-end gap-6">
+        <div className="flex flex-1 flex-wrap items-end gap-x-4 gap-y-6 lg:gap-6">
             {/* Search Sub-component */}
-            <div className="flex flex-col gap-2 flex-1 min-w-[300px]">
+            <div className="flex flex-col gap-2 flex-1 min-w-[280px]">
                <span className="text-[10px] uppercase tracking-[0.2em] font-black text-foreground/40 ml-1">Search Identifier</span>
                <div className="relative group">
                     <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-muted-foreground group-focus-within:text-primary transition-colors">
@@ -360,7 +441,10 @@ export default function MoviesList({ initialMovies }: MoviesListProps) {
         {movies.length > 0 ? movies.map((movie, idx) => (
           <div 
             key={movie.id} 
-            onClick={() => toggleSelect(movie.id)}
+            onClick={() => {
+                saveStateAndScroll();
+                toggleSelect(movie.id);
+            }}
             className={`bg-muted/10 border p-4 flex gap-5 group hover:bg-muted/20 transition-all duration-300 rounded-2xl relative overflow-hidden cursor-pointer ${
                 selectedIds.has(movie.id) ? 'border-primary/50 bg-primary/5' : 'border-border/40 hover:border-border/60'
             }`}
@@ -413,12 +497,14 @@ export default function MoviesList({ initialMovies }: MoviesListProps) {
               <div className="flex gap-2 pt-4" onClick={(e) => e.stopPropagation()}>
                 <Link
                   href={"/watch/" + movie.id}
+                  onClick={saveStateAndScroll}
                   className="flex-1 h-9 bg-muted/40 border border-border/50 hover:border-white/10 text-[9px] font-black uppercase tracking-widest text-foreground/80 hover:bg-white/5 transition-all flex items-center justify-center gap-2 rounded-lg"
                 >
                   <Play className="h-2.5 w-2.5 fill-current" /> View
                 </Link>
                 <Link
                   href={"/admin/movies/" + movie.id}
+                  onClick={saveStateAndScroll}
                   className="flex-1 h-9 bg-primary/10 border border-primary/20 text-[9px] font-black uppercase tracking-widest text-primary hover:bg-primary hover:text-primary-foreground transition-all flex items-center justify-center gap-2 rounded-lg"
                 >
                   <Edit className="h-2.5 w-2.5" /> Manage
