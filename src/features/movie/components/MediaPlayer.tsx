@@ -206,28 +206,29 @@ export default function MediaPlayer({
             .catch(err => console.error('[MediaPlayer] Failed to clear repair flag:', err));
         }
       });
-      
-      // Initialize source
-      player.src({ src, type: mimeType });
-    }
-  }, [src, mimeType]); // Re-run if source changes to re-init properly if needed
 
-  // Handle source and mimeType changes
-  useEffect(() => {
-    const player = playerRef.current;
-    if (player && !player.isDisposed() && src) {
+      // Do not initialize player.src here, the second useEffect will handle it
+      }
+      }, []); // Run initialization exactly once on mount
+
+      // Handle source and mimeType changes
+      useEffect(() => {
+      const player = playerRef.current;
+      if (player && !player.isDisposed() && src) {
       player.src({
         src: src,
         type: mimeType
       });
       player.load();
-    }
-  }, [src, mimeType]);
+      }
+      }, [src, mimeType]);
 
-  // Handle subtitle changes
-  useEffect(() => {
-    const player = playerRef.current;
-    if (player && !player.isDisposed()) {
+      // Handle subtitle changes
+      const subtitlesStr = JSON.stringify(subtitles);
+
+      useEffect(() => {
+      const player = playerRef.current;
+      if (player && !player.isDisposed()) {
       player.ready(() => {
         // 1. Clear all existing remote text tracks
         const tracks = player.remoteTextTracks();
@@ -236,9 +237,11 @@ export default function MediaPlayer({
             if (track) player.removeRemoteTextTrack(track);
         }
 
+        const parsedSubtitles = JSON.parse(subtitlesStr);
+
         // 2. Add new tracks
-        if (subtitles && subtitles.length > 0) {
-          subtitles.forEach((subtitle, index) => {
+        if (parsedSubtitles && parsedSubtitles.length > 0) {
+          parsedSubtitles.forEach((subtitle: any, index: number) => {
             const trackOptions = {
               kind: 'captions',
               src: subtitle.src,
@@ -248,9 +251,9 @@ export default function MediaPlayer({
             };
 
             console.log(`[MediaPlayer] Registering track: ${trackOptions.label}`);
-            
+
             const track = player.addRemoteTextTrack(trackOptions, false);
-            
+
             // 3. Force 'showing' mode for the default track
             if (trackOptions.default) {
               if (track) {
@@ -260,9 +263,8 @@ export default function MediaPlayer({
           });
         }
       });
-    }
-  }, [subtitles]);
-
+      }
+      }, [subtitlesStr, src]); // Re-run if src changes because video.js cleans up tracks automatically
   // Cleanup on unmount
   useEffect(() => {
     return () => {
