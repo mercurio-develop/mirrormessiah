@@ -84,25 +84,26 @@ export default function MediaPlayer({
 
       playerRef.current = player;
 
-      let restoreAttempted = false;
-      let targetTime = 0;
+      // Expose to component level so unmount can read it
+      (player as any)._mmState = { restoreAttempted: false, targetTime: 0 };
 
       const doRestore = () => {
-        if (restoreAttempted || targetTime <= 0) return;
-        
+        const state = (player as any)._mmState;
+        if (state.restoreAttempted || state.targetTime <= 0) return;
+
         const ct = player.currentTime();
-        if (ct !== undefined && Math.abs(ct - targetTime) < 2) {
-            restoreAttempted = true;
+        if (ct !== undefined && Math.abs(ct - state.targetTime) < 2) {
+            state.restoreAttempted = true;
             return;
         }
-        
-        player.currentTime(targetTime);
+
+        player.currentTime(state.targetTime);
       };
 
       player.on('loadedmetadata', () => {
-        // Reset state for new source
-        restoreAttempted = false;
-        targetTime = 0;
+        const state = (player as any)._mmState;
+        state.restoreAttempted = false;
+        state.targetTime = 0;
 
         const currentCtx = ctx.current;
         const currentId = currentCtx.id || currentCtx.src;
@@ -111,29 +112,31 @@ export default function MediaPlayer({
         if (savedTime) {
           const time = parseFloat(savedTime);
           if (!isNaN(time) && time > 0) {
-            targetTime = time;
+            state.targetTime = time;
             doRestore();
           } else {
-            restoreAttempted = true;
+            state.restoreAttempted = true;
           }
         } else {
-          restoreAttempted = true;
+          state.restoreAttempted = true;
         }
       });
 
       player.on('canplay', doRestore);
       player.on('play', doRestore);
       player.on('playing', () => {
-        if (!restoreAttempted && targetTime > 0) {
+        const state = (player as any)._mmState;
+        if (!state.restoreAttempted && state.targetTime > 0) {
             doRestore();
         }
       });
 
       player.on('timeupdate', () => {
+        const state = (player as any)._mmState;
         const ct = player.currentTime();
-        if (targetTime > 0 && !restoreAttempted) {
-             if (ct !== undefined && Math.abs(ct - targetTime) < 5) {
-                 restoreAttempted = true;
+        if (state.targetTime > 0 && !state.restoreAttempted) {
+             if (ct !== undefined && Math.abs(ct - state.targetTime) < 5) {
+                 state.restoreAttempted = true;
              } else {
                  return;
              }
@@ -143,7 +146,7 @@ export default function MediaPlayer({
         const currentId = currentCtx.id || currentCtx.src;
         const storageKey = `mm_playback_time_${currentId}`;
         const duration = player.duration();
-        
+
         if (ct !== undefined && duration !== undefined) {
           if (ct < duration - 10) {
             localStorage.setItem(storageKey, ct.toString());
@@ -153,23 +156,22 @@ export default function MediaPlayer({
         }
       });
 
-      // Save time when tab is hidden (especially important for mobile browsers)
       const handleVisibilityChange = () => {
         if (document.visibilityState === 'hidden' && playerRef.current && !playerRef.current.isDisposed()) {
+             const state = (playerRef.current as any)._mmState;
              const currentTime = playerRef.current.currentTime();
              const duration = playerRef.current.duration();
              const currentCtx = ctx.current;
              const currentId = currentCtx.id || currentCtx.src;
              const storageKey = `mm_playback_time_${currentId}`;
-             
-             if (currentTime !== undefined && duration && restoreAttempted) {
+
+             if (currentTime !== undefined && duration && state?.restoreAttempted) {
                  if (currentTime < duration - 10) {
                      localStorage.setItem(storageKey, currentTime.toString());
                  }
              }
         }
-      };
-      document.addEventListener('visibilitychange', handleVisibilityChange);
+      };      document.addEventListener('visibilitychange', handleVisibilityChange);
 
       player.on('dispose', () => {
           document.removeEventListener('visibilitychange', handleVisibilityChange);
@@ -265,6 +267,19 @@ export default function MediaPlayer({
   useEffect(() => {
     return () => {
       if (playerRef.current && !playerRef.current.isDisposed()) {
+        const state = (playerRef.current as any)._mmState;
+        const ct = playerRef.current.currentTime();
+        const duration = playerRef.current.duration();
+        const currentCtx = ctx.current;
+        const currentId = currentCtx.id || currentCtx.src;
+
+        if (ct !== undefined && duration !== undefined && state?.restoreAttempted) {
+             const storageKey = `mm_playback_time_${currentId}`;
+             if (ct < duration - 10) {
+                 localStorage.setItem(storageKey, ct.toString());
+             }
+        }
+
         playerRef.current.dispose();
         playerRef.current = null;
       }
