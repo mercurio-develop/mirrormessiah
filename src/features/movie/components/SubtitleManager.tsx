@@ -146,7 +146,7 @@ export default function SubtitleManager({ movieId }: { movieId: number }) {
       )}
 
       {showAdd && (
-        <form onSubmit={handleAdd} className="p-5 bg-muted/20 border border-border rounded-xl space-y-4 animate-in slide-in-from-top-2">
+        <div className="p-5 bg-muted/20 border border-border rounded-xl space-y-4 animate-in slide-in-from-top-2">
           <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Register Subtitle File</p>
           <div className="space-y-3">
             <input
@@ -196,7 +196,8 @@ export default function SubtitleManager({ movieId }: { movieId: number }) {
               Cancel
             </button>
             <button
-              type="submit"
+              type="button"
+              onClick={handleAdd}
               disabled={isPending || !newPath.trim()}
               className="h-9 px-4 bg-primary text-primary-foreground text-xs font-bold rounded-xl flex items-center gap-2 disabled:opacity-50 transition-all"
             >
@@ -204,7 +205,7 @@ export default function SubtitleManager({ movieId }: { movieId: number }) {
               Register
             </button>
           </div>
-        </form>
+        </div>
       )}
 
       {loading ? (
