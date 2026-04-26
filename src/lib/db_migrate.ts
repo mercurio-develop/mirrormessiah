@@ -132,7 +132,96 @@ export function runMigrations(): void {
       
       db.exec(`CREATE INDEX IF NOT EXISTS idx_subtitles_movie ON subtitles(movie_id)`);
 
-      // 2. Data Seeding
+      // 2. Series Tables
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS series (
+          id          INTEGER PRIMARY KEY,
+          library_id  INTEGER NOT NULL REFERENCES libraries(id) ON DELETE CASCADE,
+          title       TEXT NOT NULL,
+          year        INTEGER,
+          plot        TEXT,
+          rating      REAL,
+          tmdb_id     INTEGER,
+          imdb_id     TEXT,
+          thumbnail   TEXT,
+          genres      TEXT,
+          audience    TEXT CHECK(audience IN ('family', 'adult')) DEFAULT NULL,
+          director    TEXT,
+          language    TEXT,
+          needs_repair INTEGER DEFAULT 0,
+          created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+      `);
+
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS seasons (
+          id            INTEGER PRIMARY KEY,
+          series_id     INTEGER NOT NULL REFERENCES series(id) ON DELETE CASCADE,
+          season_number INTEGER NOT NULL,
+          title         TEXT,
+          plot          TEXT,
+          poster        TEXT,
+          created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at    TEXT NOT NULL DEFAULT (datetime('now')),
+          UNIQUE(series_id, season_number)
+        )
+      `);
+
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS episodes (
+          id             INTEGER PRIMARY KEY,
+          season_id      INTEGER NOT NULL REFERENCES seasons(id) ON DELETE CASCADE,
+          episode_number INTEGER NOT NULL,
+          title          TEXT,
+          plot           TEXT,
+          runtime        INTEGER,
+          thumbnail      TEXT,
+          needs_repair   INTEGER DEFAULT 0,
+          created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at     TEXT NOT NULL DEFAULT (datetime('now')),
+          UNIQUE(season_id, episode_number)
+        )
+      `);
+
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS episode_files (
+          id                INTEGER PRIMARY KEY,
+          library_id        INTEGER NOT NULL REFERENCES libraries(id) ON DELETE CASCADE,
+          episode_id        INTEGER NOT NULL REFERENCES episodes(id) ON DELETE CASCADE,
+          path              TEXT NOT NULL UNIQUE,
+          size_bytes        INTEGER,
+          container         TEXT,
+          added_at          TEXT NOT NULL DEFAULT (datetime('now')),
+          mime_type         TEXT,
+          duration_sec      INTEGER,
+          width             INTEGER,
+          height            INTEGER,
+          video_codec       TEXT,
+          audio_codec       TEXT,
+          language          TEXT
+        )
+      `);
+
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS episode_subtitles (
+          id          INTEGER PRIMARY KEY,
+          episode_id  INTEGER NOT NULL REFERENCES episodes(id) ON DELETE CASCADE,
+          file_id     INTEGER REFERENCES episode_files(id) ON DELETE CASCADE,
+          path        TEXT NOT NULL UNIQUE,
+          lang        TEXT,
+          label       TEXT,
+          format      TEXT,
+          default_flag INTEGER DEFAULT 0,
+          size_bytes  INTEGER
+        )
+      `);
+
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_seasons_series ON seasons(series_id)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_episodes_season ON episodes(season_id)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_episode_subtitles_episode ON episode_subtitles(episode_id)`);
+
+      // 3. Data Seeding
       const defaultCategories = ['Kids', 'Family', 'Adults'];
       const insertCategory = db.prepare('INSERT OR IGNORE INTO categories (name) VALUES (?)');
       for (const cat of defaultCategories) {

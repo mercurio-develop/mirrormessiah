@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
-import { LogOut, Film, Shield, Terminal, Sparkles, Menu, X as CloseIcon } from 'lucide-react';
+import { LogOut, Film, Tv, Shield, Terminal, Sparkles, Menu, X as CloseIcon } from 'lucide-react';
 import { useAdmin } from '@/contexts/AdminContext';
 import ThemeToggle from './ui/ThemeToggle';
 
@@ -152,13 +152,20 @@ export default function Navbar() {
       {/* Mobile Menu Overlay */}
       <div className={`lg:hidden fixed inset-x-0 top-20 bg-background/95 backdrop-blur-2xl border-b border-border transition-all duration-500 ease-in-out origin-top overflow-hidden ${isMenuOpen ? 'max-h-[400px] opacity-100' : 'max-h-0 opacity-0'}`}>
         <div className="p-6 space-y-6">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <Link 
               href="/" 
               className={`flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border transition-all ${pathname === '/' && !isFamilyMode ? 'bg-primary/10 border-primary text-primary' : 'bg-muted/50 border-border text-muted-foreground'}`}
             >
               <Film className="w-6 h-6" />
-              <span className="text-xs font-bold uppercase tracking-widest">Browse</span>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-center">Movies</span>
+            </Link>
+            <Link 
+              href="/series" 
+              className={`flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border transition-all ${pathname.startsWith('/series') ? 'bg-primary/10 border-primary text-primary' : 'bg-muted/50 border-border text-muted-foreground'}`}
+            >
+              <Tv className="w-6 h-6" />
+              <span className="text-[10px] font-bold uppercase tracking-widest text-center">Series</span>
             </Link>
             <button 
               onClick={toggleFamilyMode}
@@ -169,7 +176,7 @@ export default function Navbar() {
               }`}
             >
               <Sparkles className="w-6 h-6" />
-              <span className="text-xs font-bold uppercase tracking-widest">Family Mode</span>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-center">Kids</span>
             </button>
           </div>
 
