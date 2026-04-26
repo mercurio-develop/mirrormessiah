@@ -166,10 +166,10 @@ def open_db() -> sqlite3.Connection:
     return db
 
 def get_library_id(db: sqlite3.Connection) -> int:
-    row = db.execute('SELECT id FROM libraries LIMIT 1').fetchone()
+    row = db.execute('SELECT id FROM libraries WHERE root_path = ?', (SERIES_DIR.rstrip('/'),)).fetchone()
     if row:
         return row['id']
-    cur = db.execute("INSERT INTO libraries (name, root_path) VALUES ('Default', '/')")
+    cur = db.execute("INSERT INTO libraries (name, root_path) VALUES (?, ?)", ('Series', SERIES_DIR.rstrip('/')))
     db.commit()
     return cur.lastrowid
 
