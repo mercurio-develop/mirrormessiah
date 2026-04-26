@@ -26,12 +26,51 @@ API_KEY   = os.getenv('TMDB_API_KEY')
 DB_PATH   = os.getenv('DB_PATH') or str(ROOT / 'media.db')
 SERIES_DIR = '/media/tushita/TUSHITA_W11_DATA/series/'
 TMDB_BASE = 'https://api.themoviedb.org/3'
+IMG_BASE  = 'https://image.tmdb.org/t/p/w500'
 DELAY     = 0.25
 VIDEO_EXT = {'.mp4', '.mkv', '.avi'}
 SUB_EXT   = {'.srt', '.vtt', '.ass', '.ssa'}
 
 # Regex for "S01E05" or "1x05"
 EPISODE_RE = re.compile(r'S(?P<season>\d+)\s*E(?P<episode>\d+)|(?P<season2>\d+)x(?P<episode2>\d+)', re.IGNORECASE)
+
+def download_poster(poster_path: str, dest: Path) -> bool:
+    try:
+        r = requests.get(f'{IMG_BASE}{poster_path}', timeout=15, stream=True)
+        if not r.ok:
+            return False
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        with open(dest, 'wb') as f:
+            for chunk in r.iter_content(8192):
+                f.write(chunk)
+        return True
+    except Exception:
+        return False
+
+def clean_source_folder(folder: Path) -> None:
+    """Surgically remove garbage from a media folder (txt, nfo, small files)."""
+    if not folder.is_dir(): return
+
+    garbage_ext = {'.txt', '.nfo', '.jpg', '.png', '.exe', '.url', '.html', '.htm', '.xml', '.zip', '.rar'}
+    for p in list(folder.rglob('*')):
+        if p.is_file():
+            # Keep poster and backdrop if they exist
+            if p.name.lower() in ('poster.jpg', 'backdrop.jpg'):
+                continue
+            # Remove by extension
+            if p.suffix.lower() in garbage_ext:
+                try: p.unlink()
+                except: pass
+                continue
+            # Remove sample files (usually < 150MB)
+            if 'sample' in p.name.lower() and p.stat().st_size < 150 * 1024 * 1024:
+                try: p.unlink()
+                except: pass
+                continue
+            # Remove very small files that aren't subtitles
+            if p.stat().st_size < 1024 * 1024 and p.suffix.lower() not in SUB_EXT:
+                try: p.unlink()
+                except: pass
 
 def _ensure_tables(db: sqlite3.Connection) -> None:
     db.executescript("""
@@ -136,9 +175,19 @@ def get_library_id(db: sqlite3.Connection) -> int:
 
 def clean_name(name: str) -> str:
     name = Path(name).stem
+    tech_patterns = [
+        r"\[.*?\]", r"\(.*?\)", 
+        r"\d{4}p", r"\d{3}p", r"2160p", r"4k", r"bluray", r"web-dl", r"webrip", r"brrip", r"hdtv",
+        r"x264", r"x265", r"hevc", r"aac", r"dts", r"dd5\.1", r"ddp5\.1", r"5\.1", r"5\s1", 
+        r"ac3", r"yts", r"yify", r"multi", r"dual", r"subs", r"originalaudio", r"s\d{2}", r"season\s*\d+", r"complete", r"series", r"ova", r"xvid", r"av1"
+    ]
+    for pattern in tech_patterns:
+        name = re.sub(rf"\b{pattern}\b", " ", name, flags=re.IGNORECASE)
+
     name = re.sub(r'[\(\)\[\]]', ' ', name)
     name = re.sub(r'\b(19|20)\d{2}\b', '', name)
-    return re.sub(r'\s+', ' ', name).strip()
+    name = name.replace(".", " ").replace("_", " ").replace("-", " ")
+    return re.sub(r'\s+', ' ', name).strip().title()
 
 def extract_year(name: str) -> int | None:
     match = re.search(r'\b(19|20)\d{2}\b', name)
@@ -259,6 +308,65 @@ def cmd_sync(args):
     db.close()
     print("SYNC_COMPLETE")
 
+def cmd_cleanup(args):
+    print(f"\n--- INITIATING SERIES REGISTRY PURGE & CLEANUP ---")
+    db = open_db()
+    series_list = db.execute("SELECT id, title, year FROM series").fetchall()
+    
+    seen_naming = {}
+    purged_count = 0
+    fixed_titles = 0
+
+    for s in series_list:
+        old_id = s['id']
+        old_title = s['title']
+        pure_title = clean_name(old_title)
+        
+        # If the title was dirty, update it
+        if old_title != pure_title:
+            db.execute("UPDATE series SET title = ? WHERE id = ?", (pure_title, old_id))
+            fixed_titles += 1
+            s_title = pure_title
+        else:
+            s_title = old_title
+            
+        norm_key = (s_title.lower(), s['year'])
+        
+        if norm_key in seen_naming:
+            primary_id = seen_naming[norm_key]
+            # Merge seasons and episodes from old_id to primary_id
+            seasons = db.execute("SELECT id, season_number FROM seasons WHERE series_id = ?", (old_id,)).fetchall()
+            for old_season in seasons:
+                # Check if primary has this season
+                primary_season = db.execute("SELECT id FROM seasons WHERE series_id = ? AND season_number = ?", (primary_id, old_season['season_number'])).fetchone()
+                
+                if primary_season:
+                    # Move episodes to primary season
+                    p_s_id = primary_season['id']
+                    episodes = db.execute("SELECT id, episode_number FROM episodes WHERE season_id = ?", (old_season['id'],)).fetchall()
+                    for old_ep in episodes:
+                        # Check if primary season has this episode
+                        primary_ep = db.execute("SELECT id FROM episodes WHERE season_id = ? AND episode_number = ?", (p_s_id, old_ep['episode_number'])).fetchone()
+                        if primary_ep:
+                            p_e_id = primary_ep['id']
+                            db.execute("UPDATE OR IGNORE episode_files SET episode_id = ? WHERE episode_id = ?", (p_e_id, old_ep['id']))
+                            db.execute("UPDATE OR IGNORE episode_subtitles SET episode_id = ? WHERE episode_id = ?", (p_e_id, old_ep['id']))
+                            db.execute("DELETE FROM episodes WHERE id = ?", (old_ep['id'],))
+                        else:
+                            db.execute("UPDATE episodes SET season_id = ? WHERE id = ?", (p_s_id, old_ep['id']))
+                    db.execute("DELETE FROM seasons WHERE id = ?", (old_season['id'],))
+                else:
+                    db.execute("UPDATE seasons SET series_id = ? WHERE id = ?", (primary_id, old_season['id']))
+                    
+            db.execute("DELETE FROM series WHERE id = ?", (old_id,))
+            purged_count += 1
+        else:
+            seen_naming[norm_key] = old_id
+
+    db.commit()
+    db.close()
+    print(f"CLEANUP_COMPLETE: Fixed {fixed_titles} titles. Merged {purged_count} duplicates.")
+
 def cmd_organize(args):
     print(f"\n--- INITIATING FILESYSTEM REORGANIZATION (SERIES) ---")
     db = open_db()
@@ -336,15 +444,99 @@ def cmd_organize(args):
             except Exception as e:
                 print(f"  [!] ERROR: Could not rename {old_path.name}: {e}")
 
-    # Cleanup empty directories
+    # Cleanup empty directories and garbage
     for p in Path(SERIES_DIR).rglob('*'):
-        if p.is_dir() and not any(p.iterdir()):
-            try: p.rmdir()
-            except: pass
+        if p.is_dir():
+            clean_source_folder(p)
+            if not any(p.iterdir()):
+                try: p.rmdir()
+                except: pass
 
     db.commit()
     db.close()
     print(f"\nORGANIZE_COMPLETE: {renamed_files} files standardized. {skipped} skipped.")
+
+def cmd_scrape(args):
+    print(f"\n--- PHASE: Scraping Series Metadata ---")
+    db = open_db()
+    series_list = db.execute("SELECT * FROM series").fetchall()
+    scraped = 0
+    total = len(series_list)
+    
+    for i, s in enumerate(series_list, 1):
+        if args.force or not s['plot'] or not s['thumbnail']:
+            print(f"  [{i}/{total}] Scraping: {s['title']}")
+            
+            series_id = s['id']
+            tmdb_id = s['tmdb_id']
+            
+            if API_KEY and not tmdb_id:
+                res = tmdb_get('/search/tv', query=s['title'], first_air_date_year=s['year'])
+                if res and res.get('results'):
+                    tv = res['results'][0]
+                    tmdb_id = tv.get('id')
+                    db.execute("UPDATE series SET tmdb_id=? WHERE id=?", (tmdb_id, series_id))
+                    time.sleep(DELAY)
+
+            if API_KEY and tmdb_id:
+                try:
+                    details = tmdb_get(f'/tv/{tmdb_id}', append_to_response='credits')
+                    plot = details.get('overview')
+                    rating = details.get('vote_average')
+                    genres = ', '.join([g['name'] for g in details.get('genres', [])]) or None
+                    
+                    crew = details.get('credits', {}).get('crew', [])
+                    director = next((c['name'] for c in crew if c.get('job') == 'Director' or c.get('job') == 'Executive Producer'), None)
+                    
+                    genre_names = [g['name'] for g in details.get('genres', [])]
+                    audience = 'family' if any(g in genre_names for g in ('Animation', 'Family', 'Kids')) else None
+                    
+                    poster_src = details.get('poster_path')
+                    thumbnail = s['thumbnail']
+                    
+                    if poster_src:
+                        # Build standard series folder name
+                        year_str = f" ({s['year']})" if s['year'] else ""
+                        standard_series_name = re.sub(r'[<>:"/\\|?*]', '_', f"{s['title']}{year_str}").strip()
+                        standard_series_path = Path(SERIES_DIR) / standard_series_name
+                        poster_path = standard_series_path / 'poster.jpg'
+                        
+                        if args.force or not poster_path.exists():
+                            if download_poster(poster_src, poster_path):
+                                thumbnail = f"/posters/{poster_path.name}"
+                            else:
+                                thumbnail = poster_src
+                        else:
+                            thumbnail = f"/posters/{poster_path.name}"
+                    
+                    db.execute("""
+                        UPDATE series 
+                        SET plot=?, rating=?, genres=?, director=?, audience=?, thumbnail=?
+                        WHERE id=?
+                    """, (plot, rating, genres, director, audience, thumbnail, series_id))
+                    
+                    scraped += 1
+                    time.sleep(DELAY)
+                except Exception as e:
+                    print(f"    [!] Error scraping {s['title']}: {e}")
+
+    db.commit()
+    db.close()
+    print(f"SCRAPE_COMPLETE: {scraped} series enriched.")
+
+def cmd_full(args):
+    print(f"\n==========================================")
+    print(f"   MirrorMessiah Series: FULL SYSTEM INTEGRATION")
+    print(f"==========================================\n")
+    
+    cmd_sync(args)
+    cmd_cleanup(args)
+    cmd_organize(args)
+    cmd_scrape(args)
+    
+    print(f"\n==========================================")
+    print(f"   INTEGRATION COMPLETE")
+    print(f"==========================================\n")
 
 def main():
     parser = argparse.ArgumentParser(prog='series_cli', description='MirrorMessiah Series CLI')
@@ -355,9 +547,24 @@ def main():
     
     p_organize = sub.add_parser('organize', help='Reflect Database structure to physical folder names on disk')
     
+    p_cleanup = sub.add_parser('cleanup', help='Fix DB titles and merge duplicates')
+    
+    p_scrape = sub.add_parser('scrape', help='Scrape missing TMDB metadata for series')
+    p_scrape.add_argument('--force', action='store_true', help='Force re-scrape of all series')
+
+    p_full = sub.add_parser('full', help='Complete pipeline: Sync -> Cleanup -> Organize -> Scrape')
+    p_full.add_argument('dir', nargs='?', default=SERIES_DIR)
+    p_full.add_argument('--force', action='store_true', help='Force re-scrape')
+
     args = parser.parse_args()
+    if hasattr(args, 'force') is False:
+        args.force = False
+
     if args.command == 'sync': cmd_sync(args)
     elif args.command == 'organize': cmd_organize(args)
+    elif args.command == 'cleanup': cmd_cleanup(args)
+    elif args.command == 'scrape': cmd_scrape(args)
+    elif args.command == 'full': cmd_full(args)
 
 if __name__ == '__main__':
     main()
