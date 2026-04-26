@@ -311,6 +311,28 @@ def cmd_sync(args):
 def cmd_cleanup(args):
     print(f"\n--- INITIATING SERIES REGISTRY PURGE & CLEANUP ---")
     db = open_db()
+    
+    # 1. Purge missing files
+    print(f"  [.] Checking for missing files...")
+    files = db.execute("SELECT id, path FROM episode_files").fetchall()
+    deleted_files = 0
+    for f in files:
+        if not Path(f['path']).exists():
+            db.execute("DELETE FROM episode_files WHERE id = ?", (f['id'],))
+            deleted_files += 1
+
+    subs = db.execute("SELECT id, path FROM episode_subtitles").fetchall()
+    deleted_subs = 0
+    for s in subs:
+        if not Path(s['path']).exists():
+            db.execute("DELETE FROM episode_subtitles WHERE id = ?", (s['id'],))
+            deleted_subs += 1
+
+    # 2. Purge orphaned episodes, seasons, and series
+    db.execute("DELETE FROM episodes WHERE id NOT IN (SELECT episode_id FROM episode_files)")
+    db.execute("DELETE FROM seasons WHERE id NOT IN (SELECT season_id FROM episodes)")
+    db.execute("DELETE FROM series WHERE id NOT IN (SELECT series_id FROM seasons)")
+
     series_list = db.execute("SELECT id, title, year FROM series").fetchall()
     
     seen_naming = {}
