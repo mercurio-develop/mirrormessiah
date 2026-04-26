@@ -503,11 +503,11 @@ def cmd_scrape(args):
                         
                         if args.force or not poster_path.exists():
                             if download_poster(poster_src, poster_path):
-                                thumbnail = f"/posters/{poster_path.name}"
+                                thumbnail = str(poster_path)
                             else:
                                 thumbnail = poster_src
                         else:
-                            thumbnail = f"/posters/{poster_path.name}"
+                            thumbnail = str(poster_path)
                     
                     db.execute("""
                         UPDATE series 

@@ -214,8 +214,16 @@ export default function PublicSeriesList({ initialSeries }: PublicSeriesListProp
         setSelectedYear(state.selectedYear || '');
         setSort(state.sort || 'title_asc');
         
-        setSeriesList(state.seriesList || initialSeries);
-        offsetRef.current = state.offset || initialSeries.length;
+        // Use fresh initialSeries from server, but merge in any additional items if we loaded more pages
+        if (state.seriesList && state.seriesList.length > initialSeries.length) {
+            // Keep fresh initialSeries and append the rest from cache
+            const rest = state.seriesList.slice(initialSeries.length);
+            setSeriesList([...initialSeries, ...rest]);
+        } else {
+            setSeriesList(initialSeries);
+        }
+        
+        offsetRef.current = Math.max(initialSeries.length, state.offset || initialSeries.length);
         setHasMore(state.hasMore ?? (initialSeries.length >= ITEMS_PER_LOAD));
         setTotalCount(state.totalCount || 0);
 
@@ -226,6 +234,8 @@ export default function PublicSeriesList({ initialSeries }: PublicSeriesListProp
           sessionStorage.removeItem('mm_series_state');
         }, 100);
       } catch (e) {}
+    } else {
+      setSeriesList(initialSeries);
     }
     
     setRestored({ done: true, didRestore });
