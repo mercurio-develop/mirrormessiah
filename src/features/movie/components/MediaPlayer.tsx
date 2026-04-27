@@ -235,27 +235,35 @@ export default function MediaPlayer({
 
         const parsedSubtitles = JSON.parse(subtitlesStr);
 
-        // 2. Add new tracks
-        if (parsedSubtitles && parsedSubtitles.length > 0) {
-          parsedSubtitles.forEach((subtitle: any, index: number) => {
-            const trackOptions = {
-              kind: 'captions',
-              src: subtitle.src,
-              srclang: subtitle.srclang || 'en',
-              label: subtitle.label || 'Subtitles',
-              default: subtitle.default || (index === 0)
-            };
+        // 2. Add new tracks with a slight delay to avoid blocking main thread/network
+        const timeout = setTimeout(() => {
+            if (player.isDisposed()) return;
+            
+            if (parsedSubtitles && parsedSubtitles.length > 0) {
+              parsedSubtitles.forEach((subtitle: any, index: number) => {
+                const isDefault = subtitle.default || (index === 0);
+                const trackOptions = {
+                  kind: 'captions',
+                  src: subtitle.src,
+                  srclang: subtitle.srclang || 'en',
+                  label: subtitle.label || 'Subtitles',
+                  default: isDefault,
+                  mode: isDefault ? 'showing' : 'disabled'
+                };
 
-            const track = player.addRemoteTextTrack(trackOptions, false);
+                const track = player.addRemoteTextTrack(trackOptions, false);
 
-            // 3. Force 'showing' mode for the default track
-            if (trackOptions.default) {
-              if (track) {
-                (track as any).mode = 'showing';
-              }
+                // 3. Force 'showing' mode for the default track
+                if (isDefault) {
+                  if (track) {
+                    (track as any).mode = 'showing';
+                  }
+                }
+              });
             }
-          });
-        }
+        }, 500);
+
+        return () => clearTimeout(timeout);
       });
       }
       }, [subtitlesStr, src]); // Re-run if src changes because video.js cleans up tracks automatically

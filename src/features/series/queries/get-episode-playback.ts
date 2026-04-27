@@ -97,23 +97,42 @@ export function getEpisodePlayback(id: number) {
         eng: { code: 'en', label: 'English' },
         spa: { code: 'es', label: 'Español' },
         fre: { code: 'fr', label: 'Français' },
+        fra: { code: 'fr', label: 'Français' },
         ger: { code: 'de', label: 'Deutsch' },
+        deu: { code: 'de', label: 'Deutsch' },
         por: { code: 'pt', label: 'Português' },
         ita: { code: 'it', label: 'Italiano' },
         jpn: { code: 'ja', label: '日本語' },
+        chi: { code: 'zh', label: '中文' },
+        zho: { code: 'zh', label: '中文' },
+        rus: { code: 'ru', label: 'Русский' },
+        ara: { code: 'ar', label: 'العربية' },
       };
+
+      const uniqueSubs: any[] = [];
+      const seenLangs = new Set<string>();
+      const limit = 8;
+
+      for (const s of subtitles) {
+          if (uniqueSubs.length >= limit) break;
+          const mapped = langMap[s.lang] ?? { code: s.lang || 'en', label: s.label || s.lang?.toUpperCase() || 'Subtitles' };
+          
+          const langKey = mapped.code;
+          if (seenLangs.has(langKey)) continue;
+          seenLangs.add(langKey);
+
+          uniqueSubs.push({
+            src: `/api/subtitle?path=${b64urlEncode(s.path)}`,
+            srclang: mapped.code,
+            label: s.label || mapped.label,
+            default: uniqueSubs.length === 0
+          });
+      }
 
       return {
         source: { type: "file", src: `/api/stream?path=${b64urlEncode(bestFile.path)}` },
         mimeType: actualMime,
-        subtitles: subtitles.map(s => {
-          const mapped = langMap[s.lang] ?? { code: s.lang || 'en', label: s.label || s.lang?.toUpperCase() || 'Subtitles' };
-          return {
-            src: `/api/subtitle?path=${b64urlEncode(s.path)}`,
-            srclang: mapped.code,
-            label: s.label || mapped.label,
-          };
-        }),
+        subtitles: uniqueSubs,
         episode: { 
             id, 
             series_id: episode.series_id,
