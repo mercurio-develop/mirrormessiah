@@ -29,98 +29,135 @@ export default async function SeriesDetailsPage({ params }: SeriesDetailsPagePro
   if (!series) notFound();
 
   const posterUrl = getPosterUrl(series.thumbnail);
+  
+  // Find the very first episode across all seasons to use for the main "Play" button
+  let firstEpisodeId: number | null = null;
+  let firstSeasonEpNumber = "";
+  
+  if (series.seasons && series.seasons.length > 0) {
+     // Sort seasons to find season 1 (or lowest)
+     const sortedSeasons = [...series.seasons].sort((a, b) => a.season_number - b.season_number);
+     const firstSeason = sortedSeasons[0];
+     
+     if (firstSeason.episodes && firstSeason.episodes.length > 0) {
+         // Sort episodes to find episode 1
+         const sortedEps = [...firstSeason.episodes].sort((a, b) => a.episode_number - b.episode_number);
+         firstEpisodeId = sortedEps[0].id;
+         firstSeasonEpNumber = `S${firstSeason.season_number} E${sortedEps[0].episode_number}`;
+     }
+  }
 
   return (
     <div className="min-h-screen bg-background text-foreground font-sans selection:bg-primary selection:text-white pb-32">
-      {posterUrl && (
-        <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none opacity-40">
-          <HeroBackdrop src={posterUrl} alt={series.title} />
-          <div className="absolute inset-0 bg-gradient-to-t from-background via-background/90 to-transparent" />
-        </div>
-      )}
+      {/* Full-bleed Cinematic Hero Section */}
+      <div className="relative w-full h-[70vh] sm:h-[80vh] lg:h-[85vh] flex items-end">
+          {posterUrl && (
+            <div className="absolute inset-0 z-0">
+              {/* Note: In a real Netflix UI, this would be a wide landscape 16:9 backdrop image. 
+                  Since we only have vertical posters, we use object-cover to crop it stylistically. */}
+              <Image 
+                  src={posterUrl} 
+                  alt={series.title} 
+                  fill 
+                  priority 
+                  unoptimized
+                  className="object-cover opacity-60 mix-blend-luminosity lg:object-top" 
+              />
+              
+              {/* Aggressive gradient to fade to black at the bottom for content overlay */}
+              <div className="absolute inset-0 bg-gradient-to-t from-background via-background/80 to-transparent" />
+              {/* Side gradient for text readability on desktop */}
+              <div className="absolute inset-0 bg-gradient-to-r from-background via-background/40 to-transparent" />
+            </div>
+          )}
 
-      <div className="relative z-10 flex flex-col pt-20">
-        <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 py-4 lg:py-6">
-          <Link 
-            href="/series" 
-            className="inline-flex items-center gap-2 text-muted-foreground hover:text-primary transition-all group"
-          >
-            <ChevronLeft className="h-5 w-5 group-hover:-translate-x-1 transition-transform" />
-            <span className="text-sm font-bold">Back to Series</span>
-          </Link>
-        </div>
+          {/* Navigation / Back Button (Overlay) */}
+          <div className="absolute top-20 left-0 right-0 z-20 max-w-7xl mx-auto w-full px-4 sm:px-6 py-4">
+            <Link 
+              href="/series" 
+              className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-black/40 border border-white/10 text-white hover:bg-white hover:text-black transition-all group backdrop-blur-md"
+            >
+              <ChevronLeft className="h-5 w-5 group-hover:-translate-x-0.5 transition-transform" />
+            </Link>
+          </div>
 
-        <section className="w-full max-w-7xl mx-auto px-4 sm:px-6 mb-12">
-           <div className="flex flex-col lg:flex-row gap-8 lg:gap-16">
-              {/* Poster */}
-              {posterUrl && (
-                 <div className="shrink-0 w-48 sm:w-64 lg:w-80 relative aspect-[2/3] rounded-2xl overflow-hidden shadow-2xl border border-white/10 group">
-                    <Image
-                      src={posterUrl}
-                      alt={series.title}
-                      fill
-                      unoptimized
-                      priority
-                      className="object-cover group-hover:scale-105 transition-transform duration-700"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent opacity-60" />
-                 </div>
-              )}
-
-              <div className="space-y-6 flex-1">
-                 <h1 className="text-4xl md:text-5xl lg:text-7xl font-extrabold tracking-tight leading-tight">
+          <div className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 pb-12 lg:pb-24">
+             <div className="max-w-3xl space-y-6">
+                 {/* Title Treatment */}
+                 <h1 className="text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-black tracking-tight text-white drop-shadow-2xl">
                    {series.title}
                  </h1>
 
-                 <div className="flex flex-nowrap items-center gap-4 sm:gap-6 pt-2 overflow-x-auto pb-4 scrollbar-hide shrink-0">
+                 {/* Metadata Row */}
+                 <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-sm font-bold text-white/80 drop-shadow-md">
                   {series.needs_repair ? (
-                    <span className="shrink-0 px-3 py-1 bg-destructive/20 border border-destructive/40 text-destructive text-[10px] font-black uppercase tracking-widest rounded-full flex items-center gap-2 animate-pulse">
+                    <span className="px-3 py-1 bg-destructive/80 text-white text-[10px] font-black uppercase tracking-widest rounded-full flex items-center gap-2 animate-pulse shadow-lg">
                       <AlertCircle className="h-3.5 w-3.5" />
                       Repair_Required
                     </span>
                   ) : null}
-                  <div className="shrink-0 flex items-center gap-1.5 text-sm font-bold">
-                    <Star className="h-5 w-5 text-primary fill-primary" />
-                    <span>{series.rating || '0.0'}</span>
+                  <div className="flex items-center gap-1.5">
+                    <Star className="h-4 w-4 text-green-500 fill-green-500" />
+                    <span className="text-green-500">{series.rating || 'New'} Rating</span>
                   </div>
-                  <div className="shrink-0 h-4 w-px bg-border/50" />
-                  <span className="shrink-0 text-sm font-bold text-muted-foreground">{series.year}</span>
-                  <div className="shrink-0 h-4 w-px bg-border/50" />
-                  <span className="shrink-0 px-2 py-0.5 border border-muted-foreground/30 rounded text-[10px] font-black uppercase tracking-tighter text-muted-foreground">
+                  <span className="text-white">{series.year}</span>
+                  <span className="px-1.5 py-0.5 border border-white/40 rounded text-xs">
                     {series.seasons.length} Season{series.seasons.length !== 1 ? 's' : ''}
                   </span>
                   
                   {series.audience && (
-                    <>
-                      <div className="shrink-0 h-4 w-px bg-border/50" />
-                      <span className={`shrink-0 px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest text-white flex items-center gap-1.5 shadow-lg ${series.audience === 'family' ? 'bg-green-600' : 'bg-red-600'}`}>
-                        <div className="w-1 h-1 rounded-full bg-white animate-pulse" />
+                    <span className={`px-2 py-0.5 rounded-sm border text-xs font-black uppercase tracking-widest ${series.audience === 'family' ? 'border-green-500/50 text-green-400' : 'border-red-500/50 text-red-400'}`}>
                         {series.audience}
-                      </span>
-                    </>
+                    </span>
                   )}
                 </div>
 
+                {/* Synopsis */}
                 {series.plot && (
-                  <p className="text-base md:text-lg leading-relaxed text-foreground/90 font-medium max-w-3xl">
+                  <p className="text-base md:text-lg leading-relaxed text-white/90 font-medium max-w-2xl line-clamp-3 md:line-clamp-none drop-shadow-md">
                     {series.plot}
                   </p>
                 )}
-
-                <div className="flex flex-wrap gap-4 pt-4">
-                     <div className="flex flex-col gap-1">
-                        <span className="text-[10px] uppercase font-bold text-muted-foreground/40">Genres</span>
-                        <span className="text-sm font-bold text-primary">{series.genres || 'Miscellaneous'}</span>
+                
+                {/* Secondary Meta */}
+                <div className="flex flex-wrap gap-x-6 gap-y-2 pt-2 text-sm drop-shadow-md">
+                     <div className="flex items-center gap-2">
+                        <span className="text-white/50 font-medium">Starring:</span>
+                        <span className="text-white font-semibold">Netflix UI Clone Cast</span>
+                     </div>
+                     <div className="flex items-center gap-2">
+                        <span className="text-white/50 font-medium">Genres:</span>
+                        <span className="text-white font-semibold">{series.genres || 'TV Shows'}</span>
                      </div>
                 </div>
-              </div>
-           </div>
-        </section>
 
-        {/* Seasons & Episodes */}
-        <section className="w-full max-w-7xl mx-auto px-4 sm:px-6">
+                {/* Call to Action Actions */}
+                <div className="flex items-center gap-4 pt-6">
+                    {firstEpisodeId ? (
+                        <Link 
+                            href={`/watch/episode/${firstEpisodeId}`}
+                            className="h-12 sm:h-14 px-8 sm:px-10 bg-white text-black text-sm sm:text-base font-bold rounded-lg flex items-center justify-center gap-3 hover:bg-white/90 transition-all hover:scale-105 active:scale-95 shadow-2xl"
+                        >
+                            <Play className="h-5 w-5 sm:h-6 sm:w-6 fill-current" /> Play {firstSeasonEpNumber}
+                        </Link>
+                    ) : (
+                        <button disabled className="h-12 sm:h-14 px-8 sm:px-10 bg-white/20 text-white/50 text-sm sm:text-base font-bold rounded-lg flex items-center justify-center gap-3 cursor-not-allowed">
+                           <AlertCircle className="h-5 w-5" /> No Episodes Indexed
+                        </button>
+                    )}
+                    
+                    <button className="h-12 sm:h-14 px-8 sm:px-10 bg-zinc-800/80 backdrop-blur-md text-white border border-white/10 text-sm sm:text-base font-bold rounded-lg flex items-center justify-center gap-3 hover:bg-zinc-700/80 transition-all hover:scale-105 active:scale-95 shadow-2xl">
+                        <Info className="h-5 w-5 sm:h-6 sm:w-6" /> More Info
+                    </button>
+                </div>
+
+             </div>
+          </div>
+      </div>
+
+      {/* Main Content Area - Seasons & Episodes */}
+      <div className="relative z-20 max-w-7xl mx-auto px-4 sm:px-6 mt-12 sm:mt-16">
            <SeasonSelector seasons={series.seasons} seriesId={series.id} />
-        </section>
       </div>
     </div>
   );
