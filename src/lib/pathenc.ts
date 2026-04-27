@@ -113,8 +113,23 @@ export function parseRangeHeader(rangeHeader: string, fileSize: number): { start
     return null;
   }
   
-  const start = parts[0] ? parseInt(parts[0], 10) : 0;
-  const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+  let start: number;
+  let end: number;
+
+  if (parts[0] === '') {
+    // Suffix byte range: e.g., bytes=-500 (last 500 bytes)
+    const suffixLength = parseInt(parts[1], 10);
+    if (isNaN(suffixLength)) return null;
+    start = Math.max(0, fileSize - suffixLength);
+    end = fileSize - 1;
+  } else {
+    start = parseInt(parts[0], 10);
+    if (parts[1] === '') {
+      end = fileSize - 1;
+    } else {
+      end = parseInt(parts[1], 10);
+    }
+  }
   
   // Validate range
   if (isNaN(start) || isNaN(end) || start < 0 || end >= fileSize || start > end) {

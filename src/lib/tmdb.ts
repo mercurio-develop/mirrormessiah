@@ -25,6 +25,27 @@ export interface TmdbSearchResult {
   poster_path: string | null;
 }
 
+export interface TmdbSeriesDetails {
+  id: number;
+  name: string;
+  overview: string | null;
+  first_air_date: string | null;
+  vote_average: number | null;
+  genres: Array<{ id: number; name: string }>;
+  original_language: string | null;
+  poster_path: string | null;
+  credits?: {
+    crew: Array<{ job: string; name: string }>;
+  };
+}
+
+export interface TmdbSeriesSearchResult {
+  id: number;
+  name: string;
+  first_air_date: string;
+  poster_path: string | null;
+}
+
 async function tmdbFetch<T>(endpoint: string, params: Record<string, string> = {}): Promise<T> {
   if (!API_KEY) throw new Error('TMDB_API_KEY not set');
 
@@ -85,8 +106,60 @@ export async function searchMovie(title: string, year?: number | null): Promise<
   return null;
 }
 
+export async function searchSeries(title: string, year?: number | null): Promise<TmdbSeriesSearchResult | null> {
+  const clean = (t: string) => {
+    const noise = [
+      'PROPER', 'REPACK', 'UNRATED', 'EXTENDED', 'LIMITED', 'INTERNAL', 
+      'RERIP', 'REAL', 'SUBBED', 'DUBBED', 'HC', 'S\\d{2}', 'SEASON\\s*\\d+'
+    ];
+    let cleaned = t;
+    noise.forEach(n => {
+      const re = new RegExp(`\\b${n}\\b`, 'gi');
+      cleaned = cleaned.replace(re, '');
+    });
+    return cleaned.replace(/[^\w\s]/gi, ' ').replace(/\s+/g, ' ').trim();
+  };
+  
+  const searchAttempts = [
+    { query: title, first_air_date_year: year ? String(year) : undefined },
+    { query: title },
+    { query: clean(title), first_air_date_year: year ? String(year) : undefined },
+    { query: clean(title) },
+  ];
+
+  if (title.includes(',') || title.includes(':')) {
+    const shortTitle = title.split(/[,:]/)[0].trim();
+    if (shortTitle.length > 3) {
+      searchAttempts.push({ query: shortTitle, first_air_date_year: year ? String(year) : undefined });
+      searchAttempts.push({ query: shortTitle });
+    }
+  }
+
+  for (const attempt of searchAttempts) {
+    try {
+      const params: Record<string, string> = { query: attempt.query };
+      if (attempt.first_air_date_year) params.first_air_date_year = attempt.first_air_date_year;
+      
+      const data = await tmdbFetch<{ results: TmdbSeriesSearchResult[] }>('/search/tv', params);
+      if (data.results && data.results.length > 0) {
+        return data.results[0];
+      }
+    } catch (e) {
+      console.error(`TMDB Series Search failed for ${attempt.query}:`, e);
+    }
+  }
+
+  return null;
+}
+
 export async function getMovieDetails(tmdbId: number): Promise<TmdbMovieDetails> {
   return tmdbFetch<TmdbMovieDetails>(`/movie/${tmdbId}`, {
+    append_to_response: 'credits',
+  });
+}
+
+export async function getSeriesDetails(tmdbId: number): Promise<TmdbSeriesDetails> {
+  return tmdbFetch<TmdbSeriesDetails>(`/tv/${tmdbId}`, {
     append_to_response: 'credits',
   });
 }
@@ -95,6 +168,6 @@ export function posterUrl(posterPath: string): string {
   return `${IMAGE_BASE}${posterPath}`;
 }
 
-export function extractDirector(details: TmdbMovieDetails): string | null {
-  return details.credits?.crew.find(c => c.job === 'Director')?.name ?? null;
+export function extractDirector(details: TmdbMovieDetails | TmdbSeriesDetails): string | null {
+  return details.credits?.crew.find(c => c.job === 'Director' || c.job === 'Executive Producer')?.name ?? null;
 }

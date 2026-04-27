@@ -73,13 +73,7 @@ export default function MediaPlayer({
           airPlay: {}
         },
         playbackRates: [0.5, 1, 1.25, 1.5, 2],
-        html5: {
-          vhs: {
-            overrideNative: true
-          },
-          nativeAudioTracks: false,
-          nativeVideoTracks: false,
-        }
+        sources: src ? [{ src, type: mimeType }] : undefined
       });
 
       playerRef.current = player;
@@ -230,6 +224,8 @@ export default function MediaPlayer({
       const player = playerRef.current;
       if (player && !player.isDisposed()) {
       player.ready(() => {
+        if (player.isDisposed()) return;
+
         // 1. Clear all existing remote text tracks
         const tracks = player.remoteTextTracks();
         for (let i = tracks.length - 1; i >= 0; i--) {
@@ -249,8 +245,6 @@ export default function MediaPlayer({
               label: subtitle.label || 'Subtitles',
               default: subtitle.default || (index === 0)
             };
-
-            console.log(`[MediaPlayer] Registering track: ${trackOptions.label}`);
 
             const track = player.addRemoteTextTrack(trackOptions, false);
 

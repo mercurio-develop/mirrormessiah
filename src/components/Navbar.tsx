@@ -74,14 +74,19 @@ export default function Navbar() {
           </Link>
 
           <div className="hidden lg:flex items-center gap-8">
-            <Link 
-              href="/" 
+            <Link
+              href="/"
               className={`text-sm font-semibold transition-colors hover:text-primary ${pathname === '/' && !isFamilyMode ? 'text-primary' : 'text-muted-foreground'}`}
             >
-              Browse
+              Movies
             </Link>
-            <button
-              onClick={toggleFamilyMode}
+            <Link
+              href="/series"
+              className={`text-sm font-semibold transition-colors hover:text-primary ${pathname.startsWith('/series') ? 'text-primary' : 'text-muted-foreground'}`}
+            >
+              Series
+            </Link>
+            <button              onClick={toggleFamilyMode}
               className={`text-sm font-bold transition-all px-5 py-2 rounded-full border flex items-center gap-2.5 active:scale-95 ${
                 isFamilyMode
                 ? 'bg-green-500 border-green-400 text-white shadow-[0_0_25px_rgba(34,197,94,0.4)]'

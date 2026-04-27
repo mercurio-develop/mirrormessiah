@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { isAdminKeyConfigured } from '@/lib/auth';
-import { Database, Settings, ShieldAlert, Cpu, Film, ChevronRight, Copy, LayoutDashboard, PlusCircle } from 'lucide-react';
+import { Database, Settings, ShieldAlert, Cpu, Film, ChevronRight, Copy, LayoutDashboard, PlusCircle, Tv } from 'lucide-react';
 
 export default function AdminPage() {
   const adminKeyConfigured = isAdminKeyConfigured();
@@ -49,44 +49,49 @@ export default function AdminPage() {
           </div>
         </Link>
 
-        <Link href="/admin/duplicates" className="group">
-          <div className="p-8 bg-card border border-border hover:border-destructive/50 transition-all duration-300 rounded-2xl hover:shadow-2xl hover:shadow-destructive/5 flex flex-col justify-between h-full">
+        <Link href="/admin/series" className="group">
+          <div className="p-8 bg-card border border-border hover:border-blue-500/50 transition-all duration-300 rounded-2xl hover:shadow-2xl hover:shadow-blue-500/5 flex flex-col justify-between h-full">
             <div className="space-y-6">
-              <div className="p-4 bg-destructive/10 border border-destructive/20 text-destructive w-fit rounded-2xl group-hover:scale-110 transition-transform">
-                <Copy className="h-6 w-6" />
+              <div className="p-4 bg-blue-500/10 border border-blue-500/20 text-blue-500 w-fit rounded-2xl group-hover:scale-110 transition-transform">
+                <Tv className="h-6 w-6" />
               </div>
               <div className="space-y-2">
-                <h3 className="text-xl font-bold text-foreground flex items-center gap-2 group-hover:text-destructive transition-colors">
-                  Duplicate Finder <ChevronRight className="h-4 w-4 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
+                <h3 className="text-xl font-bold text-foreground flex items-center gap-2 group-hover:text-blue-500 transition-colors">
+                  Series Registry <ChevronRight className="h-4 w-4 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
                 </h3>
                 <p className="text-sm text-muted-foreground leading-relaxed">
-                  Automatically detect and merge duplicate entries to keep your registry clean.
+                  Manage your TV shows, update episodes, and organize seasons.
                 </p>
               </div>
             </div>
             <div className="mt-8 pt-6 border-t border-border/50 flex items-center justify-between text-[10px] font-black uppercase tracking-widest opacity-30">
-               <span>Database Cleanup</span>
-               <Database className="h-3 w-3" />
+               <span>Library Manager</span>
+               <PlusCircle className="h-3 w-3" />
             </div>
           </div>
         </Link>
 
-        <div className="p-8 bg-muted/30 border border-border/50 opacity-60 rounded-2xl flex flex-col justify-between h-full cursor-not-allowed">
-          <div className="space-y-6">
-            <div className="p-4 bg-muted border border-border text-muted-foreground w-fit rounded-2xl">
-              <Settings className="h-6 w-6" />
+        <Link href="/admin/terminal" className="group">
+          <div className="p-8 bg-card border border-border hover:border-purple-500/50 transition-all duration-300 rounded-2xl hover:shadow-2xl hover:shadow-purple-500/5 flex flex-col justify-between h-full">
+            <div className="space-y-6">
+              <div className="p-4 bg-purple-500/10 border border-purple-500/20 text-purple-500 w-fit rounded-2xl group-hover:scale-110 transition-transform">
+                <Settings className="h-6 w-6" />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-xl font-bold text-foreground flex items-center gap-2 group-hover:text-purple-500 transition-colors">
+                  System Terminal <ChevronRight className="h-4 w-4 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
+                </h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  Run synchronization, metadata scraping, and conversion scripts directly from the browser.
+                </p>
+              </div>
             </div>
-            <div className="space-y-2">
-              <h3 className="text-xl font-bold text-muted-foreground">System Settings</h3>
-              <p className="text-sm text-muted-foreground/60 leading-relaxed">
-                Advanced server configuration and API management tools are currently restricted.
-              </p>
+            <div className="mt-8 pt-6 border-t border-border/50 flex items-center justify-between text-[10px] font-black uppercase tracking-widest opacity-30">
+               <span>Script Execution</span>
+               <Database className="h-3 w-3" />
             </div>
           </div>
-          <div className="mt-8 pt-6 border-t border-border/50 text-[10px] font-black uppercase tracking-widest opacity-20">
-             Coming Soon
-          </div>
-        </div>
+        </Link>
       </div>
 
       {/* Maintenance Cards */}

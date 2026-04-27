@@ -216,9 +216,10 @@ export default function PublicSeriesList({ initialSeries }: PublicSeriesListProp
         
         // Use fresh initialSeries from server, but merge in any additional items if we loaded more pages
         if (state.seriesList && state.seriesList.length > initialSeries.length) {
-            // Keep fresh initialSeries and append the rest from cache
+            // Keep fresh initialSeries and append the rest from cache, ensuring no duplicates
             const rest = state.seriesList.slice(initialSeries.length);
-            setSeriesList([...initialSeries, ...rest]);
+            const uniqueRest = rest.filter((cachedItem: Series) => !initialSeries.some((initialItem) => initialItem.id === cachedItem.id));
+            setSeriesList([...initialSeries, ...uniqueRest]);
         } else {
             setSeriesList(initialSeries);
         }

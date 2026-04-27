@@ -11,16 +11,6 @@ const nextConfig = {
         pathname: '/api/images',
       },
     ],
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: 'yts.mx',
-      },
-      {
-        protocol: 'https',
-        hostname: 'img.yts.mx',
-      },
-    ],
   },
 }
 

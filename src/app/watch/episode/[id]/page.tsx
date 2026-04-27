@@ -52,8 +52,8 @@ export default async function WatchEpisodePage({ params }: WatchEpisodePageProps
         </div>
 
         {/* Player Section */}
-        <section className="w-full flex-1 flex flex-col max-w-7xl mx-auto px-4 sm:px-6 mb-8">
-          <div className="w-full flex-1 bg-black rounded-xl overflow-hidden shadow-2xl border border-white/5 relative min-h-[50vh]">
+        <section className="w-full max-w-7xl mx-auto px-4 sm:px-6 mb-8 lg:mb-12">
+          <div className="aspect-video w-full bg-black rounded-xl lg:rounded-2xl overflow-hidden shadow-[0_30px_100px_rgba(0,0,0,0.8)] border border-white/5 relative">
             {!episodeData.source ? (
               <div className="w-full h-full flex flex-col items-center justify-center text-center p-12 bg-muted/10">
                 <Activity className="h-16 w-16 text-destructive mb-6 animate-pulse" />
@@ -62,7 +62,7 @@ export default async function WatchEpisodePage({ params }: WatchEpisodePageProps
               </div>
             ) : (
               <MediaPlayer
-                id={episode.id}
+                id={`episode_${episode.id}`}
                 src={episodeData.source.src}
                 mimeType={episodeData.mimeType}
                 subtitles={episodeData.subtitles}

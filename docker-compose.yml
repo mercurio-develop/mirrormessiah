@@ -14,10 +14,13 @@ services:
       - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3000}
       - DB_PATH=/app/data/media.db
       - MEDIA_DIR=${MEDIA_DIR}
+      - SERIES_DIR=${SERIES_DIR}
     volumes:
       - mm-data:/app/data
       # MEDIA_DIR: Path to your movie collection. Mounted as rw for poster management by mm.py
       - "${MEDIA_DIR:?MEDIA_DIR is not set.}:${MEDIA_DIR}"
+      # SERIES_DIR: Path to your series collection
+      - "${SERIES_DIR:?SERIES_DIR is not set.}:${SERIES_DIR}"
     networks:
       internal-net:
         aliases:
