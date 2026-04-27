@@ -77,9 +77,14 @@ def convert_file(file_path: Path):
     import shutil
     import tempfile
     
-    # We use a secure temporary file on the local OS disk to avoid issues
-    # with network drives or exFAT/NTFS mounts failing to re-open the file for faststart
-    fd, temp_out_str = tempfile.mkstemp(suffix='.web.mp4', prefix='mm_convert_')
+    # We use a temporary file in the SAME directory as the source file.
+    # This ensures we use the disk space of the media drive (e.g. external HDD)
+    # rather than the system /tmp directory which might be on a small/full SSD.
+    fd, temp_out_str = tempfile.mkstemp(
+        suffix='.web.mp4', 
+        prefix='.mm_tmp_', 
+        dir=str(file_path.parent)
+    )
     os.close(fd)
     temp_out = Path(temp_out_str)
 
@@ -140,13 +145,23 @@ def main():
             print(f"Not a recognized video file: {target.name}")
     elif target.is_dir():
         # Use rglob if recursive flag is set, otherwise glob
+        # We materialize the list into memory immediately to prevent 
+        # FileNotFoundError if directories are renamed by other processes 
+        # during long-running ffmpeg conversions.
+        print(f"Scanning directory: {target}...")
         file_iterator = target.rglob('*') if args.recursive else target.glob('*')
+        all_files = list(file_iterator)
+        print(f"Found {len(all_files)} total items. Starting conversion pass...")
         
-        for f in file_iterator:
+        for f in all_files:
             if f.is_file() and f.suffix.lower() in VIDEO_EXTS:
                 # Do not process backups or already processed temp files
                 if not f.name.endswith('.bak') and not f.name.endswith('.web.mp4'):
-                    convert_file(f)
+                    # Check if file still exists (might have been renamed by scrape/organize)
+                    if f.exists():
+                        convert_file(f)
+                    else:
+                        print(f"\nSkipping {f.name}: File no longer exists at this path.")
 
 if __name__ == '__main__':
     main()

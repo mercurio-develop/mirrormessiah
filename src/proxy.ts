@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { jwtVerify } from 'jose';
 
+// Simple in-memory cache for verified tokens to avoid blocking the event loop
+// with expensive crypto on every asset/subtitle request.
+const verifiedTokens = new Map<string, { expires: number }>();
+
 // Define the routes that don't require authentication
 const publicRoutes = ['/login', '/api/auth'];
 
@@ -35,9 +39,22 @@ export async function proxy(request: NextRequest) {
   }
 
   try {
+    // Check cache first (valid for 60 seconds)
+    const cached = verifiedTokens.get(token);
+    if (cached && cached.expires > Date.now()) {
+        return NextResponse.next();
+    }
+
     // Verify the JWT token
     const SECRET_KEY = new TextEncoder().encode(gateKey);
     await jwtVerify(token, SECRET_KEY);
+
+    // Cache successful verification
+    verifiedTokens.set(token, { expires: Date.now() + 60000 });
+    
+    // Periodically clean up cache
+    if (verifiedTokens.size > 1000) verifiedTokens.clear();
+
     return NextResponse.next();
   } catch (error) {
     // Token is invalid or expired

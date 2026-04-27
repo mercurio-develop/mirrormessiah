@@ -267,18 +267,38 @@ def clean_source_folder(folder: Path) -> None:
                 except: pass
 
 def detect_lang_from_path(path: Path) -> str:
-    name = path.stem.lower()
-    lang3_map = {
-        'eng': 'en', 'spa': 'es', 'fre': 'fr', 'ger': 'de',
-        'por': 'pt', 'ita': 'it', 'jpn': 'ja', 'chi': 'zh',
+    name = path.name.lower()
+    
+    # ISO 639-2 (3-letter) -> ISO 639-1 (2-letter)
+    lang_map = {
+        'eng': 'en', 'spa': 'es', 'fre': 'fr', 'fra': 'fr', 'ger': 'de', 'deu': 'de',
+        'por': 'pt', 'ita': 'it', 'jpn': 'ja', 'chi': 'zh', 'zho': 'zh', 'rus': 'ru',
+        'ara': 'ar', 'ben': 'bn', 'hin': 'hi', 'urd': 'ur', 'kor': 'ko', 'vie': 'vi',
+        'tha': 'th', 'tur': 'tr', 'pol': 'pl', 'dut': 'nl', 'nld': 'nl', 'gre': 'el',
+        'ell': 'el', 'heb': 'he', 'heb': 'he', 'swe': 'sv', 'nor': 'no', 'dan': 'da',
+        'fin': 'fi', 'cat': 'ca', 'glg': 'gl', 'baq': 'eu', 'hrv': 'hr', 'cze': 'cs',
+        'ces': 'cs', 'rum': 'ro', 'ron': 'ro', 'hun': 'hu', 'ukr': 'uk', 'ind': 'id',
+        'msa': 'ms', 'may': 'ms'
     }
+
+    # 1. Try to find 2-letter or 3-letter code between dots: .eng.srt or .en.srt
     parts = name.split('.')
-    if len(parts) >= 2 and parts[-1] in lang3_map:
-        return lang3_map[parts[-1]]
-    full = str(path).lower()
-    for code, short in lang3_map.items():
-        if code in full:
-            return short
+    for p in parts:
+        if p in lang_map: return lang_map[p]
+        if len(p) == 2 and p.isalpha() and p in lang_map.values(): return p
+
+    # 2. Try common language names as prefixes
+    if 'english' in name: return 'en'
+    if 'spanish' in name: return 'es'
+    if 'french' in name: return 'fr'
+    if 'german' in name: return 'de'
+    if 'italian' in name: return 'it'
+    if 'portuguese' in name: return 'pt'
+    if 'japanese' in name: return 'ja'
+    if 'chinese' in name: return 'zh'
+    if 'arabic' in name: return 'ar'
+    if 'russian' in name: return 'ru'
+
     return 'en'
 
 # ---------------------------------------------------------------------------

@@ -47,16 +47,25 @@ def download_poster(poster_path: str, dest: Path) -> bool:
     except Exception:
         return False
 
-def clean_source_folder(folder: Path) -> None:
+def clean_source_folder(folder: Path, aggressive=False) -> None:
     """Surgically remove garbage from a media folder (txt, nfo, small files)."""
     if not folder.is_dir(): return
 
-    garbage_ext = {'.txt', '.nfo', '.jpg', '.png', '.exe', '.url', '.html', '.htm', '.xml', '.zip', '.rar'}
+    garbage_ext = {'.txt', '.nfo', '.png', '.exe', '.url', '.html', '.htm', '.xml', '.zip', '.rar', '.bak', '.sfv'}
     for p in list(folder.rglob('*')):
         if p.is_file():
-            # Keep poster and backdrop if they exist
-            if p.name.lower() in ('poster.jpg', 'backdrop.jpg'):
+            # Keep poster and backdrop if they exist, unless aggressive mode is on
+            if not aggressive and p.name.lower() in ('poster.jpg', 'backdrop.jpg', 'banner.jpg', 'fanart.jpg'):
                 continue
+            
+            # Unconditionally remove .bak files (they are huge leftovers)
+            if p.suffix.lower() == '.bak':
+                try: 
+                    p.unlink()
+                    print(f"    [clean] Removed leftover backup: {p.name}")
+                except: pass
+                continue
+
             # Remove by extension
             if p.suffix.lower() in garbage_ext:
                 try: p.unlink()
@@ -235,6 +244,34 @@ def tmdb_get(endpoint: str, **params) -> dict:
     if r.ok: return r.json()
     return {}
 
+def detect_lang_from_path(path: Path) -> str:
+    name = path.name.lower()
+    lang_map = {
+        'eng': 'en', 'spa': 'es', 'fre': 'fr', 'fra': 'fr', 'ger': 'de', 'deu': 'de',
+        'por': 'pt', 'ita': 'it', 'jpn': 'ja', 'chi': 'zh', 'zho': 'zh', 'rus': 'ru',
+        'ara': 'ar', 'ben': 'bn', 'hin': 'hi', 'urd': 'ur', 'kor': 'ko', 'vie': 'vi',
+        'tha': 'th', 'tur': 'tr', 'pol': 'pl', 'dut': 'nl', 'nld': 'nl', 'gre': 'el',
+        'ell': 'el', 'heb': 'he', 'swe': 'sv', 'nor': 'no', 'dan': 'da',
+        'fin': 'fi', 'cat': 'ca', 'glg': 'gl', 'baq': 'eu', 'hrv': 'hr', 'cze': 'cs',
+        'ces': 'cs', 'rum': 'ro', 'ron': 'ro', 'hun': 'hu', 'ukr': 'uk', 'ind': 'id',
+        'msa': 'ms', 'may': 'ms'
+    }
+    parts = name.split('.')
+    for p in parts:
+        if p in lang_map: return lang_map[p]
+        if len(p) == 2 and p.isalpha() and p in lang_map.values(): return p
+    if 'english' in name: return 'en'
+    if 'spanish' in name: return 'es'
+    if 'french' in name: return 'fr'
+    if 'german' in name: return 'de'
+    if 'italian' in name: return 'it'
+    if 'portuguese' in name: return 'pt'
+    if 'japanese' in name: return 'ja'
+    if 'chinese' in name: return 'zh'
+    if 'arabic' in name: return 'ar'
+    if 'russian' in name: return 'ru'
+    return 'en'
+
 def ingest_series(db: sqlite3.Connection, series_folder: Path, lib_id: int):
     title = clean_name(series_folder.name)
     year = extract_year(series_folder.name)
@@ -288,6 +325,25 @@ def ingest_series(db: sqlite3.Connection, series_folder: Path, lib_id: int):
                 db.execute("INSERT OR IGNORE INTO episode_files (library_id, episode_id, path, size_bytes, container) VALUES (?,?,?,?,?)",
                            (lib_id, ep_id, str(ep_file), ep_file.stat().st_size, ep_file.suffix.lstrip('.')))
                 print(f"  [+] Added: S{season_num:02d}E{ep_num:02d} -> {ep_file.name}")
+
+    # 3. Handle subtitles
+    for sub_file in series_folder.rglob('*'):
+        if sub_file.is_file() and sub_file.suffix.lower() in SUB_EXT:
+            season_num, ep_num = extract_episode_info(sub_file.name, sub_file.parent.name)
+            if season_num is None or ep_num is None: continue
+            
+            # Find the episode
+            ep = db.execute("""
+                SELECT e.id FROM episodes e
+                JOIN seasons s ON e.season_id = s.id
+                WHERE s.series_id = ? AND s.season_number = ? AND e.episode_number = ?
+            """, (series_id, season_num, ep_num)).fetchone()
+            
+            if ep:
+                lang = detect_lang_from_path(sub_file)
+                fmt = sub_file.suffix.lstrip('.')
+                db.execute("INSERT OR IGNORE INTO episode_subtitles (episode_id, path, lang, format, size_bytes) VALUES (?,?,?,?,?)",
+                           (ep['id'], str(sub_file), lang, fmt, sub_file.stat().st_size))
 
     db.commit()
 
@@ -468,13 +524,41 @@ def cmd_organize(args):
             except Exception as e:
                 print(f"  [!] ERROR: Could not rename {old_path.name}: {e}")
 
-    # Cleanup empty directories and garbage
-    for p in Path(SERIES_DIR).rglob('*'):
-        if p.is_dir():
-            clean_source_folder(p)
-            if not any(p.iterdir()):
-                try: p.rmdir()
-                except: pass
+    # Cleanup empty directories and garbage - Bottom-up approach
+    print(f"  [.] Cleaning up leftover empty directories and merged folders...")
+    
+    # 1. Map out all "Standard" paths that SHOULD exist according to the DB
+    active_standard_paths = set()
+    for s in series_list:
+        year_str = f" ({s['year']})" if s['year'] else ""
+        name = re.sub(r'[<>:"/\\|?*]', '_', f"{s['title']}{year_str}").strip()
+        active_standard_paths.add(str(Path(SERIES_DIR) / name))
+
+    # Get all subdirectories, sort by depth descending to ensure bottom-up
+    all_dirs = sorted([p for p in Path(SERIES_DIR).rglob('*') if p.is_dir()], key=lambda x: len(x.parts), reverse=True)
+    
+    for p in all_dirs:
+        # Avoid cleaning the root series directory
+        if p == Path(SERIES_DIR): continue
+        
+        # Check if this directory belongs to a zombie series
+        is_zombie = False
+        try:
+            parts = p.relative_to(SERIES_DIR).parts
+            if parts:
+                root_series_dir = Path(SERIES_DIR) / parts[0]
+                if str(root_series_dir) not in active_standard_paths:
+                    is_zombie = True
+        except: pass
+
+        clean_source_folder(p, aggressive=is_zombie)
+        
+        if p.exists() and not any(p.iterdir()):
+            try:
+                p.rmdir()
+                print(f"    [-] Removed empty/merged dir: {p.relative_to(SERIES_DIR)}")
+            except:
+                pass
 
     db.commit()
     db.close()
