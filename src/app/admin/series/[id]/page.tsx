@@ -4,6 +4,8 @@ import AdminSeriesForm from '@/features/series/components/AdminSeriesForm';
 import { getSeriesDetails } from '@/features/series/queries/get-series-details';
 import { ChevronLeft } from 'lucide-react';
 
+export const dynamic = 'force-dynamic';
+
 interface SeriesEditPageProps {
   params: Promise<{ id: string }>;
 }

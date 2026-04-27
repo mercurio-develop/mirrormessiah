@@ -283,7 +283,7 @@ export default function AdminSeriesForm({ series }: AdminSeriesFormProps) {
 
           <div className="order-1 lg:order-2 lg:col-span-4 space-y-8">
             <div className="p-6 bg-card border border-border rounded-2xl space-y-6 shadow-xl">
-              <div className="aspect-poster relative bg-muted rounded-xl overflow-hidden shadow-inner group">
+              <div className="w-full aspect-poster relative bg-muted rounded-xl overflow-hidden shadow-inner group">
                  <Image
                   src={posterUrl}
                   alt="Preview"
@@ -363,7 +363,8 @@ export default function AdminSeriesForm({ series }: AdminSeriesFormProps) {
       </form>
 
       <FileBrowser 
-        movieId={series.id} // using this prop just for the folder structure, maybe later support series
+        movieId={series.id}
+        mediaType="series"
         isOpen={isBrowserOpen}
         mode="images"
         onClose={() => setIsBrowserOpen(false)}

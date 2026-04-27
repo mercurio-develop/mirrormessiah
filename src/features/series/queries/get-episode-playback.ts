@@ -7,7 +7,7 @@ export function getEpisodePlayback(id: number) {
   
   try {
       const episode = db.prepare(`
-        SELECT e.id, e.title, e.episode_number, s.season_number, s.series_id, ser.title as series_title
+        SELECT e.id, e.title, e.episode_number, e.plot, e.runtime, e.thumbnail, s.season_number, s.series_id, ser.title as series_title
         FROM episodes e
         JOIN seasons s ON e.season_id = s.id
         JOIN series ser ON s.series_id = ser.id
@@ -120,7 +120,10 @@ export function getEpisodePlayback(id: number) {
             title: episode.title, 
             series_title: episode.series_title,
             season_number: episode.season_number,
-            episode_number: episode.episode_number
+            episode_number: episode.episode_number,
+            plot: episode.plot,
+            runtime: episode.runtime,
+            thumbnail: episode.thumbnail
         }
       };
   } catch (e: any) {

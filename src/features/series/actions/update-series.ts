@@ -57,6 +57,7 @@ export async function updateSeriesAction(
     revalidatePath(`/admin/series/${seriesId}`);
     revalidatePath('/admin/series');
     revalidatePath(`/series/${seriesId}`);
+    revalidatePath('/series');
     revalidatePath('/');
 
     return {

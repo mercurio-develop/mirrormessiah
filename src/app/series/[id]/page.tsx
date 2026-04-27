@@ -7,6 +7,8 @@ import Image from 'next/image';
 import { ChevronLeft, Star, Play, Info, User, Globe, AlertCircle, Sparkles } from 'lucide-react';
 import SeasonSelector from '@/features/series/components/SeasonSelector';
 
+export const dynamic = 'force-dynamic';
+
 interface SeriesDetailsPageProps {
   params: Promise<{ id: string }>;
 }
@@ -50,24 +52,49 @@ export default async function SeriesDetailsPage({ params }: SeriesDetailsPagePro
   return (
     <div className="min-h-screen bg-background text-foreground font-sans selection:bg-primary selection:text-white pb-32">
       {/* Full-bleed Cinematic Hero Section */}
-      <div className="relative w-full h-[70vh] sm:h-[80vh] lg:h-[85vh] flex items-end">
+      <div className="relative w-full h-[65vh] sm:h-[70vh] lg:h-[70vh] flex items-end">
           {posterUrl && (
-            <div className="absolute inset-0 z-0">
-              {/* Note: In a real Netflix UI, this would be a wide landscape 16:9 backdrop image. 
-                  Since we only have vertical posters, we use object-cover to crop it stylistically. */}
+            <div className="absolute inset-0 z-0 bg-black overflow-hidden">
+              {/* Blurred abstract background using the poster colors */}
               <Image 
                   src={posterUrl} 
-                  alt={series.title} 
+                  alt={`${series.title} background`} 
                   fill 
                   priority 
                   unoptimized
-                  className="object-cover opacity-60 mix-blend-luminosity lg:object-top" 
+                  className="object-cover opacity-30 blur-[100px] scale-125" 
               />
               
+              {/* Desktop: Clearer, right-aligned image that isn't awkwardly cropped */}
+              <div className="hidden lg:block absolute inset-0 z-0">
+                <div className="absolute inset-y-0 right-0 w-1/2 max-w-4xl opacity-50 mix-blend-luminosity [mask-image:linear-gradient(to_right,transparent,black_20%)]">
+                    <Image 
+                        src={posterUrl} 
+                        alt={series.title} 
+                        fill 
+                        priority 
+                        unoptimized
+                        className="object-cover object-[center_20%]" 
+                    />
+                </div>
+              </div>
+
+              {/* Mobile: Standard cover image, slightly top-aligned */}
+              <div className="block lg:hidden absolute inset-0 z-0">
+                 <Image 
+                    src={posterUrl} 
+                    alt={series.title} 
+                    fill 
+                    priority 
+                    unoptimized
+                    className="object-cover opacity-50 mix-blend-luminosity object-[center_20%]" 
+                />
+              </div>
+              
               {/* Aggressive gradient to fade to black at the bottom for content overlay */}
-              <div className="absolute inset-0 bg-gradient-to-t from-background via-background/80 to-transparent" />
+              <div className="absolute inset-0 z-10 bg-gradient-to-t from-background via-background/80 to-transparent" />
               {/* Side gradient for text readability on desktop */}
-              <div className="absolute inset-0 bg-gradient-to-r from-background via-background/40 to-transparent" />
+              <div className="absolute inset-0 z-10 bg-gradient-to-r from-background via-background/60 to-transparent lg:from-background lg:via-background/80 lg:to-transparent" />
             </div>
           )}
 
@@ -122,10 +149,6 @@ export default async function SeriesDetailsPage({ params }: SeriesDetailsPagePro
                 {/* Secondary Meta */}
                 <div className="flex flex-wrap gap-x-6 gap-y-2 pt-2 text-sm drop-shadow-md">
                      <div className="flex items-center gap-2">
-                        <span className="text-white/50 font-medium">Starring:</span>
-                        <span className="text-white font-semibold">Netflix UI Clone Cast</span>
-                     </div>
-                     <div className="flex items-center gap-2">
                         <span className="text-white/50 font-medium">Genres:</span>
                         <span className="text-white font-semibold">{series.genres || 'TV Shows'}</span>
                      </div>
@@ -145,10 +168,6 @@ export default async function SeriesDetailsPage({ params }: SeriesDetailsPagePro
                            <AlertCircle className="h-5 w-5" /> No Episodes Indexed
                         </button>
                     )}
-                    
-                    <button className="h-12 sm:h-14 px-8 sm:px-10 bg-zinc-800/80 backdrop-blur-md text-white border border-white/10 text-sm sm:text-base font-bold rounded-lg flex items-center justify-center gap-3 hover:bg-zinc-700/80 transition-all hover:scale-105 active:scale-95 shadow-2xl">
-                        <Info className="h-5 w-5 sm:h-6 sm:w-6" /> More Info
-                    </button>
                 </div>
 
              </div>
