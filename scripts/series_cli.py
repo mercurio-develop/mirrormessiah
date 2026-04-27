@@ -408,7 +408,7 @@ def cmd_organize(args):
         standard_series_path = Path(SERIES_DIR) / standard_series_name
 
         episodes = db.execute("""
-            SELECT e.id as ep_id, e.episode_number, s.season_number, f.id as file_id, f.path
+            SELECT e.id as ep_id, e.episode_number, e.title as ep_title, s.season_number, f.id as file_id, f.path
             FROM episodes e
             JOIN seasons s ON e.season_id = s.id
             JOIN episode_files f ON f.episode_id = e.id
@@ -421,9 +421,13 @@ def cmd_organize(args):
             old_path = Path(ep['path'])
             if not old_path.exists(): continue
 
-            # Standardized path: Series (Year)/Season 01/S01E05.ext
+            title_part = ""
+            if ep['ep_title'] and not ep['ep_title'].lower().startswith("episode "):
+                clean_ep_title = re.sub(r'[<>:"/\\|?*]', '_', ep['ep_title']).strip()
+                title_part = f" - {clean_ep_title}"
+
             season_folder_name = f"Season {ep['season_number']:02d}"
-            standard_file_name = f"S{ep['season_number']:02d}E{ep['episode_number']:02d}{old_path.suffix}"
+            standard_file_name = f"S{ep['season_number']:02d}E{ep['episode_number']:02d}{title_part}{old_path.suffix}"
             
             new_dir = standard_series_path / season_folder_name
             new_path = new_dir / standard_file_name
@@ -448,15 +452,13 @@ def cmd_organize(args):
                 for sub in subs:
                     old_sub_path = Path(sub['path'])
                     if old_sub_path.exists():
-                        # Preserve language code if present (e.g., .en.srt)
                         sub_exts = old_sub_path.suffixes
-                        # Keep at most the last two suffixes if it looks like a language code (.en.srt)
                         if len(sub_exts) >= 2 and len(sub_exts[-2]) <= 4:
                              final_ext = f"{sub_exts[-2]}{sub_exts[-1]}"
                         else:
                              final_ext = old_sub_path.suffix
                         
-                        new_sub_path = new_dir / f"S{ep['season_number']:02d}E{ep['episode_number']:02d}{final_ext}"
+                        new_sub_path = new_dir / f"S{ep['season_number']:02d}E{ep['episode_number']:02d}{title_part}{final_ext}"
                         os.rename(old_sub_path, new_sub_path)
                         db.execute("UPDATE episode_subtitles SET path = ? WHERE id = ?", (str(new_sub_path), sub['id']))
                 
@@ -536,6 +538,55 @@ def cmd_scrape(args):
                         SET plot=?, rating=?, genres=?, director=?, audience=?, thumbnail=?
                         WHERE id=?
                     """, (plot, rating, genres, director, audience, thumbnail, series_id))
+                    
+                    # Scrape seasons and episodes
+                    seasons_db = db.execute("SELECT * FROM seasons WHERE series_id = ?", (series_id,)).fetchall()
+                    for s_db in seasons_db:
+                        season_num = s_db['season_number']
+                        s_details = tmdb_get(f'/tv/{tmdb_id}/season/{season_num}')
+                        if s_details:
+                            s_title = s_details.get('name')
+                            s_plot = s_details.get('overview')
+                            s_poster = s_details.get('poster_path')
+                            
+                            s_poster_local = None
+                            if s_poster:
+                                season_folder_name = f"Season {season_num:02d}"
+                                s_poster_path = standard_series_path / season_folder_name / 'poster.jpg'
+                                if args.force or not s_poster_path.exists():
+                                    if download_poster(s_poster, s_poster_path):
+                                        s_poster_local = str(s_poster_path)
+                                    else:
+                                        s_poster_local = s_poster
+                                else:
+                                    s_poster_local = str(s_poster_path)
+                                    
+                            db.execute("UPDATE seasons SET title=?, plot=?, poster=? WHERE id=?", (s_title, s_plot, s_poster_local, s_db['id']))
+                            
+                            for ep_data in s_details.get('episodes', []):
+                                ep_num = ep_data.get('episode_number')
+                                ep_title = ep_data.get('name')
+                                ep_plot = ep_data.get('overview')
+                                ep_runtime = ep_data.get('runtime')
+                                ep_still = ep_data.get('still_path')
+                                
+                                ep_thumb_local = None
+                                if ep_still:
+                                    ep_thumb_path = standard_series_path / season_folder_name / f"S{season_num:02d}E{ep_num:02d}-thumb.jpg"
+                                    if args.force or not ep_thumb_path.exists():
+                                        if download_poster(ep_still, ep_thumb_path):
+                                            ep_thumb_local = str(ep_thumb_path)
+                                        else:
+                                            ep_thumb_local = ep_still
+                                    else:
+                                        ep_thumb_local = str(ep_thumb_path)
+
+                                db.execute("""
+                                    UPDATE episodes 
+                                    SET title=?, plot=?, runtime=?, thumbnail=?
+                                    WHERE season_id=? AND episode_number=?
+                                """, (ep_title, ep_plot, ep_runtime, ep_thumb_local, s_db['id'], ep_num))
+                            time.sleep(DELAY)
                     
                     scraped += 1
                     time.sleep(DELAY)

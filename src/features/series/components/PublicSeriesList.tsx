@@ -71,7 +71,7 @@ export default function PublicSeriesList({ initialSeries }: PublicSeriesListProp
     (searchParams.get('audience') as any) || ''
   );
   const [sort, setSort] = useState<'title_asc' | 'title_desc' | 'rating' | 'newest'>('title_asc');
-  const [showFilters, setShowFilters] = useState(true);
+  const [showFilters, setShowFilters] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
 
   useEffect(() => {
@@ -122,6 +122,7 @@ export default function PublicSeriesList({ initialSeries }: PublicSeriesListProp
   }, [searchParams, selectedAudience, selectedGenre]);
 
   const handleAudienceChange = (id: string) => {
+    setSelectedAudience(id as any);
     const params = new URLSearchParams(searchParams.toString());
     if (id) {
       params.set('audience', id);
@@ -132,6 +133,7 @@ export default function PublicSeriesList({ initialSeries }: PublicSeriesListProp
   };
 
   const handleGenreChange = (genre: string) => {
+    setSelectedGenre(genre);
     const params = new URLSearchParams(searchParams.toString());
     if (genre) {
       params.set('genre', genre);
@@ -300,8 +302,9 @@ export default function PublicSeriesList({ initialSeries }: PublicSeriesListProp
     setSearchTerm('');
     setSelectedYear('');
     setSelectedGenre('');
-    handleAudienceChange('');
+    setSelectedAudience('');
     setSort('title_asc');
+    router.push(pathname, { scroll: false });
   };
 
   return (

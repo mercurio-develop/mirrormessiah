@@ -46,6 +46,29 @@ export interface TmdbSeriesSearchResult {
   poster_path: string | null;
 }
 
+export interface TmdbSeasonDetails {
+  _id: string;
+  air_date: string;
+  episodes: Array<{
+    air_date: string;
+    episode_number: number;
+    id: number;
+    name: string;
+    overview: string;
+    runtime: number;
+    season_number: number;
+    show_id: number;
+    still_path: string | null;
+    vote_average: number;
+    vote_count: number;
+  }>;
+  name: string;
+  overview: string;
+  id: number;
+  poster_path: string | null;
+  season_number: number;
+}
+
 async function tmdbFetch<T>(endpoint: string, params: Record<string, string> = {}): Promise<T> {
   if (!API_KEY) throw new Error('TMDB_API_KEY not set');
 
@@ -162,6 +185,10 @@ export async function getSeriesDetails(tmdbId: number): Promise<TmdbSeriesDetail
   return tmdbFetch<TmdbSeriesDetails>(`/tv/${tmdbId}`, {
     append_to_response: 'credits',
   });
+}
+
+export async function getSeasonDetails(tmdbId: number, seasonNumber: number): Promise<TmdbSeasonDetails> {
+  return tmdbFetch<TmdbSeasonDetails>(`/tv/${tmdbId}/season/${seasonNumber}`);
 }
 
 export function posterUrl(posterPath: string): string {

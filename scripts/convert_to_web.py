@@ -104,8 +104,11 @@ def convert_file(file_path: Path):
         
         # Rename original to .bak so we don't lose it if something goes wrong
         backup = file_path.with_name(file_path.name + '.bak')
-        file_path.rename(backup)
-        print(f"  [i] Original backed up as {backup.name}")
+        if file_path.exists():
+            file_path.rename(backup)
+            print(f"  [i] Original backed up as {backup.name}")
+        else:
+            print(f"  [!] Warning: Original file {file_path.name} no longer exists (likely renamed).")
         
         # Rename the new web-compatible file to .mp4
         final_out = file_path.with_suffix('.mp4')

@@ -3,7 +3,7 @@
 import { getDb } from '@/lib/db';
 import { requireAdminKeyAuth, AuthError } from '@/lib/auth';
 import { ActionState } from '@/lib/action-state';
-import { searchSeries, getSeriesDetails, posterUrl, extractDirector } from '@/lib/tmdb';
+import { searchSeries, getSeriesDetails, getSeasonDetails, posterUrl, extractDirector } from '@/lib/tmdb';
 import { revalidatePath } from 'next/cache';
 import fs from 'fs';
 import path from 'path';
@@ -30,6 +30,7 @@ export async function scrapeSeriesAction(seriesId: number): Promise<ActionState>
     const details = await getSeriesDetails(tmdbId);
 
     let thumbnailPath: string | null = series.thumbnail;
+    let seriesDir = '';
     if (details.poster_path) {
       const fileRow = db.prepare(`
         SELECT f.path FROM episode_files f 
@@ -39,7 +40,7 @@ export async function scrapeSeriesAction(seriesId: number): Promise<ActionState>
       `).get(seriesId) as any;
       
       if (fileRow?.path) {
-        const seriesDir = path.dirname(path.dirname(fileRow.path)); // Assumes structure is Series/Season 01/S01E01.mp4
+        seriesDir = path.dirname(path.dirname(fileRow.path)); // Assumes structure is Series/Season 01/S01E01.mp4
         const posterDest = path.join(seriesDir, 'poster.jpg');
         try {
           const imgRes = await fetch(posterUrl(details.poster_path));
@@ -88,6 +89,107 @@ export async function scrapeSeriesAction(seriesId: number): Promise<ActionState>
       year,
       seriesId,
     );
+
+    // Scrape Seasons & Episodes
+    const seasons = db.prepare('SELECT * FROM seasons WHERE series_id = ?').all(seriesId) as any[];
+    for (const season of seasons) {
+      try {
+        const sDetails = await getSeasonDetails(tmdbId, season.season_number);
+        if (!sDetails) continue;
+
+        let seasonPosterPath: string | null = season.poster;
+        if (sDetails.poster_path && seriesDir) {
+           const seasonFolder = `Season ${season.season_number.toString().padStart(2, '0')}`;
+           const dest = path.join(seriesDir, seasonFolder, 'poster.jpg');
+           try {
+             if (!fs.existsSync(dest)) {
+                const imgRes = await fetch(posterUrl(sDetails.poster_path));
+                if (imgRes.ok) {
+                   fs.writeFileSync(dest, Buffer.from(await imgRes.arrayBuffer()));
+                }
+             }
+             seasonPosterPath = dest;
+           } catch (e) {}
+        }
+        
+        db.prepare('UPDATE seasons SET title = ?, plot = ?, poster = ? WHERE id = ?').run(
+          sDetails.name, sDetails.overview, seasonPosterPath, season.id
+        );
+
+        for (const ep of sDetails.episodes) {
+           let epThumbPath: string | null = null;
+           if (ep.still_path && seriesDir) {
+              const seasonFolder = `Season ${season.season_number.toString().padStart(2, '0')}`;
+              const thumbName = `S${season.season_number.toString().padStart(2, '0')}E${ep.episode_number.toString().padStart(2, '0')}-thumb.jpg`;
+              const dest = path.join(seriesDir, seasonFolder, thumbName);
+              try {
+                if (!fs.existsSync(dest)) {
+                   const imgRes = await fetch(posterUrl(ep.still_path));
+                   if (imgRes.ok) {
+                      fs.writeFileSync(dest, Buffer.from(await imgRes.arrayBuffer()));
+                   }
+                }
+                epThumbPath = dest;
+              } catch (e) {}
+           }
+
+           db.prepare(`
+             UPDATE episodes 
+             SET title = ?, plot = ?, runtime = ?, thumbnail = COALESCE(?, thumbnail)
+             WHERE season_id = ? AND episode_number = ?
+           `).run(ep.name, ep.overview, ep.runtime, epThumbPath, season.id, ep.episode_number);
+           
+           // Rename associated files and subtitles
+           const epRow = db.prepare(`SELECT id FROM episodes WHERE season_id = ? AND episode_number = ?`).get(season.id, ep.episode_number) as any;
+           if (epRow && ep.name && !ep.name.toLowerCase().startsWith('episode ')) {
+             const cleanTitle = ep.name.replace(/[<>:"/\\|?*]/g, '_').trim();
+             const titlePart = ` - ${cleanTitle}`;
+             
+             // Rename Media Files
+             const files = db.prepare(`SELECT id, path FROM episode_files WHERE episode_id = ?`).all(epRow.id) as any[];
+             for (const f of files) {
+                if (fs.existsSync(f.path)) {
+                   const parsed = path.parse(f.path);
+                   const newName = `S${season.season_number.toString().padStart(2, '0')}E${ep.episode_number.toString().padStart(2, '0')}${titlePart}${parsed.ext}`;
+                   const newPath = path.join(parsed.dir, newName);
+                   
+                   if (f.path !== newPath && !fs.existsSync(newPath)) {
+                      try {
+                        fs.renameSync(f.path, newPath);
+                        db.prepare(`UPDATE episode_files SET path = ? WHERE id = ?`).run(newPath, f.id);
+                      } catch (e) {}
+                   }
+                }
+             }
+             
+             // Rename Subtitle Files
+             const subs = db.prepare(`SELECT id, path FROM episode_subtitles WHERE episode_id = ?`).all(epRow.id) as any[];
+             for (const s of subs) {
+                 if (fs.existsSync(s.path)) {
+                   const oldName = path.basename(s.path);
+                   const parts = oldName.split('.');
+                   let finalExt = `.${parts.pop()}`;
+                   if (parts.length > 1 && parts[parts.length - 1].length <= 4) {
+                      finalExt = `.${parts.pop()}${finalExt}`; // capture .en.srt
+                   }
+                   
+                   const newName = `S${season.season_number.toString().padStart(2, '0')}E${ep.episode_number.toString().padStart(2, '0')}${titlePart}${finalExt}`;
+                   const newPath = path.join(path.dirname(s.path), newName);
+                   
+                   if (s.path !== newPath && !fs.existsSync(newPath)) {
+                      try {
+                         fs.renameSync(s.path, newPath);
+                         db.prepare(`UPDATE episode_subtitles SET path = ? WHERE id = ?`).run(newPath, s.id);
+                      } catch (e) {}
+                   }
+                 }
+             }
+           }
+        }
+      } catch (e) {
+        console.error(`Failed to scrape season ${season.season_number}`, e);
+      }
+    }
 
     revalidatePath(`/admin/series`);
     revalidatePath('/series');

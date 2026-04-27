@@ -70,7 +70,7 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
     (searchParams.get('audience') as any) || ''
   );
   const [sort, setSort] = useState<'title_asc' | 'title_desc' | 'rating' | 'newest'>('title_asc');
-  const [showFilters, setShowFilters] = useState(true);
+  const [showFilters, setShowFilters] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
 
   // Track scroll for depth only
@@ -124,6 +124,7 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
   }, [searchParams, selectedAudience, selectedGenre]);
 
   const handleAudienceChange = (id: string) => {
+    setSelectedAudience(id as any);
     const params = new URLSearchParams(searchParams.toString());
     if (id) {
       params.set('audience', id);
@@ -134,6 +135,7 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
   };
 
   const handleGenreChange = (genre: string) => {
+    setSelectedGenre(genre);
     const params = new URLSearchParams(searchParams.toString());
     if (genre) {
       params.set('genre', genre);
@@ -296,8 +298,9 @@ export default function PublicMoviesList({ initialMovies }: PublicMoviesListProp
     setSelectedQuality('');
     setSelectedYear('');
     setSelectedGenre('');
-    handleAudienceChange('');
+    setSelectedAudience('');
     setSort('title_asc');
+    router.push(pathname, { scroll: false });
   };
 
   const isFiltered = searchTerm || selectedQuality || selectedYear || selectedAudience || selectedGenre || sort !== 'title_asc';

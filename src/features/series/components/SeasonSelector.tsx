@@ -26,6 +26,15 @@ interface Season {
   episodes: Episode[];
 }
 
+const getPosterUrl = (thumbnail: string | null | undefined): string | null => {
+    if (!thumbnail) return null;
+    if (thumbnail.startsWith('http')) return thumbnail;
+    const [basePath, query] = thumbnail.split('?');
+    let url = "/api/images?path=" + b64urlEncode(basePath);
+    if (query) url += "&" + query;
+    return url;
+};
+
 export default function SeasonSelector({ seasons, seriesId }: { seasons: Season[], seriesId: number }) {
   const [activeSeasonId, setActiveSeasonId] = useState<number | null>(seasons.length > 0 ? seasons[0].id : null);
 
@@ -45,7 +54,7 @@ export default function SeasonSelector({ seasons, seriesId }: { seasons: Season[
                  : 'border-transparent text-muted-foreground hover:text-white/80'
               }`}
             >
-              Season {season.season_number}
+              {season.title || `Season ${season.season_number}`}
             </button>
          ))}
       </div>
@@ -75,7 +84,7 @@ export default function SeasonSelector({ seasons, seriesId }: { seasons: Season[
                             {/* Thumbnail Placeholder 16:9 */}
                             <div className="relative w-32 sm:w-40 aspect-video bg-zinc-900 rounded-md overflow-hidden shrink-0 border border-white/5 shadow-md">
                                 {ep.thumbnail ? (
-                                    <Image src={ep.thumbnail} alt={ep.title || `Episode ${ep.episode_number}`} fill className="object-cover" unoptimized />
+                                    <Image src={getPosterUrl(ep.thumbnail)!} alt={ep.title || `Episode ${ep.episode_number}`} fill className="object-cover" unoptimized />
                                 ) : (
                                     <div className="absolute inset-0 bg-gradient-to-br from-zinc-800 to-black flex items-center justify-center">
                                         {/* Minimalist placeholder for missing thumbnails */}

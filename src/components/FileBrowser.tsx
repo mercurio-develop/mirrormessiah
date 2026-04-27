@@ -17,12 +17,13 @@ interface FileBrowserProps {
   movieId: number;
   isOpen: boolean;
   mode: 'images' | 'videos';
+  mediaType?: 'movie' | 'series';
   onClose: () => void;
   onSelect: (filePath: string) => void;
   onSelectDirectory?: (dirPath: string) => void;
 }
 
-export default function FileBrowser({ movieId, isOpen, mode, onClose, onSelect, onSelectDirectory }: FileBrowserProps) {
+export default function FileBrowser({ movieId, isOpen, mode, mediaType = 'movie', onClose, onSelect, onSelectDirectory }: FileBrowserProps) {
   const [items, setItems] = useState<Item[]>([]);
   const [currentPath, setCurrentPath] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -36,14 +37,14 @@ export default function FileBrowser({ movieId, isOpen, mode, onClose, onSelect, 
     if (isOpen && movieId) {
       loadInitialContext();
     }
-  }, [isOpen, movieId, mode]);
+  }, [isOpen, movieId, mode, mediaType]);
 
   const loadInitialContext = async () => {
     setLoading(true);
     setError(null);
     try {
       // 1. Try to get current movie directory
-      const res = await fetch(`/api/browse/directory/${movieId}?type=${mode}`);
+      const res = await fetch(`/api/browse/directory/${movieId}?type=${mode}&mediaType=${mediaType}`);
       const data = await res.json();
       
       if (res.ok && data.directory) {
@@ -212,7 +213,7 @@ export default function FileBrowser({ movieId, isOpen, mode, onClose, onSelect, 
                   key={item.path}
                   onClick={() => handleItemClick(item)}
                   onDoubleClick={() => item.isDirectory ? null : handleConfirm()}
-                  className={`relative aspect-poster cursor-pointer transition-all duration-300 border rounded-2xl overflow-hidden group ${
+                  className={`w-full relative aspect-poster cursor-pointer transition-all duration-300 border rounded-2xl overflow-hidden group ${
                     selectedPath === item.path ? "border-primary ring-4 ring-primary/10 shadow-2xl scale-[1.02]" : "border-border hover:border-primary/40"
                   }`}
                 >
