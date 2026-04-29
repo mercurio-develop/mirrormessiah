@@ -5,7 +5,8 @@ import videojs from 'video.js';
 import 'video.js/dist/video-js.css';
 import '@silvermine/videojs-chromecast/dist/silvermine-videojs-chromecast.css';
 import '@silvermine/videojs-airplay/dist/silvermine-videojs-airplay.css';
-import { AlertCircle, RefreshCcw } from 'lucide-react';
+import { AlertCircle, RefreshCcw, Volume2, Loader2 } from 'lucide-react';
+import { getAudioTracks, setDefaultAudioTrack, AudioTrackInfo } from '../actions/audio-tracks';
 
 interface SubtitleTrack {
   src: string;
@@ -21,6 +22,7 @@ interface MediaPlayerProps {
   subtitles?: SubtitleTrack[];
   className?: string;
   title?: string;
+  poster?: string | null;
 }
 
 // Correctly infer the Player type from the videojs function signature
@@ -32,22 +34,78 @@ export default function MediaPlayer({
   mimeType = 'video/mp4', 
   subtitles = [], 
   className = '',
-  title = 'Video'
+  title = 'Video',
+  poster = null
 }: MediaPlayerProps) {
   const videoRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<VideoJsPlayer | null>(null);
   const [error, setError] = useState<{ code: number; message: string } | null>(null);
   const [isFlagged, setIsFlagged] = useState(false);
+  const [audioTracks, setAudioTracks] = useState<AudioTrackInfo[]>([]);
+  const [showAudioMenu, setShowAudioMenu] = useState(false);
+  const [isSwappingAudio, setIsSwappingAudio] = useState(false);
 
   const ctx = useRef({ id, src });
   useEffect(() => {
     ctx.current = { id, src };
   }, [id, src]);
 
+  // Fetch audio tracks
+  useEffect(() => {
+    if (src && typeof window !== 'undefined') {
+      try {
+        const urlObj = new URL(src, window.location.origin);
+        const encodedPath = urlObj.searchParams.get('path');
+        if (encodedPath) {
+          getAudioTracks(encodedPath).then(tracks => {
+            if (tracks && tracks.length > 1) {
+              setAudioTracks(tracks);
+            }
+          }).catch(e => console.error("Error fetching audio tracks", e));
+        }
+      } catch (e) {
+        console.error("Could not parse src URL for audio tracks", e);
+      }
+    }
+  }, [src]);
+
+  const handleTrackSelect = async (trackIndex: number) => {
+    if (isSwappingAudio) return;
+    
+    let encodedPath = null;
+    try {
+      const urlObj = new URL(src, window.location.origin);
+      encodedPath = urlObj.searchParams.get('path');
+    } catch (e) {}
+
+    if (!encodedPath) return;
+
+    setShowAudioMenu(false);
+    setIsSwappingAudio(true);
+    
+    const ct = playerRef.current?.currentTime() || 0;
+    const currentId = id || src;
+    const storageKey = `mm_playback_time_${currentId}`;
+    if (ct > 0) {
+      localStorage.setItem(storageKey, ct.toString());
+    }
+
+    const success = await setDefaultAudioTrack(encodedPath, trackIndex);
+    
+    setIsSwappingAudio(false);
+    
+    if (success) {
+      window.location.reload();
+    } else {
+      alert('Failed to switch audio track.');
+    }
+  };
+
   useEffect(() => {
     if (!playerRef.current && videoRef.current) {
       const videoElement = document.createElement('video');
       videoElement.classList.add('video-js', 'vjs-default-skin', 'vjs-big-play-centered', 'vjs-show-big-play-button-on-pause');
+
       
       // No crossorigin attribute needed for same-origin requests
       videoElement.setAttribute('playsinline', 'true');
@@ -67,6 +125,7 @@ export default function MediaPlayer({
         controls: true,
         responsive: true,
         fill: true,
+        poster: poster || undefined,
         techOrder: ['chromecast', 'html5'],
         plugins: {
           chromecast: {},
@@ -294,6 +353,45 @@ export default function MediaPlayer({
     <div className={'relative w-full h-full group bg-black overflow-hidden ' + className}>
       <div ref={videoRef} className="absolute inset-0" />
       
+      {/* Audio Track Selection Overlay */}
+      {audioTracks.length > 1 && (
+        <div className="absolute top-4 left-4 z-40">
+          <button 
+            onClick={() => setShowAudioMenu(!showAudioMenu)}
+            disabled={isSwappingAudio}
+            className="flex items-center gap-2 px-3 py-1.5 bg-black/70 hover:bg-black/90 border border-white/20 text-white text-xs font-bold uppercase tracking-wider rounded-md backdrop-blur-sm transition-all shadow-lg"
+          >
+            {isSwappingAudio ? <Loader2 className="h-4 w-4 animate-spin" /> : <Volume2 className="h-4 w-4" />}
+            {isSwappingAudio ? 'Switching...' : 'Audio'}
+          </button>
+          
+          {showAudioMenu && (
+            <div className="absolute top-full left-0 mt-2 w-48 bg-black/95 border border-white/20 rounded-md shadow-2xl overflow-hidden backdrop-blur-md animate-in fade-in slide-in-from-top-2">
+              <div className="px-3 py-2 bg-white/5 border-b border-white/10 text-[10px] text-muted-foreground uppercase font-black tracking-widest">
+                Select Audio Language
+              </div>
+              <div className="max-h-64 overflow-y-auto">
+                {audioTracks.map((track, i) => (
+                  <button
+                    key={track.index}
+                    onClick={() => handleTrackSelect(track.index)}
+                    className={`w-full text-left px-3 py-2 text-sm hover:bg-white/10 transition-colors ${i === 0 ? 'border-l-2 border-primary bg-primary/5 text-primary font-bold' : 'text-foreground'}`}
+                  >
+                    <div className="font-medium">{track.title || track.language}</div>
+                    <div className="text-[10px] text-muted-foreground uppercase opacity-70">
+                      Track {track.index} • {track.codec}
+                    </div>
+                  </button>
+                ))}
+              </div>
+              <div className="px-3 py-2 bg-destructive/10 border-t border-white/10 text-[10px] text-destructive leading-tight italic">
+                Switching tracks will reload the video.
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Internal Error Overlay */}
       {error && (
         <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/90 backdrop-blur-sm p-8 text-center animate-in fade-in duration-500">
