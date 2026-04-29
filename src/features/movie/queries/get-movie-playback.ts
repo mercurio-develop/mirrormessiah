@@ -126,7 +126,7 @@ export function getMoviePlayback(id: number) {
   }
 
   return {
-    source: { type: "file", src: `/api/stream?path=${b64urlEncode(bestFile.path)}` },
+    source: { type: "file", src: `/api/stream?path=${b64urlEncode(bestFile.path)}&v=${Date.now()}` },
     mimeType: actualMime,
     subtitles: uniqueSubs,
     movie: { id, title: movie.title }

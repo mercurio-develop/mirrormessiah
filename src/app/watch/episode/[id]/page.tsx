@@ -4,6 +4,7 @@ import { cookies } from 'next/headers';
 import MediaPlayer from '@/features/movie/components/MediaPlayer';
 import { ChevronLeft, AlertCircle, Activity } from 'lucide-react';
 import { getEpisodePlayback } from '@/features/series/queries/get-episode-playback';
+import { b64urlEncode } from '@/lib/b64url';
 
 interface WatchEpisodePageProps {
   params: Promise<{ id: string }>;

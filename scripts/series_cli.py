@@ -567,6 +567,18 @@ def cmd_organize(args):
 def cmd_scrape(args):
     print(f"\n--- PHASE: Scraping Series Metadata ---")
     db = open_db()
+    
+    # Pre-flight check: Nullify broken thumbnail paths
+    print(f"  [.] Checking for missing posters and thumbnails...")
+    for table, col in [('series', 'thumbnail'), ('seasons', 'poster'), ('episodes', 'thumbnail')]:
+        items = db.execute(f"SELECT id, {col} FROM {table}").fetchall()
+        for item in items:
+            thumb = item[col]
+            if thumb and not thumb.startswith('http'):
+                if not Path(thumb).exists():
+                    db.execute(f"UPDATE {table} SET {col} = NULL WHERE id = ?", (item['id'],))
+    db.commit()
+
     series_list = db.execute("SELECT * FROM series").fetchall()
     scraped = 0
     total = len(series_list)

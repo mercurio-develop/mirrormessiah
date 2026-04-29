@@ -99,6 +99,7 @@ export default async function WatchPage({ params }: WatchPageProps) {
                 mimeType={movieData.mimeType}
                 subtitles={movieData.subtitles}
                 title={movie.title}
+                poster={posterUrl}
                 className="w-full h-full"
               />
             )}
