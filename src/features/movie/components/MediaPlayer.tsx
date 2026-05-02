@@ -46,6 +46,7 @@ export default function MediaPlayer({
   const [isSwappingAudio, setIsSwappingAudio] = useState(false);
 
   const ctx = useRef({ id, src });
+  const lastSrcRef = useRef(src);
   useEffect(() => {
     ctx.current = { id, src };
   }, [id, src]);
@@ -121,6 +122,8 @@ export default function MediaPlayer({
         }
       }
 
+      const savedVolume = parseFloat(localStorage.getItem('mm_player_volume') || '0.8');
+
       const player = videojs(videoElement, {
         controls: true,
         responsive: true,
@@ -132,6 +135,23 @@ export default function MediaPlayer({
           airPlay: {}
         },
         playbackRates: [0.5, 1, 1.25, 1.5, 2],
+        controlBar: {
+          children: [
+            'playToggle',
+            'volumePanel',
+            'currentTimeDisplay',
+            'timeDivider',
+            'durationDisplay',
+            'progressControl',
+            'playbackRateMenuButton',
+            'chaptersButton',
+            'descriptionsButton',
+            'subsCapsButton',
+            'audioTrackButton',
+            'fullscreenToggle',
+          ],
+        },
+        volume: Math.min(savedVolume, 1),
         sources: src ? [{ src, type: mimeType }] : undefined
       });
 
@@ -175,8 +195,18 @@ export default function MediaPlayer({
         }
       });
 
+      // Persist volume across sessions
+      player.on('volumechange', () => {
+        localStorage.setItem('mm_player_volume', String(player.volume()));
+      });
+
+      // Cap volume when casting starts so TV doesn't blast at 100%
+      player.on('chromecastConnected', () => {
+        if ((player.volume() ?? 1) > 0.7) player.volume(0.7);
+      });
+
       player.on('canplay', doRestore);
-      player.on('play', doRestore);
+      // No play-event restore: calling currentTime() during 'play' on iOS aborts playback
       player.on('playing', () => {
         const state = (player as any)._mmState;
         if (!state.restoreAttempted && state.targetTime > 0) {
@@ -267,7 +297,8 @@ export default function MediaPlayer({
       // Handle source and mimeType changes
       useEffect(() => {
       const player = playerRef.current;
-      if (player && !player.isDisposed() && src) {
+      if (player && !player.isDisposed() && src && src !== lastSrcRef.current) {
+      lastSrcRef.current = src;
       player.src({
         src: src,
         type: mimeType
