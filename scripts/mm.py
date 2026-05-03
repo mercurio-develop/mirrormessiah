@@ -904,6 +904,24 @@ def cmd_sync_assets(args):
 def cmd_reset(args):
     if Path(DB_PATH).exists(): os.remove(DB_PATH)
 
+def cmd_convert(args):
+    media_dir = Path(args.dir)
+    print(f"\n--- PHASE: Converting Non-Web Media [{media_dir}] ---")
+    script_path = Path(__file__).parent / 'convert_to_web.py'
+    
+    extensions = {'.mkv', '.avi', '.webm', '.mov'}
+    files_to_convert = [p for p in media_dir.rglob('*') if p.is_file() and p.suffix.lower() in extensions]
+    
+    if not files_to_convert:
+        print("  [+] No non-MP4 media files found for conversion.")
+        return
+        
+    for i, f in enumerate(files_to_convert, 1):
+        print(f"\n  [{i}/{len(files_to_convert)}] Dispatching to conversion script: {f.name}")
+        subprocess.run([sys.executable, str(script_path), str(f)])
+        
+    print("\nCONVERSION_COMPLETE.")
+
 def cmd_full(args):
     print(f"\n==========================================")
     print(f"   MirrorMessiah: FULL SYSTEM INTEGRATION")
@@ -981,12 +999,15 @@ def main():
     p_reset = sub.add_parser('reset', help='Factory reset: permanently delete the database')
     p_reset.add_argument('--force', action='store_true')
     
+    p_convert = sub.add_parser('convert', help='Detect non-MP4 files (MKV, AVI, etc.) and convert them to web-optimized MP4')
+    p_convert.add_argument('dir', nargs='?', default=MEDIA_DIR)
+    
     args = parser.parse_args()
     dispatch = {
         'sync': cmd_sync, 'ingest': cmd_ingest, 'scrape': cmd_scrape,
         'status': cmd_status, 'organize': cmd_organize, 'cleanup': cmd_cleanup,
         'sync-assets': cmd_sync_assets, 'full': cmd_full, 'reset': cmd_reset,
-        'stage': cmd_stage, 'verify': cmd_verify
+        'stage': cmd_stage, 'verify': cmd_verify, 'convert': cmd_convert
     }
     dispatch[args.command](args)
 
