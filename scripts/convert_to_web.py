@@ -38,6 +38,46 @@ def get_streams(file_path: Path):
         print(f"  [!] Error reading streams from {file_path.name}: {e}")
         return []
 
+def extract_subtitles(file_path: Path, streams):
+    s_streams = [s for s in streams if s.get('codec_type') == 'subtitle']
+    if not s_streams:
+        return
+
+    print(f"  [*] Found {len(s_streams)} subtitle stream(s). Extracting to .vtt...")
+    
+    for s in s_streams:
+        codec_name = s.get('codec_name', '')
+        # Only extract text-based subtitles
+        if codec_name not in ('subrip', 'ass', 'ssa', 'mov_text', 'webvtt', 'srt'):
+            print(f"  [!] Skipping subtitle index {s['index']} - unsupported codec for text extraction: {codec_name}")
+            continue
+
+        tags = s.get('tags', {})
+        lang = tags.get('language', 'eng') # Default to eng if unknown
+        
+        # Naming format: movie.0.eng.vtt
+        # This matches the Next.js detection logic: parts[parts.length - 2] == 'eng'
+        out_sub_path = file_path.parent / f"{file_path.stem}.{s['index']}.{lang}.vtt"
+        
+        if out_sub_path.exists():
+            print(f"  [+] Subtitle {out_sub_path.name} already exists. Skipping.")
+            continue
+            
+        cmd = [
+            'ffmpeg', '-y', '-i', str(file_path),
+            '-map', f"0:{s['index']}",
+            '-c:s', 'webvtt',
+            str(out_sub_path)
+        ]
+        
+        try:
+            subprocess.run(cmd, capture_output=True, check=True)
+            print(f"  [✓] Extracted subtitle: {out_sub_path.name}")
+        except subprocess.CalledProcessError as e:
+            err_msg = e.stderr.decode('utf-8', errors='ignore') if e.stderr else str(e)
+            last_line = err_msg.strip().splitlines()[-1] if err_msg else 'Unknown error'
+            print(f"  [!] Failed to extract subtitle index {s['index']}: {last_line}")
+
 def convert_file(file_path: Path):
     print(f"\nProcessing: {file_path.name}")
     streams = get_streams(file_path)
@@ -45,6 +85,9 @@ def convert_file(file_path: Path):
     if not streams:
         print("  [!] Could not read streams. Skipping.")
         return
+
+    # Extract subtitles before converting video
+    extract_subtitles(file_path, streams)
 
     v_codec = next((s.get('codec_name') for s in streams if s.get('codec_type') == 'video'), None)
     a_codecs = [s.get('codec_name') for s in streams if s.get('codec_type') == 'audio']
