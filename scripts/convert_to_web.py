@@ -171,11 +171,18 @@ def convert_file(file_path: Path):
 
 def main():
     parser = argparse.ArgumentParser(description="Convert video files to web-optimized MP4 (H.264/AAC with +faststart).")
-    parser.add_argument("target", help="File or directory containing media files to convert")
+    parser.add_argument("target", nargs="?", help="File or directory containing media files to convert")
     parser.add_argument("-r", "--recursive", action="store_true", help="Search recursively in directory")
     args = parser.parse_args()
 
-    target = Path(args.target)
+    target_path = args.target
+    if not target_path and args.recursive:
+        # Default to series directory when using recursive mode
+        target_path = '/media/tushita/TUSHITA_W11_DATA/series/'
+    elif not target_path:
+        parser.error("The following arguments are required: target (unless -r is used to target the default series directory)")
+
+    target = Path(target_path)
     
     if not target.exists():
         print(f"Error: The target path '{target}' does not exist.")
