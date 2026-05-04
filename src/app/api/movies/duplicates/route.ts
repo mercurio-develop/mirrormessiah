@@ -29,7 +29,7 @@ export const GET = withAdminAuth(async (request: Request) => {
         GROUP_CONCAT(COALESCE(quality, '?') ORDER BY id ASC) as qualities,
         GROUP_CONCAT(COALESCE(thumbnail, '') ORDER BY id ASC) as thumbnails
       FROM movies
-      GROUP BY ${NORMALIZE}, COALESCE(year, 0)
+      GROUP BY ${NORMALIZE}
       HAVING COUNT(*) > 1
       ORDER BY count DESC, normalized_title ASC
     `).all() as any[];
