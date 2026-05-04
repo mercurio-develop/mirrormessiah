@@ -4,9 +4,29 @@ import { b64urlDecode } from '@/lib/b64url';
 import { requireGateKey } from '@/lib/auth';
 import fs from 'fs';
 import { stat } from 'fs/promises';
-import { Readable } from 'stream';
 
 export const dynamic = 'force-dynamic';
+
+function fileToStream(filePath: string, options?: any) {
+  const iterator = fs.createReadStream(filePath, options)[Symbol.asyncIterator]();
+  return new ReadableStream({
+    async pull(controller) {
+      try {
+        const { value, done } = await iterator.next();
+        if (done) {
+          controller.close();
+        } else {
+          controller.enqueue(new Uint8Array(value));
+        }
+      } catch (error) {
+        controller.error(error);
+      }
+    },
+    async cancel() {
+      await iterator.return?.();
+    }
+  });
+}
 
 /**
  * GET /api/stream
@@ -56,9 +76,9 @@ export async function GET(request: NextRequest) {
     if (range) {
       const { start, end } = range;
       const contentLength = end - start + 1;
-      const stream = fs.createReadStream(filePath, { start, end });
+      const stream = fileToStream(filePath, { start, end });
 
-      return new Response(Readable.toWeb(stream) as any, {
+      return new Response(stream as any, {
         status: 206,
         headers: {
           'Content-Range': `bytes ${start}-${end}/${fileSize}`,
@@ -71,9 +91,9 @@ export async function GET(request: NextRequest) {
         },
       });
     } else {
-      const stream = fs.createReadStream(filePath);
+      const stream = fileToStream(filePath);
 
-      return new Response(Readable.toWeb(stream) as any, {
+      return new Response(stream as any, {
         status: 200,
         headers: {
           'Accept-Ranges': 'bytes',
