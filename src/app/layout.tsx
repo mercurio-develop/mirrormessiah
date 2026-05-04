@@ -25,7 +25,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={`${inter.variable} h-full`}>
+    <html lang="en" className={`${inter.variable} h-full dark`}>
       <head>
         <Script 
           src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1" 
