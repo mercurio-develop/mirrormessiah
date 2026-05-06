@@ -1,5 +1,4 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
 import '@/lib/db_migrate'
 import './globals.css'
 import { ThemeProvider } from '@/contexts/ThemeContext'
@@ -7,12 +6,6 @@ import { AdminProvider } from '@/contexts/AdminContext'
 import Navbar from '@/components/Navbar'
 import { Suspense } from 'react'
 import Script from 'next/script'
-
-const inter = Inter({ 
-  subsets: ['latin'],
-  display: 'swap',
-  variable: '--font-inter',
-})
 
 export const metadata: Metadata = {
   title: 'MirrorMessiah | Premium Media Registry',
@@ -25,7 +18,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={`${inter.variable} h-full dark`}>
+    <html lang="en" className={`h-full dark`}>
       <head>
         <Script 
           src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1" 
