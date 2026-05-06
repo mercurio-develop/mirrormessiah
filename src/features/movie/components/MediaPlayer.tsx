@@ -148,6 +148,8 @@ export default function MediaPlayer({
             'descriptionsButton',
             'subsCapsButton',
             'audioTrackButton',
+            'chromecastButton',
+            'airPlayButton',
             'fullscreenToggle',
           ],
         },
