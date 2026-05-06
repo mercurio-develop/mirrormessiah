@@ -143,6 +143,23 @@
     height: 4rem !important;
     @apply pb-0 px-2 !important;
   }
+  /* Hide non-essential controls on mobile to make room for Cast/AirPlay */
+  .video-js .vjs-volume-panel,
+  .video-js .vjs-time-divider,
+  .video-js .vjs-duration,
+  .video-js .vjs-playback-rate {
+    display: none !important;
+  }
+  /* Ensure cast buttons stay visible */
+  .video-js .vjs-chromecast-button,
+  .video-js .vjs-airplay-button {
+    display: block;
+  }
+  /* The plugins use .vjs-hidden to hide buttons when cast is unavailable, don't force show if unavailable */
+  .video-js .vjs-chromecast-button.vjs-hidden,
+  .video-js .vjs-airplay-button.vjs-hidden {
+    display: none !important;
+  }
 }
 
 .custom-scrollbar::-webkit-scrollbar { width: 4px; }
