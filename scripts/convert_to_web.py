@@ -178,7 +178,7 @@ def main():
     target_path = args.target
     if not target_path and args.recursive:
         # Default to series directory when using recursive mode
-        target_path = '/media/tushita/TUSHITA_W11_DATA/series/'
+        target_path = os.getenv('MEDIA_DIR', '/media')
     elif not target_path:
         parser.error("The following arguments are required: target (unless -r is used to target the default series directory)")
 

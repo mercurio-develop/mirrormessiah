@@ -1,277 +1,113 @@
-# Media Admin Interface
+# 🌌 MirrorMessiah
 
-A Next.js 14 admin interface for managing movie metadata in an SQLite database. This interface provides a clean, responsive web UI for editing movie information, particularly poster/thumbnail paths.
-
-## Features
-
-- 🎬 **Movie Management**: Browse, search, and edit movie metadata
-- 🔍 **Search & Pagination**: Client-side search with responsive pagination
-- 🖼️ **Poster Management**: Edit thumbnail paths with live preview
-- 🔒 **Simple Authentication**: Header-based admin key authentication
-- 📱 **Responsive Design**: Works on desktop and mobile devices
-- 🎨 **Modern UI**: Built with Tailwind CSS and clean design principles
-- 🗄️ **Dynamic Schema**: Automatically detects if thumbnail column exists
-
-## Database Schema Support
-
-The interface works with the following database schema:
-
-```sql
--- Required tables
-libraries(id, name, root_path, created_at)
-movies(id, title, year, quality, imdb_id, tmdb_id, created_at, updated_at)
-files(id, library_id, movie_id, path, size_bytes, container, added_at)
-
--- Optional: movies.thumbnail column (automatically detected)
--- If present: movies.thumbnail (TEXT) - editable via UI
--- If absent: thumbnail field is hidden gracefully
-```
-
-## Quick Start
-
-### 1. Installation
-
-```bash
-# Install dependencies
-npm install
-
-# Copy environment template
-cp .env.local.example .env.local
-```
-
-### 2. Configuration
-
-Edit `.env.local`:
-
-```bash
-# Required: Set a strong admin key
-GATE_KEY=your-secret-admin-key-here
-
-# Optional: Set base URL (defaults to http://localhost:3000)
-NEXTAUTH_URL=http://localhost:3000
-```
-
-### 3. Database Setup
-
-Ensure your `media.db` SQLite database is in the project root with the required schema.
-
-### 4. Poster Directory
-
-```bash
-# Create poster directory (already exists)
-mkdir -p public/posters
-```
-
-### 5. Run Development Server
-
-```bash
-npm run dev
-```
-
-Visit `http://localhost:3000/admin` to access the admin interface.
-
-## Usage Guide
-
-### Admin Dashboard
-
-- **URL**: `/admin`
-- **Features**: Admin key status, navigation, setup instructions
-
-### Movies List
-
-- **URL**: `/admin/movies`
-- **Features**: 
-  - Search movies by title, year, or quality
-  - Responsive grid layout with poster previews
-  - Pagination (12 movies per page)
-  - Edit buttons for each movie
-
-### Movie Editor
-
-- **URL**: `/admin/movies/[id]`
-- **Features**:
-  - Edit all movie metadata fields
-  - Live poster preview
-  - Form validation
-  - Success/error feedback
-  - Admin key management
-
-### Editable Fields
-
-- **Title** (required): Movie display name
-- **Year**: Release year (1800-2100 or null)
-- **Quality**: Video quality indicator (e.g., "1080p", "4K", "BluRay")
-- **IMDB ID**: IMDB identifier for external linking
-- **TMDB ID**: The Movie Database identifier
-- **Thumbnail**: Poster image path (if column exists)
-
-### Thumbnail/Poster Handling
-
-The interface supports flexible poster management:
-
-1. **Relative Paths**: `posters/movie.jpg` → served from `/public/posters/movie.jpg`
-2. **Absolute URLs**: `https://example.com/poster.jpg` → used as-is
-3. **Fallback**: Missing/invalid posters show placeholder image
-
-## API Endpoints
-
-### GET /api/movies
-Returns list of all movies with file information.
-
-**Response:**
-```json
-{
-  "movies": [
-    {
-      "id": 1,
-      "title": "Movie Title",
-      "year": 2023,
-      "quality": "1080p",
-      "imdb_id": "tt1234567",
-      "tmdb_id": "12345",
-      "thumbnail": "posters/movie.jpg",
-      "file_path": "/path/to/movie.mp4",
-      "created_at": "2023-01-01T00:00:00Z",
-      "updated_at": "2023-01-01T00:00:00Z"
-    }
-  ],
-  "total": 1
-}
-```
-
-### GET /api/movies/[id]
-Returns single movie by ID.
-
-**Response:**
-```json
-{
-  "movie": {
-    "id": 1,
-    "title": "Movie Title",
-    "year": 2023,
-    "quality": "1080p",
-    "imdb_id": "tt1234567",
-    "tmdb_id": "12345",
-    "thumbnail": "posters/movie.jpg",
-    "created_at": "2023-01-01T00:00:00Z",
-    "updated_at": "2023-01-01T00:00:00Z"
-  }
-}
-```
-
-### PATCH /api/movies/[id]
-Updates movie fields. Requires `x-admin-key` header.
-
-**Headers:**
-```
-Content-Type: application/json
-x-admin-key: your-admin-key
-```
-
-**Request Body:**
-```json
-{
-  "title": "Updated Title",
-  "year": 2024,
-  "quality": "4K",
-  "imdb_id": "tt7654321",
-  "tmdb_id": "54321",
-  "thumbnail": "posters/updated.jpg"
-}
-```
-
-## Security Notes
-
-⚠️ **Important**: This interface is designed for **local intranet use only**.
-
-- Uses simple header-based authentication
-- No rate limiting or advanced security features
-- Admin key is stored in localStorage (client-side)
-- **Do not expose to public internet without additional security measures**
-
-## Technical Details
-
-### Architecture
-
-- **Framework**: Next.js 14 with App Router
-- **Language**: TypeScript
-- **Database**: SQLite via better-sqlite3
-- **Styling**: Tailwind CSS
-- **Authentication**: Environment variable + header validation
-
-### File Structure
-
-```
-├── app/
-│   ├── admin/                 # Admin pages
-│   │   ├── page.tsx          # Dashboard
-│   │   └── movies/           # Movie management
-│   ├── api/                  # API routes
-│   │   └── movies/           # Movie CRUD endpoints
-│   ├── globals.css           # Global styles
-│   └── layout.tsx            # Root layout
-├── components/               # React components
-│   ├── AdminMovieForm.tsx    # Movie edit form
-│   └── MoviesList.tsx        # Movie list with search
-├── lib/                      # Utilities
-│   ├── auth.ts              # Authentication helpers
-│   ├── db.ts                # Database connection & types
-│   └── schema.ts            # Schema detection & queries
-├── public/
-│   ├── posters/             # Poster images directory
-│   └── placeholder.svg      # Fallback poster image
-└── media.db                 # SQLite database
-```
-
-### Key Features Implementation
-
-1. **Dynamic Schema Detection**: Uses `PRAGMA table_info(movies)` to detect thumbnail column
-2. **Responsive Design**: Mobile-first approach with Tailwind CSS
-3. **Client-side Search**: Real-time filtering without server requests
-4. **Error Handling**: Comprehensive error handling with user feedback
-5. **Image Fallbacks**: Graceful handling of missing/broken poster images
-
-## Development
-
-### Build for Production
-
-```bash
-npm run build
-npm start
-```
-
-### Linting
-
-```bash
-npm run lint
-```
-
-### Adding New Features
-
-The codebase is structured for easy extension:
-
-- Add new API routes in `app/api/`
-- Create new pages in `app/admin/`
-- Add reusable components in `components/`
-- Extend database helpers in `lib/`
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Admin key not working**: Check `.env.local` file and restart server
-2. **Database not found**: Ensure `media.db` is in project root
-3. **Posters not loading**: Check file paths and `public/posters/` directory
-4. **Build errors**: Run `npm install` and check TypeScript errors
-
-### Debug Mode
-
-Set `NODE_ENV=development` for detailed error messages and logging.
-
-## License
-
-This project is designed for personal/internal use. Modify and distribute as needed for your specific requirements.
+MirrorMessiah is a standalone, high-fidelity media registry, transcoding pipeline, and streaming terminal built with Next.js 14 and SQLite. It provides a secure, web-based UI and a robust Python CLI for cataloging, optimizing, and streaming browser-ready media (movies, series, and subtitles).
 
 ---
 
-**Security Reminder**: This interface is intended for local network use only. Implement proper authentication and security measures before exposing to external networks.
+## ✨ Key Capabilities
+
+*   🎬 **Unified Cataloging**: Supports both single-entry Movies and Episodic Series with deep metadata integration (TMDB/IMDb).
+*   ⚡ **High-Performance Streaming**: Fully browser-optimized 1080p MP4 compliance using H.264 video encoding, AAC audio transcoding, and `faststart` metadata placement.
+*   📦 **Feature-Sliced Architecture**: Adheres strictly to isolated domain-driven design (`src/features/movie` & `src/features/series`).
+*   🎯 **Intersection Observer Scrolling**: High-performance client-side catalog grids with lag-free, observer-based infinite scrolling.
+*   💬 **On-the-Fly Subtitle Conversion**: Subtitle streaming proxy automatically parses and converts `.srt` files to browser-native `WebVTT` format on-the-fly.
+*   🔒 **Dual-Layer Gate Security**:
+    *   `GATE_KEY`: General app entry authentication.
+    *   `ADMIN_KEY`: Administrative dashboards and management tools access.
+
+---
+
+## 📁 Directory Structure & Clean Architecture
+
+MirrorMessiah is structured strictly according to the **Feature-Sliced Architecture** pattern:
+
+```
+├── src/
+│   ├── app/                  # App Router: Routing, pages, and layouts (default exports only)
+│   ├── components/           # Generic, domain-agnostic UI primitives (named exports, kebab-case)
+│   │   ├── ui/               # Form elements, toggles, dropdowns
+│   ├── contexts/             # Admin and Theme context providers
+│   ├── features/             # Core Domain Engine (no default exports, named exports only)
+│   │   ├── movie/            # Movies domain (actions, queries, components)
+│   │   └── series/           # Series domain (actions, queries, components)
+│   ├── lib/                  # Database connections, authentication rules, schemas
+│   └── middleware.ts         # App Route routing security
+├── scripts/                  # Production utility scripts
+│   ├── mm.py                 # Primary MirrorMessiah CLI utility
+│   ├── convert_to_web.py     # ffmpeg video/audio transcoding engine
+│   └── series_cli.py         # Episodic series scanner
+└── .env.example              # Sample environment template (tracked in git)
+```
+
+---
+
+## 🛠️ Developer Setup
+
+### 1. Installation
+
+Install node dependencies:
+```bash
+npm install
+```
+
+Ensure system transcoding dependencies are installed:
+```bash
+# Ubuntu/Debian
+sudo apt update && sudo apt install -y ffmpeg
+```
+
+### 2. Environment Configuration
+
+Copy the example template to create a secure local environment file (this file is ignored in Git to prevent security leaks):
+```bash
+cp .env.example .env
+```
+
+Edit the `.env` parameters:
+*   `GATE_KEY`: General access passcode.
+*   `ADMIN_KEY`: Admin panel passcode.
+*   `TMDB_API_KEY`: API token for movie/series metadata scraping.
+*   `MEDIA_DIR`: Path to the directory where your media drives are mounted.
+
+### 3. Registry Compilation (Database Migration)
+On the initial run, migrations will automatically compile the SQLite schema and seed default tables:
+```bash
+npm run build
+```
+
+---
+
+## 💻 Python CLI Registry Workflows (`scripts/mm.py`)
+
+MirrorMessiah is managed locally using the Python CLI. All absolute directories are loaded dynamically from the environment.
+
+*   **Status**: Check database metadata statistics (movies, files, subtitles counts).
+    ```bash
+    python3 scripts/mm.py status
+    ```
+*   **Transcode Media**: Scan a directory for non-web-compliant files (such as `.avi`, `.mkv`) and transcode them to 1080p MP4.
+    ```bash
+    python3 scripts/mm.py convert "/path/to/movie-folder"
+    ```
+*   **Ingest / Sync Directory**: Scan the media drive, discover new titles, auto-scrape details from TMDB, and link subtitles.
+    ```bash
+    python3 scripts/mm.py sync "/path/to/movies"
+    ```
+*   **Organize**: Rename directories on disk to match database-registered structures.
+    ```bash
+    python3 scripts/mm.py organize
+    ```
+*   **System Reset**: Wipe the SQLite registry database permanently.
+    ```bash
+    python3 scripts/mm.py reset
+    ```
+
+---
+
+## 🔒 Security Best Practices for GitHub Pushing
+
+To ensure zero leakage of private credentials, keys, or local directory paths before pushing to a remote repository:
+
+1.  **Environment Variables**: All API tokens (`TMDB_API_KEY`), access passcodes (`GATE_KEY`, `ADMIN_KEY`), and local drives mount paths (`MEDIA_DIR`) reside exclusively in `.env` or `.env.local` (which are matched in `.gitignore`).
+2.  **Ignored Database**: The SQLite registry file `media.db` and backup files (`*.db.bak`) are excluded in `.gitignore` to prevent media names or paths from committing to source control.
+3.  **Local Path Masking**: Frontend paths are stripped dynamically using clean RegExp rules (e.g., matching the `movies/` or `series/` folder levels) to obscure the user's hard drive structure in the web interface.

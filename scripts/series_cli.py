@@ -24,7 +24,7 @@ load_dotenv(ROOT / '.env')
 
 API_KEY   = os.getenv('TMDB_API_KEY')
 DB_PATH   = os.getenv('DB_PATH') or str(ROOT / 'media.db')
-SERIES_DIR = '/media/tushita/TUSHITA_W11_DATA/series/'
+SERIES_DIR = os.getenv('MEDIA_DIR') or '/media'
 TMDB_BASE = 'https://api.themoviedb.org/3'
 IMG_BASE  = 'https://image.tmdb.org/t/p/w500'
 DELAY     = 0.25
