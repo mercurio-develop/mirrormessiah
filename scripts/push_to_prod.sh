@@ -4,6 +4,9 @@
 
 set -e
 
+# Change to the project root directory
+cd "$(dirname "$0")/.."
+
 CONTAINER_NAME="mirrormessiah-web"
 DEV_DB="media.db"
 SQL_DUMP="sync_to_prod.sql"

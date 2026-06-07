@@ -125,6 +125,19 @@
   height: 3em !important;
 }
 
+/* Silvermine Plugins Override */
+.vjs-airplay-button .vjs-icon-placeholder,
+.vjs-chromecast-button .vjs-icon-placeholder {
+  width: 24px !important;
+  height: 24px !important;
+  margin: auto;
+}
+.vjs-airplay-button.vjs-airplay-button-lg,
+.vjs-chromecast-button.vjs-chromecast-button-lg {
+  padding: 0 10px !important;
+  font-size: 14px;
+}
+
 /* Scrollbar Utility */
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
@@ -148,16 +161,6 @@
   .video-js .vjs-time-divider,
   .video-js .vjs-duration,
   .video-js .vjs-playback-rate {
-    display: none !important;
-  }
-  /* Ensure cast buttons stay visible */
-  .video-js .vjs-chromecast-button,
-  .video-js .vjs-airplay-button {
-    display: block;
-  }
-  /* The plugins use .vjs-hidden to hide buttons when cast is unavailable, don't force show if unavailable */
-  .video-js .vjs-chromecast-button.vjs-hidden,
-  .video-js .vjs-airplay-button.vjs-hidden {
     display: none !important;
   }
 }
