@@ -291,9 +291,9 @@ export function MediaFileManager({ movieId }: { movieId: number }) {
                   <div className="flex flex-wrap items-center gap-4">
                     <span 
                         className="text-[11px] font-mono text-muted-foreground/50 truncate max-w-lg block bg-background/50 px-2 py-0.5 rounded border border-border/30 cursor-help"
-                        title={file.path.replace('/media/tushita/TUSHITA_W11_DATA/movies/', '')}
+                        title={file.path.replace(/^.*\/(movies|series)\//i, '')}
                     >
-                        {file.path.replace('/media/tushita/TUSHITA_W11_DATA/movies/', '')}
+                        {file.path.replace(/^.*\/(movies|series)\//i, '')}
                     </span>
                     {file.size_bytes && (
                       <span className="text-[10px] font-bold text-primary/60 flex items-center gap-1.5 bg-primary/5 px-2 py-0.5 rounded-full border border-primary/10">
