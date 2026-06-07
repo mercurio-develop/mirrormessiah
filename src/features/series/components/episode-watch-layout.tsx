@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { LayoutList, ChevronRight, ChevronLeft } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import EpisodePlaylist from './EpisodePlaylist';
+import { EpisodePlaylist } from './episode-playlist';
 
 interface PlaylistEpisode {
   id: number;
@@ -20,7 +20,7 @@ interface EpisodeWatchLayoutProps {
   currentEpisodeId: number;
 }
 
-export default function EpisodeWatchLayout({ 
+export function EpisodeWatchLayout({ 
   children, 
   playlist, 
   currentEpisodeId 

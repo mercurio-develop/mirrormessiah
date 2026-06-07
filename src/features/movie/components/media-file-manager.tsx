@@ -19,7 +19,7 @@ import {
   MoreVertical,
   ChevronDown
 } from 'lucide-react';
-import FileBrowser from '@/components/FileBrowser';
+import { FileBrowser } from '@/components/file-browser';
 import { scanMovieFilesAction } from '../actions/scan-files';
 import { relinkMovieAction } from '../actions/relink-movie';
 import { deleteMovieFileAction } from '../actions/delete-file';
@@ -32,7 +32,7 @@ interface MediaFile {
   added_at: string;
 }
 
-export default function MediaFileManager({ movieId }: { movieId: number }) {
+export function MediaFileManager({ movieId }: { movieId: number }) {
   const [files, setFiles] = useState<MediaFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [isPending, startTransition] = useTransition();

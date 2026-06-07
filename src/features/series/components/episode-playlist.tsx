@@ -28,7 +28,7 @@ const getPosterUrl = (thumbnail: string | null | undefined): string | null => {
     return url;
 };
 
-export default function EpisodePlaylist({ episodes, currentEpisodeId }: EpisodePlaylistProps) {
+export function EpisodePlaylist({ episodes, currentEpisodeId }: EpisodePlaylistProps) {
   return (
     <div className="flex flex-col h-full bg-zinc-950/50 border-l border-white/5 overflow-hidden">
       <div className="p-4 border-b border-white/5 bg-zinc-900/30">

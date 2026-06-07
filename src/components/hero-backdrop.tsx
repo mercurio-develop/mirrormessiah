@@ -7,7 +7,7 @@ interface HeroBackdropProps {
   alt: string;
 }
 
-export default function HeroBackdrop({ src, alt }: HeroBackdropProps) {
+export function HeroBackdrop({ src, alt }: HeroBackdropProps) {
   return (
     <Image
       src={src}

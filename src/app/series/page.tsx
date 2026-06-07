@@ -1,4 +1,4 @@
-import PublicSeriesList from '@/features/series/components/PublicSeriesList'
+import { PublicSeriesList } from '@/features/series/components/public-series-list'
 import { getSeriesList } from '@/features/series/queries/get-series';
 import { Suspense } from 'react';
 

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import AdminMovieForm from '@/features/movie/components/AdminMovieForm';
+import { AdminMovieForm } from '@/features/movie/components/admin-movie-form';
 import { getMovie } from '@/features/movie/queries/get-movie';
 import { ChevronLeft } from 'lucide-react';
 

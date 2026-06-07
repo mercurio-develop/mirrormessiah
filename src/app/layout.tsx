@@ -1,9 +1,9 @@
 import type { Metadata } from 'next'
 import '@/lib/db_migrate'
 import './globals.css'
-import { ThemeProvider } from '@/contexts/ThemeContext'
-import { AdminProvider } from '@/contexts/AdminContext'
-import Navbar from '@/components/Navbar'
+import { ThemeProvider } from '@/contexts/theme-context'
+import { AdminProvider } from '@/contexts/admin-context'
+import { Navbar } from '@/components/navbar'
 import { Suspense } from 'react'
 import Script from 'next/script'
 

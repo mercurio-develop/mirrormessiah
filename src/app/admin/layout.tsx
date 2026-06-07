@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useAdmin } from '@/contexts/AdminContext';
+import { useAdmin } from '@/contexts/admin-context';
 import { Lock, ChevronRight, Loader2, ShieldCheck } from 'lucide-react';
 
 export default function AdminLayout({

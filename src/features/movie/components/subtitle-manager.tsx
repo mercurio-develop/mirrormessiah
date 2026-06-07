@@ -25,7 +25,7 @@ const LANG_OPTIONS = [
   { code: 'jpn', label: '日本語' },
 ];
 
-export default function SubtitleManager({ movieId }: { movieId: number }) {
+export function SubtitleManager({ movieId }: { movieId: number }) {
   const [subtitles, setSubtitles] = useState<Subtitle[]>([]);
   const [loading, setLoading] = useState(true);
   const [isPending, startTransition] = useTransition();

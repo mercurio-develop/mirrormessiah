@@ -1,4 +1,4 @@
-import PublicMoviesList from '@/features/movie/components/PublicMoviesList'
+import { PublicMoviesList } from '@/features/movie/components/public-movies-list'
 import { getMovies } from '@/features/movie/queries/get-movies';
 import { Suspense } from 'react';
 

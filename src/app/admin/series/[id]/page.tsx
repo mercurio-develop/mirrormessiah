@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import AdminSeriesForm from '@/features/series/components/AdminSeriesForm';
+import { AdminSeriesForm } from '@/features/series/components/admin-series-form';
 import { getSeriesDetails } from '@/features/series/queries/get-series-details';
 import { ChevronLeft } from 'lucide-react';
 

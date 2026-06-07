@@ -5,8 +5,8 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { b64urlEncode } from '@/lib/b64url';
 import { Save, Loader2, AlertCircle, Trash2, Globe, Info, Search, Film, Calendar, Star, Sparkles, ChevronDown, Tv } from 'lucide-react';
-import FileBrowser from '@/components/FileBrowser';
-import DeleteSeriesModal from './DeleteSeriesModal';
+import { FileBrowser } from '@/components/file-browser';
+import { DeleteSeriesModal } from './delete-series-modal';
 import { updateSeriesAction } from '../actions/update-series';
 import { scrapeSeriesAction } from '../actions/scrape-series';
 
@@ -40,7 +40,7 @@ const getPosterUrl = (thumbnail: string | null | undefined): string => {
   return url;
 };
 
-export default function AdminSeriesForm({ series }: AdminSeriesFormProps) {
+export function AdminSeriesForm({ series }: AdminSeriesFormProps) {
   const router = useRouter();
   const [isBrowserOpen, setIsBrowserOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);

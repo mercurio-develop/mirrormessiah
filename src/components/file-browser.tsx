@@ -23,7 +23,7 @@ interface FileBrowserProps {
   onSelectDirectory?: (dirPath: string) => void;
 }
 
-export default function FileBrowser({ movieId, isOpen, mode, mediaType = 'movie', onClose, onSelect, onSelectDirectory }: FileBrowserProps) {
+export function FileBrowser({ movieId, isOpen, mode, mediaType = 'movie', onClose, onSelect, onSelectDirectory }: FileBrowserProps) {
   const [items, setItems] = useState<Item[]>([]);
   const [currentPath, setCurrentPath] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
