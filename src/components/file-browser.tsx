@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import Image from 'next/image';
 import { X, Loader2, Image as ImageIcon, Check, Video, Folder, ChevronRight, Home, ArrowLeft, Search } from 'lucide-react';
 import { b64urlEncode } from '@/lib/b64url';
@@ -32,14 +32,27 @@ export function FileBrowser({ movieId, isOpen, mode, mediaType = 'movie', onClos
   const [libraries, setLibraries] = useState<any[]>([]);
   const [filterText, setFilterText] = useState('');
 
-  // Load initial movie directory or libraries
-  useEffect(() => {
-    if (isOpen && movieId) {
-      loadInitialContext();
+  const fetchDirectory = useCallback(async (path: string) => {
+    setFilterText('');
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/browse/raw-directory?path=${encodeURIComponent(path)}&type=${mode}`);
+      if (res.ok) {
+        const data = await res.json();
+        setItems(data.items || []);
+        setCurrentPath(data.currentPath);
+      } else {
+        throw new Error('Failed to scan sector');
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
-  }, [isOpen, movieId, mode, mediaType]);
+  }, [mode]);
 
-  const loadInitialContext = async () => {
+  const loadInitialContext = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -62,27 +75,14 @@ export function FileBrowser({ movieId, isOpen, mode, mediaType = 'movie', onClos
     } finally {
       setLoading(false);
     }
-  };
+  }, [movieId, mode, mediaType, fetchDirectory]);
 
-  const fetchDirectory = async (path: string) => {
-    setFilterText('');
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/browse/raw-directory?path=${encodeURIComponent(path)}&type=${mode}`);
-      if (res.ok) {
-        const data = await res.json();
-        setItems(data.items || []);
-        setCurrentPath(data.currentPath);
-      } else {
-        throw new Error('Failed to scan sector');
-      }
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
+  // Load initial movie directory or libraries
+  useEffect(() => {
+    if (isOpen && movieId) {
+      loadInitialContext();
     }
-  };
+  }, [isOpen, movieId, loadInitialContext]);
 
   const handleItemClick = (item: Item) => {
     if (item.isDirectory) {

@@ -20,6 +20,20 @@ export default function RootLayout({
   return (
     <html lang="en" className={`h-full dark`}>
       <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              try {
+                const theme = localStorage.getItem('theme');
+                if (theme === 'light' || (!theme && window.matchMedia('(prefers-color-scheme: light)').matches)) {
+                  document.documentElement.classList.remove('dark');
+                } else {
+                  document.documentElement.classList.add('dark');
+                }
+              } catch (_) {}
+            `,
+          }}
+        />
         <Script 
           src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1" 
           strategy="beforeInteractive" 
