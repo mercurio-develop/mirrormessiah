@@ -1,4 +1,4 @@
-'use client';
+'guse client';
 
 import { useState, useMemo, useEffect, useCallback, useRef, useTransition } from 'react';
 import Link from 'next/link';

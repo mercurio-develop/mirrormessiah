@@ -2,14 +2,15 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { jwtVerify } from 'jose';
 
-// Simple in-memory cache for verified tokens to avoid blocking the event loop
+// Simple LRU-style cache for verified tokens to avoid blocking the event loop
 // with expensive crypto on every asset/subtitle request.
 const verifiedTokens = new Map<string, { expires: number }>();
+const MAX_CACHE_SIZE = 500;
 
 // Define the routes that don't require authentication
 const publicRoutes = ['/login', '/api/auth'];
 
-export async function proxy(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Allow access to public routes and static assets
@@ -50,10 +51,14 @@ export async function proxy(request: NextRequest) {
     await jwtVerify(token, SECRET_KEY);
 
     // Cache successful verification
-    verifiedTokens.set(token, { expires: Date.now() + 60000 });
+    // Implement aggressive cleanup if Map grows too large
+    if (verifiedTokens.size >= MAX_CACHE_SIZE) {
+        // Simple strategy: Clear everything if limit reached to prevent RangeError
+        // This is safe because it just triggers one crypto verify per active user
+        verifiedTokens.clear();
+    }
     
-    // Periodically clean up cache
-    if (verifiedTokens.size > 1000) verifiedTokens.clear();
+    verifiedTokens.set(token, { expires: Date.now() + 60000 });
 
     return NextResponse.next();
   } catch (error) {

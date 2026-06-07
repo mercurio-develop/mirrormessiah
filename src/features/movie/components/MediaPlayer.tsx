@@ -110,6 +110,7 @@ export default function MediaPlayer({
       
       // No crossorigin attribute needed for same-origin requests
       videoElement.setAttribute('playsinline', 'true');
+      videoElement.setAttribute('x-webkit-airplay', 'allow');
 
       videoRef.current.appendChild(videoElement);
 
@@ -131,8 +132,12 @@ export default function MediaPlayer({
         poster: poster || undefined,
         techOrder: ['chromecast', 'html5'],
         plugins: {
-          chromecast: {},
-          airPlay: {}
+          chromecast: {
+            addCastLabelToButton: true,
+          },
+          airPlay: {
+            addAirPlayLabelToButton: true,
+          }
         },
         playbackRates: [0.5, 1, 1.25, 1.5, 2],
         controlBar: {

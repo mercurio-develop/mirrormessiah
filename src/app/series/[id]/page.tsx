@@ -51,6 +51,18 @@ export default async function SeriesDetailsPage({ params }: SeriesDetailsPagePro
 
   return (
     <div className="min-h-screen bg-background text-foreground font-sans selection:bg-primary selection:text-white pb-32">
+      {/* Top Navigation Bar - Dedicated Space */}
+      <nav className="bg-background border-b border-white/5 py-4 sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto w-full px-4 sm:px-6">
+          <Link 
+            href="/series" 
+            className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-white/5 border border-white/10 text-white hover:bg-white hover:text-black hover:scale-105 transition-all group"
+          >
+            <ChevronLeft className="h-5 w-5 group-hover:-translate-x-0.5 transition-transform" />
+          </Link>
+        </div>
+      </nav>
+
       {/* Full-bleed Cinematic Hero Section */}
       <div className="relative w-full h-[65vh] sm:h-[70vh] lg:h-[70vh] flex items-end">
           {posterUrl && (
@@ -97,16 +109,6 @@ export default async function SeriesDetailsPage({ params }: SeriesDetailsPagePro
               <div className="absolute inset-0 z-10 bg-gradient-to-r from-background via-background/60 to-transparent lg:from-background lg:via-background/80 lg:to-transparent" />
             </div>
           )}
-
-          {/* Navigation / Back Button (Overlay) */}
-          <div className="absolute top-20 left-0 right-0 z-20 max-w-7xl mx-auto w-full px-4 sm:px-6 py-4">
-            <Link 
-              href="/series" 
-              className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-black/40 border border-white/10 text-white hover:bg-white hover:text-black transition-all group backdrop-blur-md"
-            >
-              <ChevronLeft className="h-5 w-5 group-hover:-translate-x-0.5 transition-transform" />
-            </Link>
-          </div>
 
           <div className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 pb-12 lg:pb-24">
              <div className="max-w-3xl space-y-6">
