@@ -152,6 +152,7 @@ export function PublicMoviesList({ initialMovies }: PublicMoviesListProps) {
   
   const loadingRef = useRef(false);
   const offsetRef = useRef(initialMovies.length);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
   const qualities = ['720p', '1080p'];
   const years = useMemo(() => {
@@ -280,18 +281,25 @@ export function PublicMoviesList({ initialMovies }: PublicMoviesListProps) {
     sessionStorage.setItem('mm_movies_state', JSON.stringify(state));
   };
 
-  const handleScroll = useCallback(() => {
-    if (loadingRef.current || !hasMore) return;
-    const { scrollHeight, scrollTop, clientHeight } = document.documentElement;
-    if (scrollTop + clientHeight >= scrollHeight - 800) {
-      fetchMovies(debouncedSearch, selectedQuality, selectedYear, selectedAudience, sort, selectedGenre);
-    }
-  }, [fetchMovies, hasMore, debouncedSearch, selectedQuality, selectedYear, selectedAudience, sort, selectedGenre]);
-
+  // Infinite Scroll using Intersection Observer
   useEffect(() => {
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [handleScroll]);
+    const sentinel = loadMoreRef.current;
+    if (!sentinel || !hasMore || loadingRef.current) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          fetchMovies(debouncedSearch, selectedQuality, selectedYear, selectedAudience, sort, selectedGenre);
+        }
+      },
+      { rootMargin: '400px' }
+    );
+
+    observer.observe(sentinel);
+    return () => {
+      if (sentinel) observer.unobserve(sentinel);
+    };
+  }, [hasMore, fetchMovies, debouncedSearch, selectedQuality, selectedYear, selectedAudience, sort, selectedGenre]);
 
   const clearFilters = () => {
     setSearchTerm('');
@@ -575,7 +583,7 @@ export function PublicMoviesList({ initialMovies }: PublicMoviesListProps) {
         )}
         
         {hasMore && (
-          <div className="mt-20 flex justify-center pb-20">
+          <div ref={loadMoreRef} className="mt-20 flex justify-center pb-20">
             <div className="flex flex-col items-center gap-4">
               <Loader2 className="h-10 w-10 text-primary animate-spin" />
               <span className="text-[10px] font-black text-muted-foreground/40 uppercase tracking-[0.3em] animate-pulse">Syncing movies...</span>

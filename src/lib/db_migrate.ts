@@ -131,6 +131,7 @@ export function runMigrations(): void {
       `);
       
       db.exec(`CREATE INDEX IF NOT EXISTS idx_subtitles_movie ON subtitles(movie_id)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_files_movie ON files(movie_id)`);
 
       // 2. Series Tables
       db.exec(`
@@ -220,6 +221,7 @@ export function runMigrations(): void {
       db.exec(`CREATE INDEX IF NOT EXISTS idx_seasons_series ON seasons(series_id)`);
       db.exec(`CREATE INDEX IF NOT EXISTS idx_episodes_season ON episodes(season_id)`);
       db.exec(`CREATE INDEX IF NOT EXISTS idx_episode_subtitles_episode ON episode_subtitles(episode_id)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_episode_files_episode ON episode_files(episode_id)`);
 
       // 3. Data Seeding
       const defaultCategories = ['Kids', 'Family', 'Adults'];

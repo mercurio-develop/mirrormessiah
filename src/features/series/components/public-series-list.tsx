@@ -150,6 +150,7 @@ export function PublicSeriesList({ initialSeries }: PublicSeriesListProps) {
   
   const loadingRef = useRef(false);
   const offsetRef = useRef(initialSeries.length);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
   const years = useMemo(() => {
     const currentYear = new Date().getFullYear();
@@ -285,18 +286,25 @@ export function PublicSeriesList({ initialSeries }: PublicSeriesListProps) {
     sessionStorage.setItem('mm_series_state', JSON.stringify(state));
   };
 
-  const handleScroll = useCallback(() => {
-    if (loadingRef.current || !hasMore) return;
-    const { scrollHeight, scrollTop, clientHeight } = document.documentElement;
-    if (scrollTop + clientHeight >= scrollHeight - 800) {
-      fetchSeries(debouncedSearch, selectedYear, selectedAudience, sort, selectedGenre);
-    }
-  }, [fetchSeries, hasMore, debouncedSearch, selectedYear, selectedAudience, sort, selectedGenre]);
-
+  // Infinite Scroll using Intersection Observer
   useEffect(() => {
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [handleScroll]);
+    const sentinel = loadMoreRef.current;
+    if (!sentinel || !hasMore || loadingRef.current) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          fetchSeries(debouncedSearch, selectedYear, selectedAudience, sort, selectedGenre);
+        }
+      },
+      { rootMargin: '400px' }
+    );
+
+    observer.observe(sentinel);
+    return () => {
+      if (sentinel) observer.unobserve(sentinel);
+    };
+  }, [hasMore, fetchSeries, debouncedSearch, selectedYear, selectedAudience, sort, selectedGenre]);
 
   const clearFilters = () => {
     setSearchTerm('');
@@ -559,7 +567,7 @@ export function PublicSeriesList({ initialSeries }: PublicSeriesListProps) {
         )}
         
         {hasMore && (
-          <div className="mt-20 flex justify-center pb-20">
+          <div ref={loadMoreRef} className="mt-20 flex justify-center pb-20">
             <div className="flex flex-col items-center gap-4">
               <Loader2 className="h-10 w-10 text-primary animate-spin" />
               <span className="text-[10px] font-black text-muted-foreground/40 uppercase tracking-[0.3em] animate-pulse">Syncing series...</span>

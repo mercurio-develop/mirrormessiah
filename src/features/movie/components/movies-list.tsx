@@ -81,6 +81,7 @@ export function MoviesList({ initialMovies }: MoviesListProps) {
   const offsetRef = useRef(initialMovies.length);
   const [restored, setRestored] = useState({ done: false, didRestore: false });
   const scrollRestored = useRef(false);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
   // 1. Restore state on mount
   useEffect(() => {
@@ -326,18 +327,25 @@ export function MoviesList({ initialMovies }: MoviesListProps) {
     }
   }, [debouncedSearch, currentSort, currentAudience, fetchMovies, restored.done, restored.didRestore]);
 
-  // Infinite Scroll
+  // Infinite Scroll using Intersection Observer
   useEffect(() => {
-    const handleScroll = () => {
-      if (loadingRef.current || !hasMore) return;
-      const { scrollTop, scrollHeight, clientHeight } = document.documentElement;
-      if (scrollTop + clientHeight >= scrollHeight - 800) {
-        fetchMovies(debouncedSearch, currentSort, currentAudience);
-      }
+    const sentinel = loadMoreRef.current;
+    if (!sentinel || !hasMore || loadingRef.current) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          fetchMovies(debouncedSearch, currentSort, currentAudience);
+        }
+      },
+      { rootMargin: '400px' }
+    );
+
+    observer.observe(sentinel);
+    return () => {
+      if (sentinel) observer.unobserve(sentinel);
     };
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [fetchMovies, hasMore, debouncedSearch, currentSort, currentAudience]);
+  }, [hasMore, fetchMovies, debouncedSearch, currentSort, currentAudience]);
 
   const clearSearch = () => {
     setSearchTerm('');
@@ -609,6 +617,10 @@ export function MoviesList({ initialMovies }: MoviesListProps) {
             </div>
         )}
       </div>
+
+      {hasMore && !loading && (
+        <div ref={loadMoreRef} className="h-10" />
+      )}
 
       {loading && (
         <div className="flex justify-center py-12">

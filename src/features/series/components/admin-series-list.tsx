@@ -96,6 +96,7 @@ export function AdminSeriesList({ initialSeries }: AdminSeriesListProps) {
   const offsetRef = useRef(initialSeries.length);
   const [restored, setRestored] = useState({ done: false, didRestore: false });
   const scrollRestored = useRef(false);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const saved = sessionStorage.getItem('mm_admin_series_state');
@@ -335,18 +336,25 @@ export function AdminSeriesList({ initialSeries }: AdminSeriesListProps) {
     }
   }, [debouncedSearch, currentSort, currentAudience, fetchSeries, restored.done, restored.didRestore]);
 
-  // Infinite Scroll
+  // Infinite Scroll using Intersection Observer
   useEffect(() => {
-    const handleScroll = () => {
-      if (loadingRef.current || !hasMore) return;
-      const { scrollTop, scrollHeight, clientHeight } = document.documentElement;
-      if (scrollTop + clientHeight >= scrollHeight - 800) {
-        fetchSeries(debouncedSearch, currentSort, currentAudience);
-      }
+    const sentinel = loadMoreRef.current;
+    if (!sentinel || !hasMore || loadingRef.current) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          fetchSeries(debouncedSearch, currentSort, currentAudience);
+        }
+      },
+      { rootMargin: '400px' }
+    );
+
+    observer.observe(sentinel);
+    return () => {
+      if (sentinel) observer.unobserve(sentinel);
     };
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [fetchSeries, hasMore, debouncedSearch, currentSort, currentAudience]);
+  }, [hasMore, fetchSeries, debouncedSearch, currentSort, currentAudience]);
 
   const clearSearch = () => {
     setSearchTerm('');
@@ -610,6 +618,10 @@ export function AdminSeriesList({ initialSeries }: AdminSeriesListProps) {
             </div>
         )}
       </div>
+
+      {hasMore && !loading && (
+        <div ref={loadMoreRef} className="h-10" />
+      )}
 
       {loading && (
         <div className="flex justify-center py-12">
