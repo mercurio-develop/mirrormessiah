@@ -35,7 +35,7 @@ const getPosterUrl = (thumbnail: string | null | undefined): string | null => {
     return url;
 };
 
-export default function SeasonSelector({ seasons, seriesId }: { seasons: Season[], seriesId: number }) {
+export function SeasonSelector({ seasons, seriesId }: { seasons: Season[], seriesId: number }) {
   const [activeSeasonId, setActiveSeasonId] = useState<number | null>(seasons.length > 0 ? seasons[0].id : null);
 
   const activeSeason = seasons.find(s => s.id === activeSeasonId);

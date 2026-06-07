@@ -1,12 +1,12 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { cookies } from 'next/headers';
-import MediaPlayer from '@/features/movie/components/MediaPlayer';
+import { MediaPlayer } from '@/features/movie/components/media-player';
 import { ChevronLeft, ChevronRight, AlertCircle, Activity, SkipBack, SkipForward, LayoutList } from 'lucide-react';
 import { getEpisodeContext } from '@/features/series/queries/get-episode-context';
 import { b64urlEncode } from '@/lib/b64url';
-import EpisodePlaylist from '@/features/series/components/EpisodePlaylist';
-import EpisodeWatchLayout from '@/features/series/components/EpisodeWatchLayout';
+import { EpisodePlaylist } from '@/features/series/components/episode-playlist';
+import { EpisodeWatchLayout } from '@/features/series/components/episode-watch-layout';
 
 interface WatchEpisodePageProps {
   params: Promise<{ id: string }>;

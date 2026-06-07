@@ -1,11 +1,11 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { getSeriesDetails } from '@/features/series/queries/get-series-details';
-import HeroBackdrop from '@/components/HeroBackdrop';
+import { HeroBackdrop } from '@/components/hero-backdrop';
 import { b64urlEncode } from '@/lib/b64url';
 import Image from 'next/image';
 import { ChevronLeft, Star, Play, Info, User, Globe, AlertCircle, Sparkles } from 'lucide-react';
-import SeasonSelector from '@/features/series/components/SeasonSelector';
+import { SeasonSelector } from '@/features/series/components/season-selector';
 
 export const dynamic = 'force-dynamic';
 

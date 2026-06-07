@@ -11,7 +11,7 @@ interface DeleteMovieModalProps {
   onDeleted: () => void;
 }
 
-export default function DeleteMovieModal({ movie, isOpen, onClose, onDeleted }: DeleteMovieModalProps) {
+export function DeleteMovieModal({ movie, isOpen, onClose, onDeleted }: DeleteMovieModalProps) {
   const [isPending, startTransition] = useTransition();
   const [conflictCheck, setConflictCheck] = useState<{ shared: boolean, count: number } | null>(null);
   const [checkLoading, setCheckCheckLoading] = useState(true);

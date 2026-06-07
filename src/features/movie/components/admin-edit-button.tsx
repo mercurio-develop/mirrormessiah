@@ -2,9 +2,9 @@
 
 import Link from 'next/link';
 import { Edit } from 'lucide-react';
-import { useAdmin } from '@/contexts/AdminContext';
+import { useAdmin } from '@/contexts/admin-context';
 
-export default function AdminEditButton({ movieId }: { movieId: number }) {
+export function AdminEditButton({ movieId }: { movieId: number }) {
   const { isAdmin } = useAdmin();
 
   if (!isAdmin) return null;

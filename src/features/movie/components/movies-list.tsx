@@ -1,4 +1,4 @@
-'guse client';
+'use client';
 
 import { useState, useMemo, useEffect, useCallback, useRef, useTransition } from 'react';
 import Link from 'next/link';
@@ -26,12 +26,12 @@ import {
   Zap,
   ShieldAlert, Sparkles
 } from 'lucide-react';
-import Dropdown from '@/components/ui/Dropdown';
+import { Dropdown } from '@/components/ui/dropdown';
 import { validateThumbnailsAction } from '../actions/validate-thumbnails';
 import { deleteMoviesAction } from '../actions/delete-movies';
 import { scrapeMoviesAction } from '../actions/scrape-movies';
 import { updateAudienceAction } from '../actions/update-audience';
-import ValidateAssetsModal from './ValidateAssetsModal';
+import { ValidateAssetsModal } from './validate-assets-modal';
 
 interface MoviesListProps {
   initialMovies: MovieWithFile[];
@@ -56,7 +56,7 @@ const SORT_OPTIONS = [
     { value: 'repair', label: 'Needs Repair' }
 ];
 
-export default function MoviesList({ initialMovies }: MoviesListProps) {
+export function MoviesList({ initialMovies }: MoviesListProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();

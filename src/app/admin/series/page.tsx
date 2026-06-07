@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import AdminSeriesList from '@/features/series/components/AdminSeriesList';
+import { AdminSeriesList } from '@/features/series/components/admin-series-list';
 import { ChevronLeft, Tv, List } from 'lucide-react';
 import { getSeriesList } from '@/features/series/queries/get-series';
 

@@ -6,13 +6,13 @@ import Image from 'next/image';
 import { Movie } from '@/lib/types';
 import { b64urlEncode } from '@/lib/b64url';
 import { Save, Loader2, AlertCircle, Trash2, Globe, Info, Search, Film, Calendar, Star, Clock, Sparkles, ChevronDown, Edit } from 'lucide-react';
-import FileBrowser from '@/components/FileBrowser';
-import SubtitleManager from './SubtitleManager';
-import MediaFileManager from './MediaFileManager';
-import DeleteMovieModal from './DeleteMovieModal';
+import { FileBrowser } from '@/components/file-browser';
+import { SubtitleManager } from './subtitle-manager';
+import { MediaFileManager } from './media-file-manager';
+import { DeleteMovieModal } from './delete-movie-modal';
 import { updateMovieAction } from '../actions/update-movie';
 import { scrapeMovieAction } from '../actions/scrape-movie';
-import AdminEditButton from './AdminEditButton';
+import { AdminEditButton } from './admin-edit-button';
 
 interface AdminMovieFormProps {
   movie: Movie;
@@ -30,7 +30,7 @@ const getPosterUrl = (thumbnail: string | null | undefined): string => {
   return url;
 };
 
-export default function AdminMovieForm({ movie }: AdminMovieFormProps) {
+export function AdminMovieForm({ movie }: AdminMovieFormProps) {
   const router = useRouter();
   const [isBrowserOpen, setIsBrowserOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);

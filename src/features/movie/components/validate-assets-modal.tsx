@@ -10,7 +10,7 @@ interface ValidateAssetsModalProps {
   isLoading: boolean;
 }
 
-export default function ValidateAssetsModal({ isOpen, onClose, onConfirm, isLoading }: ValidateAssetsModalProps) {
+export function ValidateAssetsModal({ isOpen, onClose, onConfirm, isLoading }: ValidateAssetsModalProps) {
   if (!isOpen) return null;
 
   return (

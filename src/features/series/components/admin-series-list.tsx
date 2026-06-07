@@ -26,8 +26,8 @@ import {
   ShieldAlert, Sparkles,
   Layers
 } from 'lucide-react';
-import Dropdown from '@/components/ui/Dropdown';
-import ValidateAssetsModal from '@/features/movie/components/ValidateAssetsModal';
+import { Dropdown } from '@/components/ui/dropdown';
+import { ValidateAssetsModal } from '@/features/movie/components/validate-assets-modal';
 
 // Actions
 import { validateSeriesThumbnailsAction } from '../actions/validate-series-thumbnails';
@@ -71,7 +71,7 @@ const SORT_OPTIONS = [
     { value: 'repair', label: 'Needs Repair' }
 ];
 
-export default function AdminSeriesList({ initialSeries }: AdminSeriesListProps) {
+export function AdminSeriesList({ initialSeries }: AdminSeriesListProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();

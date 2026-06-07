@@ -4,10 +4,10 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { LogOut, Film, Tv, Shield, Terminal, Sparkles, Menu, X as CloseIcon } from 'lucide-react';
-import { useAdmin } from '@/contexts/AdminContext';
-import ThemeToggle from './ui/ThemeToggle';
+import { useAdmin } from '@/contexts/admin-context';
+import { ThemeToggle } from './ui/theme-toggle';
 
-export default function Navbar() {
+export function Navbar() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();

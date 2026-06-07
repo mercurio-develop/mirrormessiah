@@ -23,9 +23,9 @@ import {
     Filter,
     ShieldAlert
 } from 'lucide-react';
-import { useAdmin } from '@/contexts/AdminContext';
+import { useAdmin } from '@/contexts/admin-context';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
-import Dropdown from '@/components/ui/Dropdown';
+import { Dropdown } from '@/components/ui/dropdown';
 
 interface PublicMoviesListProps {
   initialMovies: MovieWithFile[];
@@ -56,7 +56,7 @@ const getPosterUrl = (thumbnail: string | null | undefined): string => {
   return url;
 };
 
-export default function PublicMoviesList({ initialMovies }: PublicMoviesListProps) {
+export function PublicMoviesList({ initialMovies }: PublicMoviesListProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();

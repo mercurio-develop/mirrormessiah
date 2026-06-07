@@ -28,7 +28,7 @@ interface MediaPlayerProps {
 // Correctly infer the Player type from the videojs function signature
 type VideoJsPlayer = ReturnType<typeof videojs>;
 
-export default function MediaPlayer({ 
+export function MediaPlayer({ 
   id,
   src, 
   mimeType = 'video/mp4', 

@@ -11,7 +11,7 @@ interface DeleteSeriesModalProps {
   onDeleted: () => void;
 }
 
-export default function DeleteSeriesModal({ series, isOpen, onClose, onDeleted }: DeleteSeriesModalProps) {
+export function DeleteSeriesModal({ series, isOpen, onClose, onDeleted }: DeleteSeriesModalProps) {
   const [deleteFiles, setDeleteFiles] = useState(false);
   const [deleteDirectory, setDeleteDirectory] = useState(false);
   const [isPending, startTransition] = useTransition();

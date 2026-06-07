@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import MoviesList from '@/features/movie/components/MoviesList';
+import { MoviesList } from '@/features/movie/components/movies-list';
 import { ChevronLeft, Plus, Film, List } from 'lucide-react';
 import { getMovies } from '@/features/movie/queries/get-movies';
 

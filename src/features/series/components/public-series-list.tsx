@@ -16,7 +16,7 @@ import {
     Tv
 } from 'lucide-react';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
-import Dropdown from '@/components/ui/Dropdown';
+import { Dropdown } from '@/components/ui/dropdown';
 
 export interface Series {
   id: number;
@@ -59,7 +59,7 @@ const getPosterUrl = (thumbnail: string | null | undefined): string => {
   return url;
 };
 
-export default function PublicSeriesList({ initialSeries }: PublicSeriesListProps) {
+export function PublicSeriesList({ initialSeries }: PublicSeriesListProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
