@@ -138,3 +138,142 @@ export function parseRangeHeader(rangeHeader: string, fileSize: number): { start
   
   return { start, end };
 }
+
+/**
+ * Sanitize WebVTT content, ensuring correct header formatting and removing internal empty lines in cue payloads.
+ */
+export function sanitizeVtt(vttContent: string): string {
+  // Normalize line endings
+  const lines = vttContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+  
+  // Find first timestamp to locate where header ends and cues begin
+  let firstTimestampIndex = -1;
+  for (let j = 0; j < lines.length; j++) {
+    if (lines[j].includes('-->')) {
+      firstTimestampIndex = j;
+      break;
+    }
+  }
+
+  const result: string[] = [];
+  let headerEndIndex = 0;
+  let hasHeader = false;
+
+  if (firstTimestampIndex !== -1) {
+    if (firstTimestampIndex > 0) {
+      const lineBefore = lines[firstTimestampIndex - 1].trim();
+      // If the line before the timestamp is not empty, and not WEBVTT, it's the first cue's identifier
+      if (lineBefore !== '' && !lineBefore.startsWith('WEBVTT')) {
+        headerEndIndex = firstTimestampIndex - 1;
+      } else {
+        headerEndIndex = firstTimestampIndex;
+      }
+    } else {
+      headerEndIndex = 0;
+    }
+
+    // Process header lines (from 0 to headerEndIndex - 1)
+    for (let j = 0; j < headerEndIndex; j++) {
+      const line = lines[j];
+      const trimmed = line.trim();
+      if (trimmed.startsWith('WEBVTT')) {
+        hasHeader = true;
+      }
+      result.push(line);
+    }
+  }
+
+  // Prepend WEBVTT header if not present
+  if (!hasHeader) {
+    result.unshift('WEBVTT\n');
+  }
+
+  if (firstTimestampIndex !== -1) {
+    // Process cues starting from headerEndIndex
+    const cues: { identifier?: string; timestamp: string; payload: string[] }[] = [];
+    let currentIdentifier: string | undefined = undefined;
+    let i = headerEndIndex;
+
+    while (i < lines.length) {
+      const line = lines[i];
+      const trimmed = line.trim();
+
+      if (trimmed === '') {
+        i++;
+        continue;
+      }
+
+      if (trimmed.includes('-->')) {
+        const cue = {
+          identifier: currentIdentifier,
+          timestamp: trimmed,
+          payload: [] as string[]
+        };
+        currentIdentifier = undefined; // consumed
+        i++;
+
+        // Read payload lines for the current cue
+        while (i < lines.length) {
+          const nextLine = lines[i];
+          const nextTrimmed = nextLine.trim();
+
+          if (nextTrimmed === '') {
+            // We found a blank line. Let's check if it is a true cue separator.
+            let lookAhead = i + 1;
+            // Skip any consecutive blank lines
+            while (lookAhead < lines.length && lines[lookAhead].trim() === '') {
+              lookAhead++;
+            }
+            
+            if (lookAhead >= lines.length) {
+              // End of file, so this blank line is a separator
+              i = lookAhead;
+              break;
+            }
+            
+            const firstNonBlank = lines[lookAhead].trim();
+            if (firstNonBlank.includes('-->')) {
+              // It's followed directly by a timestamp line. True separator!
+              i = lookAhead;
+              break;
+            }
+            
+            // Check if it's followed by an identifier and then a timestamp line
+            let nextNext = lookAhead + 1;
+            if (nextNext < lines.length && lines[nextNext].trim().includes('-->')) {
+              // Yes, firstNonBlank is the identifier, and nextNext is the timestamp. True separator!
+              i = lookAhead; // We start parsing the next cue from the identifier line
+              break;
+            }
+            
+            // Otherwise, it's just a blank line inside the payload. We skip it and continue.
+            i++;
+            continue;
+          }
+
+          // If it's not a blank line, it's definitely part of the payload!
+          cue.payload.push(nextLine);
+          i++;
+        }
+
+        cues.push(cue);
+      } else {
+        currentIdentifier = trimmed;
+        i++;
+      }
+    }
+
+    // Append cues to result with exactly one blank line separator
+    for (const cue of cues) {
+      result.push('');
+      if (cue.identifier) {
+        result.push(cue.identifier);
+      }
+      result.push(cue.timestamp);
+      result.push(...cue.payload);
+    }
+  }
+
+  // Ensure file ends with a single newline
+  return result.join('\n').trim() + '\n';
+}

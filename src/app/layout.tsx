@@ -20,7 +20,9 @@ export default function RootLayout({
   return (
     <html lang="en" className={`h-full dark`} suppressHydrationWarning>
       <head suppressHydrationWarning>
-        <script
+        <Script
+          id="theme-initializer"
+          strategy="beforeInteractive"
           dangerouslySetInnerHTML={{
             __html: `
               try {

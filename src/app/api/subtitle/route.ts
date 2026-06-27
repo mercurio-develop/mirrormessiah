@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { validateFilePath, convertSrtToVtt } from '@/lib/pathenc';
+import { validateFilePath, convertSrtToVtt, sanitizeVtt } from '@/lib/pathenc';
 import { b64urlDecode } from '@/lib/b64url';
 import { requireGateKey } from '@/lib/auth';
 import fs from 'fs';
@@ -42,7 +42,8 @@ export async function GET(request: NextRequest) {
 
     const isSrt = filePath.toLowerCase().endsWith('.srt');
     const body = isSrt ? convertSrtToVtt(raw) : raw;
-    return new NextResponse(body, {
+    const sanitizedBody = sanitizeVtt(body);
+    return new NextResponse(sanitizedBody, {
       headers: {
         'Content-Type': 'text/vtt; charset=utf-8',
         'Cache-Control': 'public, max-age=86400',
