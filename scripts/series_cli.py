@@ -24,7 +24,7 @@ load_dotenv(ROOT / '.env')
 
 API_KEY   = os.getenv('TMDB_API_KEY')
 DB_PATH   = os.getenv('DB_PATH') or str(ROOT / 'media.db')
-SERIES_DIR = os.getenv('MEDIA_DIR') or '/media'
+SERIES_DIR = os.getenv('SERIES_DIR') or os.getenv('MEDIA_DIR') or '/media'
 TMDB_BASE = 'https://api.themoviedb.org/3'
 IMG_BASE  = 'https://image.tmdb.org/t/p/w500'
 DELAY     = 0.25
@@ -611,14 +611,15 @@ def cmd_scrape(args):
                     genre_names = [g['name'] for g in details.get('genres', [])]
                     audience = 'family' if any(g in genre_names for g in ('Animation', 'Family', 'Kids')) else None
                     
+                    # Build standard series folder name
+                    year_str = f" ({s['year']})" if s['year'] else ""
+                    standard_series_name = re.sub(r'[<>:"/\\|?*]', '_', f"{s['title']}{year_str}").strip()
+                    standard_series_path = Path(SERIES_DIR) / standard_series_name
+
                     poster_src = details.get('poster_path')
                     thumbnail = s['thumbnail']
                     
                     if poster_src:
-                        # Build standard series folder name
-                        year_str = f" ({s['year']})" if s['year'] else ""
-                        standard_series_name = re.sub(r'[<>:"/\\|?*]', '_', f"{s['title']}{year_str}").strip()
-                        standard_series_path = Path(SERIES_DIR) / standard_series_name
                         poster_path = standard_series_path / 'poster.jpg'
                         
                         if args.force or not poster_path.exists():
