@@ -159,7 +159,9 @@ def get_video_metadata(file_path: Path) -> dict | None:
 def clean_movie_name(name: str) -> str:
     """Surgically strip technical noise and empty shells to find the Pure Title."""
     if not name: return ""
-    name = Path(name).stem
+    ext = Path(name).suffix.lower()
+    if ext in {'.mp4', '.mkv', '.avi', '.webm', '.mov', '.srt', '.vtt', '.ass', '.ssa'}:
+        name = Path(name).stem
     
     tech_patterns = [
         r"\[.*?\]", r"\(.*?\)", 
