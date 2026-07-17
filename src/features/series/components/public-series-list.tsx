@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import { Dropdown } from '@/components/ui/dropdown';
+import { normalizeSearchQuery } from '@/lib/search';
 
 export interface Series {
   id: number;
@@ -95,7 +96,7 @@ export function PublicSeriesList({ initialSeries }: PublicSeriesListProps) {
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      setDebouncedSearch(searchTerm);
+      setDebouncedSearch(normalizeSearchQuery(searchTerm));
     }, 300);
     return () => clearTimeout(timer);
   }, [searchTerm]);

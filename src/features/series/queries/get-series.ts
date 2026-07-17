@@ -1,4 +1,5 @@
 import { getDb } from '@/lib/db';
+import { getSearchTerms } from '@/lib/search';
 
 export function getSeriesList(options: {
   q?: string | null;
@@ -17,7 +18,7 @@ export function getSeriesList(options: {
   let relevanceSql = '0';
 
   if (q) {
-    const searchTerms = q.trim().split(/\s+/);
+    const searchTerms = getSearchTerms(q);
     searchTerms.forEach(term => {
       const isYear = /^\d{4}$/.test(term);
       const likeTerm = `%${term}%`;

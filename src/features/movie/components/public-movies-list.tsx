@@ -26,6 +26,7 @@ import {
 import { useAdmin } from '@/contexts/admin-context';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import { Dropdown } from '@/components/ui/dropdown';
+import { normalizeSearchQuery } from '@/lib/search';
 
 interface PublicMoviesListProps {
   initialMovies: MovieWithFile[];
@@ -96,7 +97,7 @@ export function PublicMoviesList({ initialMovies }: PublicMoviesListProps) {
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      setDebouncedSearch(searchTerm);
+      setDebouncedSearch(normalizeSearchQuery(searchTerm));
     }, 300);
     return () => clearTimeout(timer);
   }, [searchTerm]);
