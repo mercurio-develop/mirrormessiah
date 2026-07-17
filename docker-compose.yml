@@ -15,6 +15,7 @@ services:
       - DB_PATH=/app/data/media.db
       - MEDIA_DIR=${MEDIA_DIR}
       - SERIES_DIR=${SERIES_DIR}
+      - TMDB_API_KEY=${TMDB_API_KEY}
     volumes:
       - mm-data:/app/data
       # MEDIA_DIR: Path to your movie collection. Mounted as rw for poster management by mm.py

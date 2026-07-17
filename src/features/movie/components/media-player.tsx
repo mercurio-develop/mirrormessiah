@@ -28,6 +28,36 @@ interface MediaPlayerProps {
 // Correctly infer the Player type from the videojs function signature
 type VideoJsPlayer = ReturnType<typeof videojs>;
 
+const CAST_SENDER_URL = 'https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1';
+
+function loadCastSenderScript(): Promise<void> {
+  if (typeof window === 'undefined') return Promise.resolve();
+
+  const w = window as Window & { cast?: { framework?: unknown } };
+  if (w.cast?.framework) return Promise.resolve();
+
+  const existing = document.querySelector(`script[src="${CAST_SENDER_URL}"]`) as HTMLScriptElement | null;
+  if (existing) {
+    if (existing.dataset.loaded === 'true') return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      existing.addEventListener('load', () => resolve(), { once: true });
+      existing.addEventListener('error', () => reject(new Error('Cast sender failed to load')), { once: true });
+    });
+  }
+
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = CAST_SENDER_URL;
+    script.async = true;
+    script.onload = () => {
+      script.dataset.loaded = 'true';
+      resolve();
+    };
+    script.onerror = () => reject(new Error('Cast sender failed to load'));
+    document.head.appendChild(script);
+  });
+}
+
 export function MediaPlayer({ 
   id,
   src, 
@@ -103,7 +133,19 @@ export function MediaPlayer({
   };
 
   useEffect(() => {
-    if (!playerRef.current && videoRef.current) {
+    if (playerRef.current || !videoRef.current) return;
+
+    let cancelled = false;
+
+    const initPlayer = async () => {
+      try {
+        await loadCastSenderScript();
+      } catch (err) {
+        console.warn('[MediaPlayer] Cast sender unavailable:', err);
+      }
+
+      if (cancelled || playerRef.current || !videoRef.current) return;
+
       const videoElement = document.createElement('video');
       videoElement.classList.add('video-js', 'vjs-default-skin', 'vjs-big-play-centered', 'vjs-show-big-play-button-on-pause');
 
@@ -298,8 +340,14 @@ export function MediaPlayer({
       });
 
       // Do not initialize player.src here, the second useEffect will handle it
-      }
-      }, []); // Run initialization exactly once on mount
+    };
+
+    void initPlayer();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []); // Run initialization exactly once on mount
 
       // Handle source and mimeType changes
       useEffect(() => {

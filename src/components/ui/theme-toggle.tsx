@@ -1,19 +1,41 @@
 'use client';
 
-import { useTheme } from '@/contexts/theme-context';
-import { useState } from 'react';
+import { useTheme } from 'next-themes';
+import { useEffect, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme();
   const [isOpen, setIsOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const themes = [
     { value: 'light', label: 'Light', icon: '☀️' },
     { value: 'dark', label: 'Dark', icon: '🌙' },
   ] as const;
 
-  const currentTheme = themes.find(t => t.value === theme) || themes[0];
+  if (!mounted) {
+    return (
+      <div className="relative">
+        <button
+          type="button"
+          className="flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium text-muted-foreground"
+          aria-label="Toggle theme"
+          disabled
+        >
+          <span className="text-lg opacity-0">🌙</span>
+          <span className="hidden sm:inline opacity-0">Dark</span>
+          <ChevronDown className="w-4 h-4 opacity-0" />
+        </button>
+      </div>
+    );
+  }
+
+  const currentTheme = themes.find(t => t.value === theme) ?? themes[1];
 
   return (
     <div className="relative">

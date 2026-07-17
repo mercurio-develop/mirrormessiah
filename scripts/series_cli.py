@@ -183,7 +183,9 @@ def get_library_id(db: sqlite3.Connection) -> int:
     return cur.lastrowid
 
 def clean_name(name: str) -> str:
-    name = Path(name).stem
+    ext = Path(name).suffix.lower()
+    if ext in {'.mp4', '.mkv', '.avi', '.webm', '.mov', '.srt', '.vtt', '.ass', '.ssa'}:
+        name = Path(name).stem
     tech_patterns = [
         r"\[.*?\]", r"\(.*?\)", 
         r"\d{4}p", r"\d{3}p", r"2160p", r"4k", r"bluray", r"web-dl", r"webrip", r"brrip", r"hdtv",
@@ -564,6 +566,38 @@ def cmd_organize(args):
     db.close()
     print(f"\nORGANIZE_COMPLETE: {renamed_files} files standardized. {skipped} skipped.")
 
+def series_needs_scrape(db: sqlite3.Connection, series_id: int, series_row: sqlite3.Row, force: bool = False) -> bool:
+    if force:
+        return True
+    if not series_row['plot'] or not series_row['thumbnail']:
+        return True
+    missing_eps = db.execute("""
+        SELECT COUNT(*) AS n FROM episodes e
+        JOIN seasons s ON e.season_id = s.id
+        WHERE s.series_id = ? AND (e.thumbnail IS NULL OR e.thumbnail = '')
+    """, (series_id,)).fetchone()['n']
+    return missing_eps > 0
+
+def resolve_series_path(db: sqlite3.Connection, series_id: int, series_row: sqlite3.Row) -> Path:
+    file_row = db.execute("""
+        SELECT f.path FROM episode_files f
+        JOIN episodes e ON f.episode_id = e.id
+        JOIN seasons s ON e.season_id = s.id
+        WHERE s.series_id = ? LIMIT 1
+    """, (series_id,)).fetchone()
+    if file_row:
+        return Path(file_row['path']).parent.parent
+    year_str = f" ({series_row['year']})" if series_row['year'] else ""
+    standard_series_name = re.sub(r'[<>:"/\\|?*]', '_', f"{series_row['title']}{year_str}").strip()
+    return Path(SERIES_DIR) / standard_series_name
+
+def count_missing_episode_thumbnails(db: sqlite3.Connection) -> int:
+    row = db.execute("""
+        SELECT COUNT(*) AS n FROM episodes
+        WHERE thumbnail IS NULL OR thumbnail = ''
+    """).fetchone()
+    return row['n']
+
 def cmd_scrape(args):
     print(f"\n--- PHASE: Scraping Series Metadata ---")
     db = open_db()
@@ -581,118 +615,124 @@ def cmd_scrape(args):
 
     series_list = db.execute("SELECT * FROM series").fetchall()
     scraped = 0
+    skipped = 0
     total = len(series_list)
-    
+    missing_before = count_missing_episode_thumbnails(db)
+    print(f"  [.] {total} series in library, {missing_before} episodes missing thumbnails")
+
     for i, s in enumerate(series_list, 1):
-        if args.force or not s['plot'] or not s['thumbnail']:
-            print(f"  [{i}/{total}] Scraping: {s['title']}")
-            
-            series_id = s['id']
-            tmdb_id = s['tmdb_id']
-            
-            if API_KEY and not tmdb_id:
-                res = tmdb_get('/search/tv', query=s['title'], first_air_date_year=s['year'])
-                if res and res.get('results'):
-                    tv = res['results'][0]
-                    tmdb_id = tv.get('id')
-                    db.execute("UPDATE series SET tmdb_id=? WHERE id=?", (tmdb_id, series_id))
-                    time.sleep(DELAY)
+        series_id = s['id']
+        if not series_needs_scrape(db, series_id, s, force=args.force):
+            skipped += 1
+            continue
 
-            if API_KEY and tmdb_id:
-                try:
-                    details = tmdb_get(f'/tv/{tmdb_id}', append_to_response='credits')
-                    plot = details.get('overview')
-                    rating = details.get('vote_average')
-                    genres = ', '.join([g['name'] for g in details.get('genres', [])]) or None
-                    
-                    crew = details.get('credits', {}).get('crew', [])
-                    director = next((c['name'] for c in crew if c.get('job') == 'Director' or c.get('job') == 'Executive Producer'), None)
-                    
-                    genre_names = [g['name'] for g in details.get('genres', [])]
-                    audience = 'family' if any(g in genre_names for g in ('Animation', 'Family', 'Kids')) else None
-                    
-                    # Build standard series folder name
-                    year_str = f" ({s['year']})" if s['year'] else ""
-                    standard_series_name = re.sub(r'[<>:"/\\|?*]', '_', f"{s['title']}{year_str}").strip()
-                    standard_series_path = Path(SERIES_DIR) / standard_series_name
+        print(f"  [{i}/{total}] Scraping: {s['title']}")
+        tmdb_id = s['tmdb_id']
 
-                    poster_src = details.get('poster_path')
-                    thumbnail = s['thumbnail']
+        if API_KEY and not tmdb_id:
+            res = tmdb_get('/search/tv', query=s['title'], first_air_date_year=s['year'])
+            if res and res.get('results'):
+                tv = res['results'][0]
+                tmdb_id = tv.get('id')
+                db.execute("UPDATE series SET tmdb_id=? WHERE id=?", (tmdb_id, series_id))
+                time.sleep(DELAY)
+
+        if API_KEY and tmdb_id:
+            try:
+                details = tmdb_get(f'/tv/{tmdb_id}', append_to_response='credits')
+                plot = details.get('overview')
+                rating = details.get('vote_average')
+                genres = ', '.join([g['name'] for g in details.get('genres', [])]) or None
+                
+                crew = details.get('credits', {}).get('crew', [])
+                director = next((c['name'] for c in crew if c.get('job') == 'Director' or c.get('job') == 'Executive Producer'), None)
+                
+                genre_names = [g['name'] for g in details.get('genres', [])]
+                audience = 'family' if any(g in genre_names for g in ('Animation', 'Family', 'Kids')) else None
+                
+                standard_series_path = resolve_series_path(db, series_id, s)
+
+                poster_src = details.get('poster_path')
+                thumbnail = s['thumbnail']
+                
+                if poster_src:
+                    poster_path = standard_series_path / 'poster.jpg'
                     
-                    if poster_src:
-                        poster_path = standard_series_path / 'poster.jpg'
-                        
-                        if args.force or not poster_path.exists():
-                            if download_poster(poster_src, poster_path):
-                                thumbnail = str(poster_path)
-                            else:
-                                thumbnail = poster_src
-                        else:
+                    if args.force or not poster_path.exists():
+                        if download_poster(poster_src, poster_path):
                             thumbnail = str(poster_path)
-                    
-                    db.execute("""
-                        UPDATE series 
-                        SET plot=?, rating=?, genres=?, director=?, audience=?, thumbnail=?
-                        WHERE id=?
-                    """, (plot, rating, genres, director, audience, thumbnail, series_id))
-                    
-                    # Scrape seasons and episodes
-                    seasons_db = db.execute("SELECT * FROM seasons WHERE series_id = ?", (series_id,)).fetchall()
-                    for s_db in seasons_db:
-                        season_num = s_db['season_number']
-                        s_details = tmdb_get(f'/tv/{tmdb_id}/season/{season_num}')
-                        if s_details:
-                            s_title = s_details.get('name')
-                            s_plot = s_details.get('overview')
-                            s_poster = s_details.get('poster_path')
-                            
-                            s_poster_local = None
-                            if s_poster:
-                                season_folder_name = f"Season {season_num:02d}"
-                                s_poster_path = standard_series_path / season_folder_name / 'poster.jpg'
-                                if args.force or not s_poster_path.exists():
-                                    if download_poster(s_poster, s_poster_path):
-                                        s_poster_local = str(s_poster_path)
-                                    else:
-                                        s_poster_local = s_poster
-                                else:
+                        else:
+                            thumbnail = poster_src
+                    else:
+                        thumbnail = str(poster_path)
+                
+                db.execute("""
+                    UPDATE series 
+                    SET plot=?, rating=?, genres=?, director=?, audience=?, thumbnail=?
+                    WHERE id=?
+                """, (plot, rating, genres, director, audience, thumbnail, series_id))
+                
+                # Scrape seasons and episodes
+                seasons_db = db.execute("SELECT * FROM seasons WHERE series_id = ?", (series_id,)).fetchall()
+                for s_db in seasons_db:
+                    season_num = s_db['season_number']
+                    s_details = tmdb_get(f'/tv/{tmdb_id}/season/{season_num}')
+                    if s_details:
+                        s_title = s_details.get('name')
+                        s_plot = s_details.get('overview')
+                        s_poster = s_details.get('poster_path')
+                        
+                        s_poster_local = None
+                        season_folder_name = f"Season {season_num:02d}"
+                        if s_poster:
+                            s_poster_path = standard_series_path / season_folder_name / 'poster.jpg'
+                            if args.force or not s_poster_path.exists():
+                                if download_poster(s_poster, s_poster_path):
                                     s_poster_local = str(s_poster_path)
-                                    
-                            db.execute("UPDATE seasons SET title=?, plot=?, poster=? WHERE id=?", (s_title, s_plot, s_poster_local, s_db['id']))
-                            
-                            for ep_data in s_details.get('episodes', []):
-                                ep_num = ep_data.get('episode_number')
-                                ep_title = ep_data.get('name')
-                                ep_plot = ep_data.get('overview')
-                                ep_runtime = ep_data.get('runtime')
-                                ep_still = ep_data.get('still_path')
+                                else:
+                                    s_poster_local = s_poster
+                            else:
+                                s_poster_local = str(s_poster_path)
                                 
-                                ep_thumb_local = None
-                                if ep_still:
-                                    ep_thumb_path = standard_series_path / season_folder_name / f"S{season_num:02d}E{ep_num:02d}-thumb.jpg"
-                                    if args.force or not ep_thumb_path.exists():
-                                        if download_poster(ep_still, ep_thumb_path):
-                                            ep_thumb_local = str(ep_thumb_path)
-                                        else:
-                                            ep_thumb_local = ep_still
-                                    else:
+                        db.execute("UPDATE seasons SET title=?, plot=?, poster=? WHERE id=?", (s_title, s_plot, s_poster_local, s_db['id']))
+                        
+                        for ep_data in s_details.get('episodes', []):
+                            ep_num = ep_data.get('episode_number')
+                            ep_title = ep_data.get('name')
+                            ep_plot = ep_data.get('overview')
+                            ep_runtime = ep_data.get('runtime')
+                            ep_still = ep_data.get('still_path')
+                            
+                            ep_thumb_local = None
+                            if ep_still:
+                                ep_thumb_path = standard_series_path / season_folder_name / f"S{season_num:02d}E{ep_num:02d}-thumb.jpg"
+                                if args.force or not ep_thumb_path.exists():
+                                    if download_poster(ep_still, ep_thumb_path):
                                         ep_thumb_local = str(ep_thumb_path)
+                                    else:
+                                        ep_thumb_local = ep_still
+                                else:
+                                    ep_thumb_local = str(ep_thumb_path)
 
-                                db.execute("""
-                                    UPDATE episodes 
-                                    SET title=?, plot=?, runtime=?, thumbnail=?
-                                    WHERE season_id=? AND episode_number=?
-                                """, (ep_title, ep_plot, ep_runtime, ep_thumb_local, s_db['id'], ep_num))
-                            time.sleep(DELAY)
-                    
-                    scraped += 1
-                    time.sleep(DELAY)
-                except Exception as e:
-                    print(f"    [!] Error scraping {s['title']}: {e}")
+                            db.execute("""
+                                UPDATE episodes 
+                                SET title=?, plot=?, runtime=?, thumbnail=?
+                                WHERE season_id=? AND episode_number=?
+                            """, (ep_title, ep_plot, ep_runtime, ep_thumb_local, s_db['id'], ep_num))
+                        time.sleep(DELAY)
+                
+                scraped += 1
+                time.sleep(DELAY)
+            except Exception as e:
+                print(f"    [!] Error scraping {s['title']}: {e}")
 
+    missing_after = count_missing_episode_thumbnails(db)
     db.commit()
     db.close()
-    print(f"SCRAPE_COMPLETE: {scraped} series enriched.")
+    print(f"SCRAPE_COMPLETE:")
+    print(f"  - Series scraped: {scraped}")
+    print(f"  - Series skipped: {skipped}")
+    print(f"  - Episodes missing thumbnails: {missing_before} -> {missing_after}")
 
 def cmd_full(args):
     print(f"\n==========================================")

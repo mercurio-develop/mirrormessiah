@@ -151,6 +151,7 @@ export function PublicMoviesList({ initialMovies }: PublicMoviesListProps) {
   const [totalCount, setTotalCount] = useState(0);
   
   const loadingRef = useRef(false);
+  const abortRef = useRef<AbortController | null>(null);
   const offsetRef = useRef(initialMovies.length);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
@@ -163,8 +164,15 @@ export function PublicMoviesList({ initialMovies }: PublicMoviesListProps) {
     return list;
   }, []);
 
-  const fetchMovies = useCallback(async (search = '', quality = '', year = '', audience = '', sortOrder: 'title_asc' | 'title_desc' | 'rating' | 'newest' = 'title_asc', genre = '', reset = false) => {
-    if (loadingRef.current) return;
+  const fetchMovies = useCallback(async (search = '', quality = '', year = '', audience = '', sortOrder: 'title_asc' | 'title_desc' | 'rating' | 'newest' = 'title_asc', genre = '', reset = false): Promise<boolean> => {
+    if (loadingRef.current && !reset) return false;
+
+    if (reset && abortRef.current) {
+      abortRef.current.abort();
+    }
+
+    const controller = new AbortController();
+    abortRef.current = controller;
 
     loadingRef.current = true;
     setLoading(true);
@@ -180,7 +188,7 @@ export function PublicMoviesList({ initialMovies }: PublicMoviesListProps) {
       if (genre) url += "&genre=" + encodeURIComponent(genre);
       url += "&sort=" + sortOrder;
       
-      const res = await fetch(url, { cache: 'no-store' });
+      const res = await fetch(url, { cache: 'no-store', signal: controller.signal });
       if (res.ok) {
         const data = await res.json();
         const newMovies = data.movies || [];
@@ -199,12 +207,19 @@ export function PublicMoviesList({ initialMovies }: PublicMoviesListProps) {
         }
         
         setHasMore(newMovies.length >= ITEMS_PER_LOAD);
+        return true;
       }
+      return false;
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return false;
       console.error('Movies_Fetch_Failure:', err);
+      return false;
     } finally {
-      setLoading(false);
-      loadingRef.current = false;
+      if (abortRef.current === controller) {
+        setLoading(false);
+        loadingRef.current = false;
+        abortRef.current = null;
+      }
     }
   }, []);
 
@@ -220,6 +235,8 @@ export function PublicMoviesList({ initialMovies }: PublicMoviesListProps) {
         setDebouncedSearch(state.searchTerm || '');
         setSelectedQuality(state.selectedQuality || '');
         setSelectedYear(state.selectedYear || '');
+        if ('selectedGenre' in state) setSelectedGenre(state.selectedGenre || '');
+        if ('selectedAudience' in state) setSelectedAudience(state.selectedAudience || '');
         setSort(state.sort || 'title_asc');
         
         setMovies(state.movies || initialMovies);
@@ -249,21 +266,32 @@ export function PublicMoviesList({ initialMovies }: PublicMoviesListProps) {
       debouncedSearch, selectedQuality, selectedYear, selectedAudience, sort, selectedGenre
     });
 
+    const hasActiveFilters =
+      debouncedSearch || selectedQuality || selectedYear ||
+      selectedGenre || selectedAudience || sort !== 'title_asc';
+
+    const runResetFetch = (scrollToTop: boolean) => {
+      if (scrollToTop) {
+        window.scrollTo({ top: 0, behavior: 'instant' });
+      }
+      void fetchMovies(debouncedSearch, selectedQuality, selectedYear, selectedAudience, sort, selectedGenre, true).then((success) => {
+        if (success) lastStateString.current = currentStateString;
+      });
+    };
+
     if (isInitialMount.current) {
       isInitialMount.current = false;
-      lastStateString.current = currentStateString;
-      
-      if (!restored.didRestore) {
-         fetchMovies(debouncedSearch, selectedQuality, selectedYear, selectedAudience, sort, selectedGenre, true);
+      if (!restored.didRestore || hasActiveFilters) {
+        runResetFetch(false);
+      } else {
+        lastStateString.current = currentStateString;
       }
       return;
     }
 
     if (currentStateString === lastStateString.current) return;
 
-    lastStateString.current = currentStateString;
-    window.scrollTo({ top: 0, behavior: 'instant' });
-    fetchMovies(debouncedSearch, selectedQuality, selectedYear, selectedAudience, sort, selectedGenre, true);
+    runResetFetch(true);
   }, [debouncedSearch, selectedQuality, selectedYear, selectedAudience, sort, selectedGenre, restored, fetchMovies]);
 
   const saveStateAndScroll = () => {
@@ -276,6 +304,8 @@ export function PublicMoviesList({ initialMovies }: PublicMoviesListProps) {
       searchTerm,
       selectedQuality,
       selectedYear,
+      selectedGenre,
+      selectedAudience,
       sort
     };
     sessionStorage.setItem('mm_movies_state', JSON.stringify(state));
@@ -284,7 +314,7 @@ export function PublicMoviesList({ initialMovies }: PublicMoviesListProps) {
   // Infinite Scroll using Intersection Observer
   useEffect(() => {
     const sentinel = loadMoreRef.current;
-    if (!sentinel || !hasMore || loadingRef.current) return;
+    if (!sentinel || !hasMore || loading) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -299,7 +329,7 @@ export function PublicMoviesList({ initialMovies }: PublicMoviesListProps) {
     return () => {
       if (sentinel) observer.unobserve(sentinel);
     };
-  }, [hasMore, fetchMovies, debouncedSearch, selectedQuality, selectedYear, selectedAudience, sort, selectedGenre]);
+  }, [hasMore, loading, fetchMovies, debouncedSearch, selectedQuality, selectedYear, selectedAudience, sort, selectedGenre]);
 
   const clearFilters = () => {
     setSearchTerm('');
