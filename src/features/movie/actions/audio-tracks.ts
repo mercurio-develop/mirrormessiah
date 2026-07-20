@@ -4,8 +4,13 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
 import fs from 'fs/promises';
-import { b64urlDecode } from '@/lib/b64url';
+import { b64urlDecode, b64urlEncode } from '@/lib/b64url';
 import { validateFilePath } from '@/lib/pathenc';
+import {
+  resolveOriginalMediaPath,
+  activeAudioIndexFromPath,
+  cachePathForTrack,
+} from '@/lib/audio-path';
 
 const execAsync = promisify(exec);
 
@@ -14,51 +19,84 @@ export interface AudioTrackInfo {
   codec: string;
   language: string;
   title: string;
+  isDefault: boolean;
+}
+
+function displayTitle(stream: { tags?: Record<string, string> }, language: string): string {
+  const langLabels: Record<string, string> = {
+    eng: 'English', en: 'English', rus: 'Russian', ru: 'Russian',
+    spa: 'Spanish', es: 'Spanish', ita: 'Italian', it: 'Italian',
+    jpn: 'Japanese', ja: 'Japanese', fre: 'French', fr: 'French',
+    deu: 'German', de: 'German', por: 'Portuguese', pt: 'Portuguese',
+  };
+  const tagTitle = stream.tags?.title || stream.tags?.handler_name;
+  if (tagTitle && tagTitle !== 'SoundHandler') return tagTitle;
+  return langLabels[language.toLowerCase()] || language.toUpperCase();
 }
 
 export async function getAudioTracks(encodedPath: string): Promise<AudioTrackInfo[]> {
   try {
-    console.log('[getAudioTracks] Received encoded path:', encodedPath);
     let filePath = b64urlDecode(encodedPath);
-    console.log('[getAudioTracks] Decoded file path:', filePath);
+    filePath = resolveOriginalMediaPath(filePath);
+
     const isValid = await validateFilePath(filePath);
-    if (!isValid) {
-        console.warn('[getAudioTracks] Path validation failed for:', filePath);
-        return [];
-    }
+    if (!isValid) return [];
 
     const { stdout } = await execAsync(`ffprobe -v quiet -print_format json -show_streams "${filePath}"`);
     const data = JSON.parse(stdout);
 
-    const audioStreams = data.streams?.filter((s: any) => s.codec_type === 'audio') || [];
-    console.log(`[getAudioTracks] Found ${audioStreams.length} audio streams`);
-    
-    return audioStreams.map((s: any) => ({
-      index: s.index,
-      codec: s.codec_name,
-      language: s.tags?.language || 'und',
-      title: s.tags?.title || s.tags?.handler_name || 'Audio Track'
-    }));
+    const audioStreams = data.streams?.filter((s: { codec_type?: string }) => s.codec_type === 'audio') || [];
+    const activeFromCache = activeAudioIndexFromPath(b64urlDecode(encodedPath));
+    const hasExplicitDefault = audioStreams.some(
+      (s: { disposition?: { default?: number } }) => s.disposition?.default === 1
+    );
 
+    return audioStreams.map((s: { index: number; codec_name: string; tags?: Record<string, string>; disposition?: { default?: number } }, i: number) => {
+      const language = s.tags?.language || 'und';
+      let isDefault = false;
+      if (activeFromCache !== null) {
+        isDefault = s.index === activeFromCache;
+      } else if (hasExplicitDefault) {
+        isDefault = s.disposition?.default === 1;
+      } else {
+        isDefault = i === 0;
+      }
+
+      return {
+        index: s.index,
+        codec: s.codec_name,
+        language,
+        title: displayTitle(s, language),
+        isDefault,
+      };
+    });
   } catch (error) {
     console.error('[getAudioTracks] Error:', error);
     return [];
   }
 }
 
-export async function setDefaultAudioTrack(encodedPath: string, trackIndex: number): Promise<boolean> {
+export async function setDefaultAudioTrack(
+  encodedPath: string,
+  trackIndex: number
+): Promise<{ success: boolean; encodedPath?: string }> {
   try {
     let filePath = b64urlDecode(encodedPath);
-    const isValid = await validateFilePath(filePath);
-    if (!isValid) return false;
+    filePath = resolveOriginalMediaPath(filePath);
 
-    // Get all audio streams to avoid duplication
+    const isValid = await validateFilePath(filePath);
+    if (!isValid) return { success: false };
+
     const { stdout } = await execAsync(`ffprobe -v quiet -print_format json -show_streams "${filePath}"`);
     const data = JSON.parse(stdout);
-    const audioStreams = data.streams?.filter((s: any) => s.codec_type === 'audio') || [];
+    const audioStreams = data.streams?.filter((s: { codec_type?: string }) => s.codec_type === 'audio') || [];
 
-    const parsedPath = path.parse(filePath);
-    const tempPath = path.join(parsedPath.dir, `.mm_tmp_audio_${parsedPath.base}`);
+    if (!audioStreams.some((s: { index: number }) => s.index === trackIndex)) {
+      return { success: false };
+    }
+
+    const outputPath = cachePathForTrack(filePath, trackIndex);
+    await fs.mkdir(path.dirname(outputPath), { recursive: true });
 
     let mapArgs = `-map 0:v:0 -map 0:${trackIndex}`;
     for (const stream of audioStreams) {
@@ -67,16 +105,34 @@ export async function setDefaultAudioTrack(encodedPath: string, trackIndex: numb
       }
     }
 
-    const cmd = `ffmpeg -y -i "${filePath}" ${mapArgs} -c copy -movflags +faststart "${tempPath}"`;
+    const cmd = `ffmpeg -y -i "${filePath}" ${mapArgs} -c copy -movflags +faststart "${outputPath}"`;
     console.log('[setDefaultAudioTrack] Running:', cmd);
 
     await execAsync(cmd);
-    await fs.rename(tempPath, filePath);
-    
-    return true;
 
+    const encodedCachePath = b64urlEncode(outputPath);
+    return { success: true, encodedPath: encodedCachePath };
   } catch (error) {
     console.error('[setDefaultAudioTrack] Error:', error);
-    return false;
+    return { success: false };
+  }
+}
+
+/** Resolve stream path: use cached remux when present for the preferred track. */
+export async function resolveAudioStreamPath(
+  encodedPath: string,
+  trackIndex: number | null
+): Promise<string> {
+  const filePath = resolveOriginalMediaPath(b64urlDecode(encodedPath));
+  if (!(await validateFilePath(filePath))) return encodedPath;
+
+  if (trackIndex === null) return encodedPath;
+
+  const cacheFile = cachePathForTrack(filePath, trackIndex);
+  try {
+    await fs.access(cacheFile);
+    return b64urlEncode(cacheFile);
+  } catch {
+    return encodedPath;
   }
 }
