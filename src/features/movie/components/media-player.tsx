@@ -7,6 +7,7 @@ import '@silvermine/videojs-chromecast/dist/silvermine-videojs-chromecast.css';
 import '@silvermine/videojs-airplay/dist/silvermine-videojs-airplay.css';
 import { AlertCircle, RefreshCcw, Volume2, Loader2 } from 'lucide-react';
 import { getAudioTracks, setDefaultAudioTrack, AudioTrackInfo } from '../actions/audio-tracks';
+import { audioPathKey, audioPreferenceKey, rebuildStreamSrc } from '@/lib/audio-path';
 
 interface SubtitleTrack {
   src: string;
@@ -77,20 +78,34 @@ export function MediaPlayer({
 
   const ctx = useRef({ id, src });
   const lastSrcRef = useRef(src);
+  const [effectiveSrc, setEffectiveSrc] = useState(src);
+
   useEffect(() => {
     ctx.current = { id, src };
   }, [id, src]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      setEffectiveSrc(src);
+      return;
+    }
+    const currentId = id || src;
+    const savedPath = localStorage.getItem(audioPathKey(currentId));
+    setEffectiveSrc(savedPath ? rebuildStreamSrc(src, savedPath) : src);
+  }, [id, src]);
+
   // Fetch audio tracks
   useEffect(() => {
-    if (src && typeof window !== 'undefined') {
+    if (effectiveSrc && typeof window !== 'undefined') {
       try {
-        const urlObj = new URL(src, window.location.origin);
+        const urlObj = new URL(effectiveSrc, window.location.origin);
         const encodedPath = urlObj.searchParams.get('path');
         if (encodedPath) {
           getAudioTracks(encodedPath).then(tracks => {
             if (tracks && tracks.length > 1) {
               setAudioTracks(tracks);
+            } else {
+              setAudioTracks([]);
             }
           }).catch(e => console.error("Error fetching audio tracks", e));
         }
@@ -98,7 +113,7 @@ export function MediaPlayer({
         console.error("Could not parse src URL for audio tracks", e);
       }
     }
-  }, [src]);
+  }, [effectiveSrc]);
 
   const handleTrackSelect = async (trackIndex: number) => {
     if (isSwappingAudio) return;
@@ -121,11 +136,14 @@ export function MediaPlayer({
       localStorage.setItem(storageKey, ct.toString());
     }
 
-    const success = await setDefaultAudioTrack(encodedPath, trackIndex);
+    const result = await setDefaultAudioTrack(encodedPath, trackIndex);
     
     setIsSwappingAudio(false);
     
-    if (success) {
+    if (result.success && result.encodedPath) {
+      const currentId = id || src;
+      localStorage.setItem(audioPathKey(currentId), result.encodedPath);
+      localStorage.setItem(audioPreferenceKey(currentId), String(trackIndex));
       window.location.reload();
     } else {
       alert('Failed to switch audio track.');
@@ -201,7 +219,7 @@ export function MediaPlayer({
           ],
         },
         volume: Math.min(savedVolume, 1),
-        sources: src ? [{ src, type: mimeType }] : undefined
+        sources: effectiveSrc ? [{ src: effectiveSrc, type: mimeType }] : undefined
       });
 
       playerRef.current = player;
@@ -352,15 +370,15 @@ export function MediaPlayer({
       // Handle source and mimeType changes
       useEffect(() => {
       const player = playerRef.current;
-      if (player && !player.isDisposed() && src && src !== lastSrcRef.current) {
-      lastSrcRef.current = src;
+      if (player && !player.isDisposed() && effectiveSrc && effectiveSrc !== lastSrcRef.current) {
+      lastSrcRef.current = effectiveSrc;
       player.src({
-        src: src,
+        src: effectiveSrc,
         type: mimeType
       });
       player.load();
       }
-      }, [src, mimeType]);
+      }, [effectiveSrc, mimeType]);
 
       // Handle subtitle changes
       const subtitlesStr = JSON.stringify(subtitles);
@@ -457,11 +475,11 @@ export function MediaPlayer({
                 Select Audio Language
               </div>
               <div className="max-h-64 overflow-y-auto">
-                {audioTracks.map((track, i) => (
+                {audioTracks.map((track) => (
                   <button
                     key={track.index}
                     onClick={() => handleTrackSelect(track.index)}
-                    className={`w-full text-left px-3 py-2 text-sm hover:bg-white/10 transition-colors ${i === 0 ? 'border-l-2 border-primary bg-primary/5 text-primary font-bold' : 'text-foreground'}`}
+                    className={`w-full text-left px-3 py-2 text-sm hover:bg-white/10 transition-colors ${track.isDefault ? 'border-l-2 border-primary bg-primary/5 text-primary font-bold' : 'text-foreground'}`}
                   >
                     <div className="font-medium">{track.title || track.language}</div>
                     <div className="text-[10px] text-muted-foreground uppercase opacity-70">
@@ -471,7 +489,7 @@ export function MediaPlayer({
                 ))}
               </div>
               <div className="px-3 py-2 bg-destructive/10 border-t border-white/10 text-[10px] text-destructive leading-tight italic">
-                Switching tracks will reload the video.
+                Switching tracks creates a cached copy — your original file is not modified.
               </div>
             </div>
           )}
