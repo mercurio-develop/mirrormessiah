@@ -17,9 +17,13 @@ Commands:
   reset                     Permanently delete the database
   clean-files               Remove duplicate file rows, 4K links, missing paths
   status                    Show DB stats
+  convert  [dir]            Convert MKV files to web-optimized MP4 (MP4 and other formats skipped)
+  prebuild-audio [dir]      Pre-build instant audio-switch caches for multi-track MP4s
 
 Usage:
   python scripts/mm.py sync /media/movies
+  python scripts/mm.py convert /media/movies
+  python scripts/mm.py prebuild-audio /media/movies
   python scripts/mm.py full --root /media/movies
   python scripts/mm.py status
 
@@ -155,6 +159,168 @@ def get_video_metadata(file_path: Path) -> dict | None:
         return {'height': height, 'width': width, 'quality': quality}
     except:
         return None
+
+def is_video_playable(file_path: Path) -> bool:
+    return get_video_metadata(file_path) is not None
+
+def get_movie_folder(db: sqlite3.Connection, movie_id: int) -> Path | None:
+    rows = db.execute('SELECT path FROM files WHERE movie_id = ?', (movie_id,)).fetchall()
+    seen_parents: set[str] = set()
+    for row in rows:
+        parent = Path(row['path']).parent
+        key = str(parent)
+        if key in seen_parents:
+            continue
+        seen_parents.add(key)
+        if parent.exists():
+            return parent
+    return None
+
+def find_playable_mp4(folder: Path) -> Path | None:
+    mp4s = [
+        p for p in folder.rglob('*.mp4')
+        if p.is_file()
+        and not p.name.startswith('.mm_tmp_')
+        and not p.name.endswith('.web.mp4')
+    ]
+    playable = [p for p in mp4s if is_video_playable(p)]
+    if not playable:
+        return None
+    return max(playable, key=lambda p: p.stat().st_size)
+
+def find_convertible_source(folder: Path, extensions: set[str]) -> Path | None:
+    sources: list[tuple[int, Path]] = []
+    for p in folder.iterdir():
+        if not p.is_file() or p.name.startswith('.mm_tmp_'):
+            continue
+        name = p.name.lower()
+        if name.endswith('.mkv.bak'):
+            sources.append((1, p))
+        elif p.suffix.lower() in extensions and not name.endswith('.bak'):
+            sources.append((0, p))
+    if not sources:
+        return None
+    sources.sort(key=lambda item: (item[0], -item[1].stat().st_size))
+    return sources[0][1]
+
+def relink_movie_file(
+    db: sqlite3.Connection,
+    movie_id: int,
+    mp4_path: Path,
+    library_id: int,
+) -> None:
+    for row in db.execute('SELECT id, path FROM files WHERE movie_id = ?', (movie_id,)).fetchall():
+        path = Path(row['path'])
+        if not path.exists() or not is_video_playable(path):
+            db.execute('DELETE FROM files WHERE id = ?', (row['id'],))
+
+    existing = db.execute(
+        'SELECT id FROM files WHERE movie_id = ? AND path = ?',
+        (movie_id, str(mp4_path)),
+    ).fetchone()
+    if not existing:
+        ff_meta = get_video_metadata(mp4_path)
+        db.execute(
+            "INSERT INTO files (library_id, movie_id, path, size_bytes, container) VALUES (?,?,?,?,?)",
+            (library_id, movie_id, str(mp4_path), mp4_path.stat().st_size, 'mp4'),
+        )
+        if ff_meta and ff_meta.get('quality'):
+            db.execute('UPDATE movies SET quality = ? WHERE id = ?', (ff_meta['quality'], movie_id))
+
+    if is_video_playable(mp4_path):
+        db.execute('UPDATE movies SET needs_repair = 0 WHERE id = ?', (movie_id,))
+
+def relink_converted_folders(
+    db: sqlite3.Connection,
+    converted_files: list[Path],
+    library_id: int,
+) -> int:
+    relinked = 0
+    seen_folders: set[str] = set()
+    for source in converted_files:
+        folder = source.parent
+        key = str(folder)
+        if key in seen_folders:
+            continue
+        seen_folders.add(key)
+
+        mp4_path = find_playable_mp4(folder)
+        if not mp4_path:
+            continue
+
+        movie_id = None
+        for row in db.execute('SELECT movie_id, path FROM files').fetchall():
+            if Path(row['path']).parent == folder:
+                movie_id = row['movie_id']
+                break
+        if movie_id is None:
+            meta = parse_folder_name(folder.name)
+            match = db.execute(
+                'SELECT id FROM movies WHERE LOWER(title)=LOWER(?) AND COALESCE(year,0)=COALESCE(?,0)',
+                (meta['title'], meta['year']),
+            ).fetchone()
+            if match:
+                movie_id = match['id']
+
+        if movie_id is None:
+            continue
+
+        relink_movie_file(db, movie_id, mp4_path, library_id)
+        resync_movie_subtitles(db, movie_id, folder)
+        relinked += 1
+        print(f"    [+] Registry linked: {mp4_path.name}")
+
+    return relinked
+
+def repair_flagged_movies(
+    db: sqlite3.Connection,
+    script_path: Path,
+    extensions: set[str],
+) -> None:
+    repair_movies = db.execute(
+        'SELECT id, title FROM movies WHERE needs_repair = 1 ORDER BY title'
+    ).fetchall()
+    if not repair_movies:
+        print("  [+] No titles flagged for repair.")
+        return
+
+    library_id = get_library_id(db)
+    print(f"\n--- PHASE: Repair Pass ({len(repair_movies)} titles) ---")
+
+    for movie in repair_movies:
+        title = movie['title']
+        folder = get_movie_folder(db, movie['id'])
+        if not folder:
+            print(f"  [!] {title}: movie folder not found on disk")
+            continue
+
+        playable = find_playable_mp4(folder)
+        if playable:
+            relink_movie_file(db, movie['id'], playable, library_id)
+            resync_movie_subtitles(db, movie['id'], folder)
+            print(f"  [✓] {title}: linked to playable file {playable.name}")
+            continue
+
+        source = find_convertible_source(folder, extensions)
+        if source:
+            print(f"  [*] {title}: converting from {source.name}")
+            subprocess.run([sys.executable, str(script_path), str(source)])
+            playable = find_playable_mp4(folder)
+            if playable:
+                relink_movie_file(db, movie['id'], playable, library_id)
+                resync_movie_subtitles(db, movie['id'], folder)
+                print(f"  [✓] {title}: repaired via conversion -> {playable.name}")
+            else:
+                print(f"  [!] {title}: conversion finished but no playable MP4 found")
+            continue
+
+        corrupt_mp4 = [p for p in folder.glob('*.mp4') if p.is_file() and not is_video_playable(p)]
+        if corrupt_mp4:
+            print(
+                f"  [!] {title}: MP4 file is corrupt/truncated and no MKV source found — re-download required"
+            )
+        else:
+            print(f"  [!] {title}: no playable video or convertible source found")
 
 def clean_movie_name(name: str) -> str:
     """Surgically strip technical noise and empty shells to find the Pure Title."""
@@ -311,13 +477,35 @@ def detect_lang_from_path(path: Path) -> str:
 
     return 'en'
 
+def label_from_subtitle_path(path: Path, lang: str) -> str:
+    base = path.stem
+    lang_labels = {
+        'en': 'English', 'es': 'Español', 'fr': 'Français', 'de': 'Deutsch',
+        'pt': 'Português', 'it': 'Italiano', 'ja': '日本語', 'zh': 'Chinese',
+    }
+    stream_match = re.search(r'\.(\d+)\.([a-z]{2,3})$', base, re.I)
+    if stream_match:
+        lang_map = {
+            'eng': 'en', 'spa': 'es', 'fre': 'fr', 'fra': 'fr', 'ger': 'de', 'deu': 'de',
+            'por': 'pt', 'ita': 'it', 'jpn': 'ja', 'chi': 'zh', 'zho': 'zh',
+        }
+        code = lang_map.get(stream_match.group(2).lower(), stream_match.group(2).lower())
+        label = lang_labels.get(code, code.upper())
+        return f"{label} (Track {stream_match.group(1)})"
+    return lang_labels.get(lang, lang.upper())
+
 def resync_movie_subtitles(db: sqlite3.Connection, movie_id: int, folder: Path) -> tuple[int, int, int]:
     """Remove broken subtitle DB rows and register any files found on disk."""
     removed = 0
-    for row in db.execute('SELECT id, path FROM subtitles WHERE movie_id = ?', (movie_id,)).fetchall():
+    for row in db.execute('SELECT id, path, lang, label FROM subtitles WHERE movie_id = ?', (movie_id,)).fetchall():
         if not Path(row['path']).exists():
             db.execute('DELETE FROM subtitles WHERE id = ?', (row['id'],))
             removed += 1
+            continue
+        lang = row['lang'] or detect_lang_from_path(Path(row['path']))
+        label = row['label'] or label_from_subtitle_path(Path(row['path']), lang)
+        if lang != row['lang'] or label != row['label']:
+            db.execute('UPDATE subtitles SET lang = ?, label = ? WHERE id = ?', (lang, label, row['id']))
 
     added = 0
     found = 0
@@ -325,10 +513,11 @@ def resync_movie_subtitles(db: sqlite3.Connection, movie_id: int, folder: Path) 
         for sf in find_subtitle_files(folder):
             found += 1
             lang = detect_lang_from_path(sf)
+            label = label_from_subtitle_path(sf, lang)
             fmt = sf.suffix.lstrip('.')
             cur = db.execute(
-                'INSERT OR IGNORE INTO subtitles (movie_id, path, lang, format) VALUES (?,?,?,?)',
-                (movie_id, str(sf), lang, fmt),
+                'INSERT OR IGNORE INTO subtitles (movie_id, path, lang, label, format) VALUES (?,?,?,?,?)',
+                (movie_id, str(sf), lang, label, fmt),
             )
             if cur.rowcount > 0:
                 added += 1
@@ -971,41 +1160,86 @@ def cmd_convert(args):
     media_dir = Path(args.dir)
     print(f"\n--- PHASE: Converting Non-Web Media [{media_dir}] ---")
     script_path = Path(__file__).parent / 'convert_to_web.py'
-    
-    extensions = {'.mkv', '.avi', '.webm', '.mov'}
-    files_to_convert = [p for p in media_dir.rglob('*') if p.is_file() and p.suffix.lower() in extensions]
-    
-    if not files_to_convert:
-        print("  [+] No non-MP4 media files found for conversion.")
-        return
-        
-    for i, f in enumerate(files_to_convert, 1):
-        print(f"\n  [{i}/{len(files_to_convert)}] Dispatching to conversion script: {f.name}")
-        subprocess.run([sys.executable, str(script_path), str(f)])
+
+    extensions = {'.mkv', '.avi', '.webm', '.mov'} if args.all_formats else {'.mkv'}
+    format_label = ', '.join(sorted(ext.lstrip('.').upper() for ext in extensions))
+    print(f"  [.] Target formats: {format_label}")
+
+    files_to_convert = [
+        p for p in media_dir.rglob('*')
+        if p.is_file()
+        and p.suffix.lower() in extensions
+        and not p.name.endswith('.bak')
+        and not p.name.startswith('.mm_tmp_')
+    ]
 
     if files_to_convert:
+        for i, f in enumerate(files_to_convert, 1):
+            print(f"\n  [{i}/{len(files_to_convert)}] Dispatching to conversion script: {f.name}")
+            convert_args = [sys.executable, str(script_path), str(f)]
+            if args.skip_audio_prebuild:
+                convert_args.append('--skip-audio-prebuild')
+            subprocess.run(convert_args)
+    else:
+        print(f"  [+] No {format_label} files found for conversion.")
+
+    db = open_db()
+    library_id = get_library_id(db)
+
+    if files_to_convert:
+        print("\n  [.] Linking converted files in registry...")
+        relinked = relink_converted_folders(db, files_to_convert, library_id)
+        if relinked == 0:
+            print("    [i] No registry rows updated (run sync if titles are still missing).")
+
         print("\n  [.] Registering extracted subtitles...")
-        db = open_db()
         touched_movies = set()
         for f in files_to_convert:
-            movie_file = db.execute('SELECT movie_id FROM files WHERE path = ?', (str(f),)).fetchone()
-            if not movie_file:
-                movie_file = db.execute(
-                    'SELECT movie_id FROM files WHERE path LIKE ? LIMIT 1',
-                    (str(f.with_suffix('.mp4')),),
+            folder = f.parent
+            mp4_path = find_playable_mp4(folder)
+            if not mp4_path:
+                continue
+            movie_id = None
+            for row in db.execute('SELECT movie_id, path FROM files').fetchall():
+                if Path(row['path']).parent == folder:
+                    movie_id = row['movie_id']
+                    break
+            if movie_id is None:
+                meta = parse_folder_name(folder.name)
+                match = db.execute(
+                    'SELECT id FROM movies WHERE LOWER(title)=LOWER(?) AND COALESCE(year,0)=COALESCE(?,0)',
+                    (meta['title'], meta['year']),
                 ).fetchone()
-            if movie_file:
-                touched_movies.add(movie_file['movie_id'])
+                if match:
+                    movie_id = match['id']
+            if movie_id:
+                touched_movies.add(movie_id)
+
         for movie_id in touched_movies:
             row = db.execute('SELECT path FROM files WHERE movie_id = ? LIMIT 1', (movie_id,)).fetchone()
-            if row:
-                found, added, removed = resync_movie_subtitles(db, movie_id, Path(row['path']).parent)
+            folder = Path(row['path']).parent if row else None
+            if folder and folder.exists():
+                found, added, removed = resync_movie_subtitles(db, movie_id, folder)
                 if added or removed:
                     print(f"    [+] Movie {movie_id}: {added} subtitle(s) added, {removed} stale removed")
-        db.commit()
-        db.close()
-        
+
+    if not args.no_repair:
+        repair_flagged_movies(db, script_path, extensions)
+
+    db.commit()
+    db.close()
+
     print("\nCONVERSION_COMPLETE.")
+
+def cmd_prebuild_audio(args):
+    media_dir = Path(args.dir)
+    print(f"\n--- PHASE: Pre-building Audio Switch Caches [{media_dir}] ---")
+    script_path = Path(__file__).parent / 'convert_to_web.py'
+    subprocess.run([
+        sys.executable, str(script_path), str(media_dir),
+        '--prebuild-audio-only',
+    ], check=False)
+    print("\nPREBUILD_AUDIO_COMPLETE.")
 
 def cmd_full(args):
     print(f"\n==========================================")
@@ -1084,15 +1318,37 @@ def main():
     p_reset = sub.add_parser('reset', help='Factory reset: permanently delete the database')
     p_reset.add_argument('--force', action='store_true')
     
-    p_convert = sub.add_parser('convert', help='Detect non-MP4 files (MKV, AVI, etc.) and convert them to web-optimized MP4')
-    p_convert.add_argument('dir', nargs='?', default=MEDIA_DIR)
+    p_convert = sub.add_parser('convert', help='Convert MKV files to web-optimized MP4 (skips MP4 and other formats by default)')
+    p_convert.add_argument('dir', nargs='?', default=MEDIA_DIR, help='Movie library root to scan recursively')
+    p_convert.add_argument(
+        '--all-formats',
+        action='store_true',
+        help='Also convert AVI, WEBM, and MOV (default: MKV only)',
+    )
+    p_convert.add_argument(
+        '--no-repair',
+        action='store_true',
+        help='Skip the repair pass for titles flagged needs_repair',
+    )
+    p_convert.add_argument(
+        '--skip-audio-prebuild',
+        action='store_true',
+        help='Skip pre-building per-track audio caches after MKV conversion',
+    )
+
+    p_prebuild = sub.add_parser(
+        'prebuild-audio',
+        help='Pre-build instant audio-switch caches for existing multi-track MP4 files',
+    )
+    p_prebuild.add_argument('dir', nargs='?', default=MEDIA_DIR, help='Movie library root to scan recursively')
     
     args = parser.parse_args()
     dispatch = {
         'sync': cmd_sync, 'ingest': cmd_ingest, 'scrape': cmd_scrape,
         'status': cmd_status, 'organize': cmd_organize, 'cleanup': cmd_cleanup,
         'sync-assets': cmd_sync_assets, 'full': cmd_full, 'reset': cmd_reset,
-        'stage': cmd_stage, 'verify': cmd_verify, 'convert': cmd_convert
+        'stage': cmd_stage, 'verify': cmd_verify, 'convert': cmd_convert,
+        'prebuild-audio': cmd_prebuild_audio,
     }
     dispatch[args.command](args)
 

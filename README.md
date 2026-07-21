@@ -85,9 +85,22 @@ MirrorMessiah is managed locally using the Python CLI. All absolute directories 
     ```bash
     python3 scripts/mm.py status
     ```
-*   **Transcode Media**: Scan a directory for non-web-compliant files (such as `.avi`, `.mkv`) and transcode them to 1080p MP4.
+*   **Transcode Media**: Scan for `.mkv` files and transcode to web-compatible MP4. Multi-audio files also get **pre-built switch caches** so language changes in the player are instant.
     ```bash
-    python3 scripts/mm.py convert "/path/to/movie-folder"
+    python3 scripts/mm.py convert "/path/to/movies"
+    ```
+    Optional flags:
+    ```bash
+    python3 scripts/mm.py convert --all-formats   # also convert AVI/WEBM/MOV
+    python3 scripts/mm.py convert --skip-audio-prebuild  # faster convert, slow switching later
+    ```
+*   **Pre-build audio caches** (for already-converted MP4s like Macross Plus):
+    ```bash
+    python3 scripts/mm.py prebuild-audio "/path/to/movies"
+    ```
+    Or a single title:
+    ```bash
+    python3 scripts/convert_to_web.py "/path/to/Macross Plus.mp4" --prebuild-audio-only
     ```
 *   **Ingest / Sync Directory**: Scan the media drive, discover new titles, auto-scrape details from TMDB, and link subtitles.
     ```bash

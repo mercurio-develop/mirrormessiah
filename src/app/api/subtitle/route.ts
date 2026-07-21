@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { validateFilePath, convertSrtToVtt, sanitizeVtt } from '@/lib/pathenc';
+import { validateFilePath, convertSrtToVtt, sanitizeVtt, prepareVttForPlayback } from '@/lib/pathenc';
 import { b64urlDecode } from '@/lib/b64url';
 import { requireGateKey } from '@/lib/auth';
 import fs from 'fs';
@@ -44,6 +44,8 @@ export async function GET(request: NextRequest) {
     let body = isSrt ? convertSrtToVtt(raw) : raw;
     if (isSrt || !body.trimStart().startsWith('WEBVTT')) {
       body = sanitizeVtt(body);
+    } else {
+      body = prepareVttForPlayback(body);
     }
     return new NextResponse(body, {
       headers: {

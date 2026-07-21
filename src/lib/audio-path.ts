@@ -27,6 +27,12 @@ export function cachePathForTrack(sourcePath: string, trackIndex: number): strin
   return path.join(parsed.dir, '.mm_cache', `${parsed.base}.aud${trackIndex}.mp4`);
 }
 
+/** Extracted AAC sidecar created during MKV/MP4 conversion for fast audio switching. */
+export function sidecarAudioPath(sourcePath: string, trackIndex: number): string {
+  const parsed = path.parse(sourcePath);
+  return path.join(parsed.dir, '.mm_cache', `${parsed.base}.aud${trackIndex}.aac`);
+}
+
 export function audioPreferenceKey(id: string | number): string {
   return `mm_audio_track_${id}`;
 }
@@ -36,16 +42,20 @@ export function audioPathKey(id: string | number): string {
 }
 
 /** Rebuild /api/stream URL using a new encoded path, preserving auth query params. */
-export function rebuildStreamSrc(currentSrc: string, encodedPath: string): string {
+export function rebuildStreamSrc(
+  currentSrc: string,
+  encodedPath: string,
+  bustCache = false,
+): string {
   try {
     const urlObj = new URL(currentSrc, 'http://local');
     const token = urlObj.searchParams.get('t');
-    const v = urlObj.searchParams.get('v');
+    const v = bustCache ? String(Date.now()) : urlObj.searchParams.get('v');
     let next = `/api/stream?path=${encodeURIComponent(encodedPath)}`;
     if (v) next += `&v=${encodeURIComponent(v)}`;
     if (token) next += `&t=${encodeURIComponent(token)}`;
     return next;
   } catch {
-    return `/api/stream?path=${encodeURIComponent(encodedPath)}`;
+    return `/api/stream?path=${encodeURIComponent(encodedPath)}&v=${Date.now()}`;
   }
 }
