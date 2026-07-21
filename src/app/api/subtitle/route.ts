@@ -41,9 +41,11 @@ export async function GET(request: NextRequest) {
     console.log(`[SubtitleProxy] Serving ${filePath} (${raw.length} chars)`);
 
     const isSrt = filePath.toLowerCase().endsWith('.srt');
-    const body = isSrt ? convertSrtToVtt(raw) : raw;
-    const sanitizedBody = sanitizeVtt(body);
-    return new NextResponse(sanitizedBody, {
+    let body = isSrt ? convertSrtToVtt(raw) : raw;
+    if (isSrt || !body.trimStart().startsWith('WEBVTT')) {
+      body = sanitizeVtt(body);
+    }
+    return new NextResponse(body, {
       headers: {
         'Content-Type': 'text/vtt; charset=utf-8',
         'Cache-Control': 'public, max-age=86400',

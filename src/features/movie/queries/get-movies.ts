@@ -1,5 +1,6 @@
 import { getDb } from '@/lib/db';
 import { getSearchTerms } from '@/lib/search';
+import { movieHasSubtitles } from '@/lib/movie-subtitles';
 
 export function getMovies(options: {
   q?: string | null;
@@ -107,6 +108,10 @@ export function getMovies(options: {
     params.push(limit, offset);
 
     const movies = db.prepare(movieQuery).all(...params) as any[];
+
+    for (const movie of movies) {
+      movie.has_subtitles = movieHasSubtitles(db, movie.id) ? 1 : 0;
+    }
 
     return {
       movies,

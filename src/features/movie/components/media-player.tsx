@@ -5,7 +5,7 @@ import videojs from 'video.js';
 import 'video.js/dist/video-js.css';
 import '@silvermine/videojs-chromecast/dist/silvermine-videojs-chromecast.css';
 import '@silvermine/videojs-airplay/dist/silvermine-videojs-airplay.css';
-import { AlertCircle, RefreshCcw, Volume2, Loader2 } from 'lucide-react';
+import { AlertCircle, RefreshCcw, Volume2, Loader2, Subtitles } from 'lucide-react';
 import { getAudioTracks, setDefaultAudioTrack, AudioTrackInfo } from '../actions/audio-tracks';
 import { audioPathKey, audioPreferenceKey, rebuildStreamSrc } from '@/lib/audio-path';
 
@@ -28,6 +28,45 @@ interface MediaPlayerProps {
 
 // Correctly infer the Player type from the videojs function signature
 type VideoJsPlayer = ReturnType<typeof videojs>;
+
+function clearRemoteTextTracks(player: VideoJsPlayer) {
+  const tracks = player.remoteTextTracks();
+  for (let i = tracks.length - 1; i >= 0; i--) {
+    const track = (tracks as any)[i];
+    if (track) player.removeRemoteTextTrack(track);
+  }
+}
+
+function addRemoteTextTracks(player: VideoJsPlayer, tracks: SubtitleTrack[]) {
+  clearRemoteTextTracks(player);
+  if (!tracks.length) return;
+
+  tracks.forEach((subtitle, index) => {
+    const isDefault = subtitle.default || index === 0;
+    const textTrack = player.addRemoteTextTrack(
+      {
+        kind: 'subtitles',
+        src: subtitle.src,
+        srclang: subtitle.srclang || 'en',
+        label: subtitle.label || 'Subtitles',
+        default: isDefault,
+      },
+      false,
+    );
+
+    if (textTrack) {
+      const track = (textTrack as { track?: TextTrack }).track;
+      if (track) track.mode = isDefault ? 'showing' : 'disabled';
+    }
+  });
+}
+
+function setActiveTextTrack(player: VideoJsPlayer, trackIndex: number | null) {
+  const tracks = player.remoteTextTracks() as unknown as TextTrack[];
+  for (let i = 0; i < tracks.length; i++) {
+    tracks[i].mode = trackIndex === i ? 'showing' : 'disabled';
+  }
+}
 
 const CAST_SENDER_URL = 'https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1';
 
@@ -74,11 +113,19 @@ export function MediaPlayer({
   const [isFlagged, setIsFlagged] = useState(false);
   const [audioTracks, setAudioTracks] = useState<AudioTrackInfo[]>([]);
   const [showAudioMenu, setShowAudioMenu] = useState(false);
+  const [showSubtitleMenu, setShowSubtitleMenu] = useState(false);
+  const [activeSubtitleIndex, setActiveSubtitleIndex] = useState<number | null>(null);
+  const [playerReady, setPlayerReady] = useState(false);
   const [isSwappingAudio, setIsSwappingAudio] = useState(false);
 
   const ctx = useRef({ id, src });
+  const subtitlesRef = useRef(subtitles);
   const lastSrcRef = useRef(src);
   const [effectiveSrc, setEffectiveSrc] = useState(src);
+
+  useEffect(() => {
+    subtitlesRef.current = subtitles;
+  }, [subtitles]);
 
   useEffect(() => {
     ctx.current = { id, src };
@@ -150,6 +197,15 @@ export function MediaPlayer({
     }
   };
 
+  const handleSubtitleSelect = (trackIndex: number | null) => {
+    setShowSubtitleMenu(false);
+    setActiveSubtitleIndex(trackIndex);
+    const player = playerRef.current;
+    if (player && !player.isDisposed()) {
+      setActiveTextTrack(player, trackIndex);
+    }
+  };
+
   useEffect(() => {
     if (playerRef.current || !videoRef.current) return;
 
@@ -209,8 +265,6 @@ export function MediaPlayer({
             'durationDisplay',
             'progressControl',
             'playbackRateMenuButton',
-            'chaptersButton',
-            'descriptionsButton',
             'subsCapsButton',
             'audioTrackButton',
             'chromecastButton',
@@ -223,6 +277,24 @@ export function MediaPlayer({
       });
 
       playerRef.current = player;
+
+      const syncTracks = () => {
+        if (player.isDisposed()) return;
+        addRemoteTextTracks(player, subtitlesRef.current);
+        const defaultIdx = subtitlesRef.current.findIndex((t) => t.default);
+        const idx = defaultIdx >= 0 ? defaultIdx : subtitlesRef.current.length > 0 ? 0 : null;
+        setActiveSubtitleIndex(idx);
+        if (idx !== null) {
+          setActiveTextTrack(player, idx);
+        }
+      };
+
+      player.ready(() => {
+        setPlayerReady(true);
+        syncTracks();
+      });
+
+      player.on('loadedmetadata', syncTracks);
 
       // Expose to component level so unmount can read it
       (player as any)._mmState = { restoreAttempted: false, targetTime: 0 };
@@ -380,56 +452,20 @@ export function MediaPlayer({
       }
       }, [effectiveSrc, mimeType]);
 
-      // Handle subtitle changes
-      const subtitlesStr = JSON.stringify(subtitles);
+  useEffect(() => {
+    if (!playerReady) return;
+    const player = playerRef.current;
+    if (!player || player.isDisposed()) return;
 
-      useEffect(() => {
-      const player = playerRef.current;
-      if (player && !player.isDisposed()) {
-      player.ready(() => {
-        if (player.isDisposed()) return;
+    addRemoteTextTracks(player, subtitles);
+    const defaultIdx = subtitles.findIndex((t) => t.default);
+    const idx = defaultIdx >= 0 ? defaultIdx : subtitles.length > 0 ? 0 : null;
+    setActiveSubtitleIndex(idx);
+    if (idx !== null) {
+      setActiveTextTrack(player, idx);
+    }
+  }, [playerReady, subtitles]);
 
-        // 1. Clear all existing remote text tracks
-        const tracks = player.remoteTextTracks();
-        for (let i = tracks.length - 1; i >= 0; i--) {
-            const track = (tracks as any)[i];
-            if (track) player.removeRemoteTextTrack(track);
-        }
-
-        const parsedSubtitles = JSON.parse(subtitlesStr);
-
-        // 2. Add new tracks with a slight delay to avoid blocking main thread/network
-        const timeout = setTimeout(() => {
-            if (player.isDisposed()) return;
-            
-            if (parsedSubtitles && parsedSubtitles.length > 0) {
-              parsedSubtitles.forEach((subtitle: any, index: number) => {
-                const isDefault = subtitle.default || (index === 0);
-                const trackOptions = {
-                  kind: 'captions',
-                  src: subtitle.src,
-                  srclang: subtitle.srclang || 'en',
-                  label: subtitle.label || 'Subtitles',
-                  default: isDefault,
-                  mode: isDefault ? 'showing' : 'disabled'
-                };
-
-                const track = player.addRemoteTextTrack(trackOptions, false);
-
-                // 3. Force 'showing' mode for the default track
-                if (isDefault) {
-                  if (track) {
-                    (track as any).mode = 'showing';
-                  }
-                }
-              });
-            }
-        }, 500);
-
-        return () => clearTimeout(timeout);
-      });
-      }
-      }, [subtitlesStr, src]); // Re-run if src changes because video.js cleans up tracks automatically
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -490,6 +526,58 @@ export function MediaPlayer({
               </div>
               <div className="px-3 py-2 bg-destructive/10 border-t border-white/10 text-[10px] text-destructive leading-tight italic">
                 Switching tracks creates a cached copy — your original file is not modified.
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Subtitle Selection Overlay */}
+      {subtitles.length > 0 && (
+        <div className="absolute top-4 right-4 z-40">
+          <button
+            type="button"
+            onClick={() => {
+              setShowSubtitleMenu((open) => !open);
+              setShowAudioMenu(false);
+            }}
+            className={`flex items-center gap-2 px-3 py-1.5 border text-white text-xs font-bold uppercase tracking-wider rounded-md backdrop-blur-sm transition-all shadow-lg ${
+              activeSubtitleIndex !== null
+                ? 'bg-primary/80 hover:bg-primary border-primary/40'
+                : 'bg-black/70 hover:bg-black/90 border-white/20'
+            }`}
+          >
+            <Subtitles className="h-4 w-4" />
+            CC
+          </button>
+
+          {showSubtitleMenu && (
+            <div className="absolute top-full right-0 mt-2 w-52 bg-black/95 border border-white/20 rounded-md shadow-2xl overflow-hidden backdrop-blur-md animate-in fade-in slide-in-from-top-2">
+              <div className="px-3 py-2 bg-white/5 border-b border-white/10 text-[10px] text-muted-foreground uppercase font-black tracking-widest">
+                Subtitles
+              </div>
+              <div className="max-h-64 overflow-y-auto">
+                <button
+                  type="button"
+                  onClick={() => handleSubtitleSelect(null)}
+                  className={`w-full text-left px-3 py-2 text-sm hover:bg-white/10 transition-colors ${
+                    activeSubtitleIndex === null ? 'border-l-2 border-primary bg-primary/5 text-primary font-bold' : 'text-foreground'
+                  }`}
+                >
+                  Off
+                </button>
+                {subtitles.map((track, index) => (
+                  <button
+                    key={`${track.src}-${index}`}
+                    type="button"
+                    onClick={() => handleSubtitleSelect(index)}
+                    className={`w-full text-left px-3 py-2 text-sm hover:bg-white/10 transition-colors ${
+                      activeSubtitleIndex === index ? 'border-l-2 border-primary bg-primary/5 text-primary font-bold' : 'text-foreground'
+                    }`}
+                  >
+                    {track.label || track.srclang || `Track ${index + 1}`}
+                  </button>
+                ))}
               </div>
             </div>
           )}

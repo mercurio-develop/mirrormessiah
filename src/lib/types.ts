@@ -41,4 +41,5 @@ export interface MovieWithFile extends Movie {
   file_path?: string;
   file_size?: number | null;
   file_container?: string | null;
+  has_subtitles?: number;
 }
