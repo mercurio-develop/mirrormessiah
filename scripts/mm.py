@@ -280,7 +280,8 @@ def detect_lang_from_path(path: Path) -> str:
         'ell': 'el', 'heb': 'he', 'heb': 'he', 'swe': 'sv', 'nor': 'no', 'dan': 'da',
         'fin': 'fi', 'cat': 'ca', 'glg': 'gl', 'baq': 'eu', 'hrv': 'hr', 'cze': 'cs',
         'ces': 'cs', 'rum': 'ro', 'ron': 'ro', 'hun': 'hu', 'ukr': 'uk', 'ind': 'id',
-        'msa': 'ms', 'may': 'ms'
+        'msa': 'ms', 'may': 'ms', 'tel': 'te', 'tam': 'ta', 'kan': 'kn', 'mal': 'ml',
+        'fil': 'fil'
     }
 
     # 1. Try to find 2-letter or 3-letter code between dots: .eng.srt or .en.srt
@@ -300,8 +301,39 @@ def detect_lang_from_path(path: Path) -> str:
     if 'chinese' in name: return 'zh'
     if 'arabic' in name: return 'ar'
     if 'russian' in name: return 'ru'
+    if 'hindi' in name: return 'hi'
+    if 'telugu' in name: return 'te'
+    if 'tamil' in name: return 'ta'
+    if 'kannada' in name: return 'kn'
+    if 'malayalam' in name: return 'ml'
+    if 'dansk' in name or 'danish' in name: return 'da'
+    if 'brazilian' in name or 'latin american' in name: return 'es'
 
     return 'en'
+
+def resync_movie_subtitles(db: sqlite3.Connection, movie_id: int, folder: Path) -> tuple[int, int, int]:
+    """Remove broken subtitle DB rows and register any files found on disk."""
+    removed = 0
+    for row in db.execute('SELECT id, path FROM subtitles WHERE movie_id = ?', (movie_id,)).fetchall():
+        if not Path(row['path']).exists():
+            db.execute('DELETE FROM subtitles WHERE id = ?', (row['id'],))
+            removed += 1
+
+    added = 0
+    found = 0
+    if folder.exists():
+        for sf in find_subtitle_files(folder):
+            found += 1
+            lang = detect_lang_from_path(sf)
+            fmt = sf.suffix.lstrip('.')
+            cur = db.execute(
+                'INSERT OR IGNORE INTO subtitles (movie_id, path, lang, format) VALUES (?,?,?,?)',
+                (movie_id, str(sf), lang, fmt),
+            )
+            if cur.rowcount > 0:
+                added += 1
+
+    return found, added, removed
 
 # ---------------------------------------------------------------------------
 # TMDB helpers
@@ -531,6 +563,8 @@ def ingest_path(db: sqlite3.Connection, path: Path, library_id: int, auto_scrape
         fmt  = sf.suffix.lstrip('.')
         db.execute("INSERT OR IGNORE INTO subtitles (movie_id, path, lang, format) VALUES (?,?,?,?)", (movie_id, str(sf), lang, fmt))
 
+    resync_movie_subtitles(db, movie_id, folder)
+
     db.commit()
     if newly_added and auto_scrape and API_KEY:
         movie_row = dict(db.execute('SELECT * FROM movies WHERE id=?', (movie_id,)).fetchone())
@@ -577,10 +611,33 @@ def cmd_sync(args):
         db.execute("DELETE FROM movies WHERE id = ?", (m['id'],))
         db.execute("DELETE FROM subtitles WHERE movie_id = ?", (m['id'],))
         db.execute("DELETE FROM movie_categories WHERE movie_id = ?", (m['id'],))
+
+    # 3. Resync subtitles for remaining movies
+    print(f"\n--- PHASE: Resyncing Subtitles ---")
+    orphan_subs = db.execute(
+        "DELETE FROM subtitles WHERE movie_id NOT IN (SELECT id FROM movies)"
+    ).rowcount
+    sub_added = 0
+    sub_removed = orphan_subs
+    movies_with_files = db.execute("""
+        SELECT DISTINCT m.id, m.title, f.path
+        FROM movies m
+        JOIN files f ON f.movie_id = m.id
+    """).fetchall()
+    seen = set()
+    for row in movies_with_files:
+        if row['id'] in seen:
+            continue
+        seen.add(row['id'])
+        folder = Path(row['path']).parent
+        found, added, removed = resync_movie_subtitles(db, row['id'], folder)
+        sub_added += added
+        sub_removed += removed
             
     db.commit()
     db.close()
     print(f"SYNC_COMPLETE: {added} added, {deleted_files} files purged.")
+    print(f"  Subtitles: {sub_added} registered, {sub_removed} stale paths removed.")
 
 def cmd_ingest(args):
     path = Path(args.path)
@@ -689,8 +746,12 @@ def cmd_organize(args) -> None:
                 subs = db.execute("SELECT id, path FROM subtitles WHERE movie_id = ?", (movie['id'],)).fetchall()
                 for s in subs:
                     old_s_path = Path(s['path'])
-                    new_f_path = new_dir / old_s_path.name
-                    db.execute("UPDATE subtitles SET path = ? WHERE id = ?", (str(new_f_path), s['id']))
+                    try:
+                        rel = old_s_path.relative_to(current_dir)
+                        new_s_path = new_dir / rel
+                    except ValueError:
+                        new_s_path = new_dir / old_s_path.name
+                    db.execute("UPDATE subtitles SET path = ? WHERE id = ?", (str(new_s_path), s['id']))
                 
                 # Update thumbnail path if it was inside the movie folder
                 movie_data = db.execute("SELECT thumbnail FROM movies WHERE id = ?", (movie['id'],)).fetchone()
@@ -921,6 +982,28 @@ def cmd_convert(args):
     for i, f in enumerate(files_to_convert, 1):
         print(f"\n  [{i}/{len(files_to_convert)}] Dispatching to conversion script: {f.name}")
         subprocess.run([sys.executable, str(script_path), str(f)])
+
+    if files_to_convert:
+        print("\n  [.] Registering extracted subtitles...")
+        db = open_db()
+        touched_movies = set()
+        for f in files_to_convert:
+            movie_file = db.execute('SELECT movie_id FROM files WHERE path = ?', (str(f),)).fetchone()
+            if not movie_file:
+                movie_file = db.execute(
+                    'SELECT movie_id FROM files WHERE path LIKE ? LIMIT 1',
+                    (str(f.with_suffix('.mp4')),),
+                ).fetchone()
+            if movie_file:
+                touched_movies.add(movie_file['movie_id'])
+        for movie_id in touched_movies:
+            row = db.execute('SELECT path FROM files WHERE movie_id = ? LIMIT 1', (movie_id,)).fetchone()
+            if row:
+                found, added, removed = resync_movie_subtitles(db, movie_id, Path(row['path']).parent)
+                if added or removed:
+                    print(f"    [+] Movie {movie_id}: {added} subtitle(s) added, {removed} stale removed")
+        db.commit()
+        db.close()
         
     print("\nCONVERSION_COMPLETE.")
 

@@ -274,6 +274,71 @@ def detect_lang_from_path(path: Path) -> str:
     if 'russian' in name: return 'ru'
     return 'en'
 
+def find_subtitle_files(folder: Path) -> list[Path]:
+    if not folder.exists():
+        return []
+    return [p for p in folder.rglob('*') if p.is_file() and p.suffix.lower() in SUB_EXT]
+
+def subtitle_matches_episode(sub_path: Path, season_number: int, episode_number: int) -> bool:
+    season_num, ep_num = extract_episode_info(sub_path.name, sub_path.parent.name)
+    return season_num == season_number and ep_num == episode_number
+
+def resync_episode_subtitles(db: sqlite3.Connection, episode_id: int, season_number: int, episode_number: int) -> tuple[int, int, int]:
+    files = db.execute('SELECT path FROM episode_files WHERE episode_id = ?', (episode_id,)).fetchall()
+    if not files:
+        return 0, 0, 0
+
+    removed = 0
+    for row in db.execute('SELECT id, path FROM episode_subtitles WHERE episode_id = ?', (episode_id,)).fetchall():
+        if not Path(row['path']).exists():
+            db.execute('DELETE FROM episode_subtitles WHERE id = ?', (row['id'],))
+            removed += 1
+
+    matched: dict[str, Path] = {}
+    for file_row in files:
+        ep_dir = Path(file_row['path']).parent
+        video_stem = Path(file_row['path']).stem
+        for sub_path in find_subtitle_files(ep_dir):
+            if subtitle_matches_episode(sub_path, season_number, episode_number):
+                matched[str(sub_path)] = sub_path
+                continue
+            sub_stem = sub_path.stem
+            if sub_stem == video_stem or sub_stem.startswith(f'{video_stem}.') or sub_stem.startswith(f'{video_stem}-'):
+                matched[str(sub_path)] = sub_path
+
+    added = 0
+    existing = {row['path'] for row in db.execute('SELECT path FROM episode_subtitles WHERE episode_id = ?', (episode_id,)).fetchall()}
+    for sub_path in matched.values():
+        if str(sub_path) in existing:
+            continue
+        lang = detect_lang_from_path(sub_path)
+        fmt = sub_path.suffix.lstrip('.')
+        db.execute(
+            'INSERT OR IGNORE INTO episode_subtitles (episode_id, path, lang, format) VALUES (?,?,?,?)',
+            (episode_id, str(sub_path), lang, fmt),
+        )
+        if db.execute('SELECT changes()').fetchone()[0]:
+            added += 1
+
+    return len(matched), added, removed
+
+def resync_series_subtitles(db: sqlite3.Connection, series_id: int) -> tuple[int, int, int]:
+    db.execute('DELETE FROM episode_subtitles WHERE episode_id NOT IN (SELECT id FROM episodes)')
+    episodes = db.execute("""
+        SELECT e.id, s.season_number, e.episode_number
+        FROM episodes e
+        JOIN seasons s ON s.id = e.season_id
+        WHERE s.series_id = ?
+    """, (series_id,)).fetchall()
+
+    found = added = removed = 0
+    for ep in episodes:
+        f, a, r = resync_episode_subtitles(db, ep['id'], ep['season_number'], ep['episode_number'])
+        found += f
+        added += a
+        removed += r
+    return found, added, removed
+
 def ingest_series(db: sqlite3.Connection, series_folder: Path, lib_id: int):
     title = clean_name(series_folder.name)
     year = extract_year(series_folder.name)
@@ -362,9 +427,19 @@ def cmd_sync(args):
     for item in sorted(media_dir.iterdir()):
         if item.is_dir():
             ingest_series(db, item, lib_id)
+
+    print(f"\n--- PHASE: Resyncing Episode Subtitles ---")
+    db.execute('DELETE FROM episode_subtitles WHERE episode_id NOT IN (SELECT id FROM episodes)')
+    sub_added = sub_removed = 0
+    for series in db.execute('SELECT id, title FROM series').fetchall():
+        found, added, removed = resync_series_subtitles(db, series['id'])
+        sub_added += added
+        sub_removed += removed
+    db.commit()
             
     db.close()
     print("SYNC_COMPLETE")
+    print(f"  Subtitles: {sub_added} registered, {sub_removed} stale paths removed.")
 
 def cmd_cleanup(args):
     print(f"\n--- INITIATING SERIES REGISTRY PURGE & CLEANUP ---")
@@ -566,18 +641,6 @@ def cmd_organize(args):
     db.close()
     print(f"\nORGANIZE_COMPLETE: {renamed_files} files standardized. {skipped} skipped.")
 
-def series_needs_scrape(db: sqlite3.Connection, series_id: int, series_row: sqlite3.Row, force: bool = False) -> bool:
-    if force:
-        return True
-    if not series_row['plot'] or not series_row['thumbnail']:
-        return True
-    missing_eps = db.execute("""
-        SELECT COUNT(*) AS n FROM episodes e
-        JOIN seasons s ON e.season_id = s.id
-        WHERE s.series_id = ? AND (e.thumbnail IS NULL OR e.thumbnail = '')
-    """, (series_id,)).fetchone()['n']
-    return missing_eps > 0
-
 def resolve_series_path(db: sqlite3.Connection, series_id: int, series_row: sqlite3.Row) -> Path:
     file_row = db.execute("""
         SELECT f.path FROM episode_files f
@@ -590,6 +653,94 @@ def resolve_series_path(db: sqlite3.Connection, series_id: int, series_row: sqli
     year_str = f" ({series_row['year']})" if series_row['year'] else ""
     standard_series_name = re.sub(r'[<>:"/\\|?*]', '_', f"{series_row['title']}{year_str}").strip()
     return Path(SERIES_DIR) / standard_series_name
+
+def resolve_series_thumbnail(series_path: Path, db: sqlite3.Connection, series_id: int) -> str | None:
+    poster = series_path / 'poster.jpg'
+    if poster.exists():
+        return str(poster)
+
+    seasons = db.execute(
+        "SELECT season_number FROM seasons WHERE series_id = ? ORDER BY season_number ASC",
+        (series_id,),
+    ).fetchall()
+    for s in seasons:
+        season_poster = series_path / f"Season {s['season_number']:02d}" / 'poster.jpg'
+        if season_poster.exists():
+            return str(season_poster)
+
+    episodes = db.execute("""
+        SELECT s.season_number, e.episode_number
+        FROM episodes e
+        JOIN seasons s ON e.season_id = s.id
+        WHERE s.series_id = ?
+        ORDER BY s.season_number ASC, e.episode_number ASC
+    """, (series_id,)).fetchall()
+    for ep in episodes:
+        sn, en = ep['season_number'], ep['episode_number']
+        ep_thumb = series_path / f"Season {sn:02d}" / f"S{sn:02d}E{en:02d}-thumb.jpg"
+        if ep_thumb.exists():
+            return str(ep_thumb)
+
+    return None
+
+def series_has_local_artwork(series_path: Path, db: sqlite3.Connection, series_id: int) -> bool:
+    return resolve_series_thumbnail(series_path, db, series_id) is not None
+
+def discover_local_artwork(db: sqlite3.Connection, series_id: int, series_row: sqlite3.Row) -> None:
+    series_path = resolve_series_path(db, series_id, series_row)
+
+    poster = series_path / 'poster.jpg'
+    if poster.exists():
+        if not series_row['thumbnail']:
+            db.execute("UPDATE series SET thumbnail = ? WHERE id = ?", (str(poster), series_id))
+    elif not series_row['thumbnail']:
+        fallback = resolve_series_thumbnail(series_path, db, series_id)
+        if fallback:
+            db.execute("UPDATE series SET thumbnail = ? WHERE id = ?", (fallback, series_id))
+
+    seasons = db.execute(
+        "SELECT id, season_number, poster FROM seasons WHERE series_id = ?",
+        (series_id,),
+    ).fetchall()
+    for s in seasons:
+        if s['poster']:
+            continue
+        season_poster = series_path / f"Season {s['season_number']:02d}" / 'poster.jpg'
+        if season_poster.exists():
+            db.execute("UPDATE seasons SET poster = ? WHERE id = ?", (str(season_poster), s['id']))
+
+    episodes = db.execute("""
+        SELECT e.id, s.season_number, e.episode_number, e.thumbnail
+        FROM episodes e
+        JOIN seasons s ON e.season_id = s.id
+        WHERE s.series_id = ?
+    """, (series_id,)).fetchall()
+    for ep in episodes:
+        if ep['thumbnail']:
+            continue
+        sn, en = ep['season_number'], ep['episode_number']
+        ep_thumb = series_path / f"Season {sn:02d}" / f"S{sn:02d}E{en:02d}-thumb.jpg"
+        if ep_thumb.exists():
+            db.execute("UPDATE episodes SET thumbnail = ? WHERE id = ?", (str(ep_thumb), ep['id']))
+
+def series_needs_scrape(db: sqlite3.Connection, series_id: int, series_row: sqlite3.Row, force: bool = False) -> bool:
+    if force:
+        return True
+    if not series_row['plot']:
+        return True
+    missing_eps = db.execute("""
+        SELECT COUNT(*) AS n FROM episodes e
+        JOIN seasons s ON e.season_id = s.id
+        WHERE s.series_id = ? AND (e.thumbnail IS NULL OR e.thumbnail = '')
+    """, (series_id,)).fetchone()['n']
+    if missing_eps > 0:
+        return True
+    if not series_row['thumbnail']:
+        series_path = resolve_series_path(db, series_id, series_row)
+        if series_has_local_artwork(series_path, db, series_id):
+            return False
+        return True
+    return False
 
 def count_missing_episode_thumbnails(db: sqlite3.Connection) -> int:
     row = db.execute("""
@@ -613,6 +764,11 @@ def cmd_scrape(args):
                     db.execute(f"UPDATE {table} SET {col} = NULL WHERE id = ?", (item['id'],))
     db.commit()
 
+    print(f"  [.] Discovering local artwork on disk...")
+    for s in db.execute("SELECT * FROM series").fetchall():
+        discover_local_artwork(db, s['id'], s)
+    db.commit()
+
     series_list = db.execute("SELECT * FROM series").fetchall()
     scraped = 0
     skipped = 0
@@ -622,6 +778,7 @@ def cmd_scrape(args):
 
     for i, s in enumerate(series_list, 1):
         series_id = s['id']
+        s = db.execute("SELECT * FROM series WHERE id = ?", (series_id,)).fetchone()
         if not series_needs_scrape(db, series_id, s, force=args.force):
             skipped += 1
             continue
@@ -654,17 +811,24 @@ def cmd_scrape(args):
 
                 poster_src = details.get('poster_path')
                 thumbnail = s['thumbnail']
-                
-                if poster_src:
-                    poster_path = standard_series_path / 'poster.jpg'
-                    
-                    if args.force or not poster_path.exists():
+
+                if args.force:
+                    if poster_src:
+                        poster_path = standard_series_path / 'poster.jpg'
                         if download_poster(poster_src, poster_path):
                             thumbnail = str(poster_path)
                         else:
                             thumbnail = poster_src
-                    else:
-                        thumbnail = str(poster_path)
+                else:
+                    local_thumb = resolve_series_thumbnail(standard_series_path, db, series_id)
+                    if local_thumb:
+                        thumbnail = local_thumb
+                    elif poster_src:
+                        poster_path = standard_series_path / 'poster.jpg'
+                        if download_poster(poster_src, poster_path):
+                            thumbnail = str(poster_path)
+                        else:
+                            thumbnail = poster_src
                 
                 db.execute("""
                     UPDATE series 

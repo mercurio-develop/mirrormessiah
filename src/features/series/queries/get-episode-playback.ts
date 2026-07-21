@@ -2,6 +2,8 @@ import { getDb } from '@/lib/db';
 import { getMimeType } from '@/lib/pathenc';
 import { b64urlEncode } from '@/lib/b64url';
 import { buildSubtitleTracks } from '@/lib/subtitle-tracks';
+import { discoverEpisodeSubtitles } from '@/lib/series-subtitles';
+import fs from 'fs';
 
 export function getEpisodePlayback(id: number) {
   const db = getDb();
@@ -90,10 +92,20 @@ export function getEpisodePlayback(id: number) {
 
       const actualMime = getMimeType(bestFile.path);
 
-      const subtitles = db.prepare(`
+      let subtitles = db.prepare(`
         SELECT path, lang, label, format FROM episode_subtitles WHERE episode_id = ?
         ORDER BY lang ASC, path ASC
       `).all(id) as { path: string; lang: string | null; label: string | null; format: string | null }[];
+
+      subtitles = subtitles.filter((s) => fs.existsSync(s.path));
+
+      if (subtitles.length === 0) {
+        subtitles = discoverEpisodeSubtitles(
+          bestFile.path,
+          episode.season_number,
+          episode.episode_number,
+        );
+      }
 
       const uniqueSubs = buildSubtitleTracks(subtitles);
 

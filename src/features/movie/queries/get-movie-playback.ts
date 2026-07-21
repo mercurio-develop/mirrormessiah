@@ -2,6 +2,8 @@ import { getDb } from '@/lib/db';
 import { getMimeType } from '@/lib/pathenc';
 import { b64urlEncode } from '@/lib/b64url';
 import { buildSubtitleTracks } from '@/lib/subtitle-tracks';
+import { discoverMovieSubtitles } from '@/lib/movie-subtitles';
+import fs from 'fs';
 
 export function getMoviePlayback(id: number) {
   const db = getDb();
@@ -84,10 +86,16 @@ export function getMoviePlayback(id: number) {
 
   const actualMime = getMimeType(bestFile.path);
 
-  const subtitles = db.prepare(`
+  let subtitles = db.prepare(`
     SELECT path, lang, label, format FROM subtitles WHERE movie_id = ?
     ORDER BY lang ASC, path ASC
   `).all(id) as { path: string; lang: string | null; label: string | null; format: string | null }[];
+
+  subtitles = subtitles.filter((s) => fs.existsSync(s.path));
+
+  if (subtitles.length === 0) {
+    subtitles = discoverMovieSubtitles(db, id);
+  }
 
   const uniqueSubs = buildSubtitleTracks(subtitles);
 

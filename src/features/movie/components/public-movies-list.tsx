@@ -560,8 +560,12 @@ export function PublicMoviesList({ initialMovies }: PublicMoviesListProps) {
                        <span>{movie.year}</span>
                        <span className="opacity-30">•</span>
                        <span className="tracking-tighter">{movie.quality || 'HDR'}</span>
-                       <span className="opacity-30">•</span>
-                       <span className="text-[9px] font-black tracking-widest text-primary/40">CC</span>
+                       {movie.has_subtitles ? (
+                         <>
+                           <span className="opacity-30">•</span>
+                           <span className="text-[9px] font-black tracking-widest text-primary/80">CC</span>
+                         </>
+                       ) : null}
                     </div>
 
                     {movie.audience === 'family' && (

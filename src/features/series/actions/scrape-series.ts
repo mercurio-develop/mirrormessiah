@@ -4,6 +4,7 @@ import { getDb } from '@/lib/db';
 import { requireAdminKeyAuth, AuthError } from '@/lib/auth';
 import { ActionState } from '@/lib/action-state';
 import { searchSeries, getSeriesDetails, getSeasonDetails, posterUrl, extractDirector } from '@/lib/tmdb';
+import { discoverLocalArtwork, resolveLocalSeriesThumbnail, resolveSeriesDir } from '@/features/series/lib/local-artwork';
 import { revalidatePath } from 'next/cache';
 import fs from 'fs';
 import path from 'path';
@@ -29,18 +30,17 @@ export async function scrapeSeriesAction(seriesId: number): Promise<ActionState>
 
     const details = await getSeriesDetails(tmdbId);
 
+    const seriesDir = resolveSeriesDir(db, seriesId) ?? '';
+    if (seriesDir) {
+      discoverLocalArtwork(db, seriesId, seriesDir, series.thumbnail);
+    }
+
     let thumbnailPath: string | null = series.thumbnail;
-    let seriesDir = '';
-    if (details.poster_path) {
-      const fileRow = db.prepare(`
-        SELECT f.path FROM episode_files f 
-        JOIN episodes e ON f.episode_id = e.id 
-        JOIN seasons s ON e.season_id = s.id 
-        WHERE s.series_id = ? LIMIT 1
-      `).get(seriesId) as any;
-      
-      if (fileRow?.path) {
-        seriesDir = path.dirname(path.dirname(fileRow.path)); // Assumes structure is Series/Season 01/S01E01.mp4
+    if (seriesDir) {
+      const localThumb = resolveLocalSeriesThumbnail(seriesDir, db, seriesId);
+      if (localThumb) {
+        thumbnailPath = localThumb;
+      } else if (details.poster_path) {
         const posterDest = path.join(seriesDir, 'poster.jpg');
         try {
           const imgRes = await fetch(posterUrl(details.poster_path));
@@ -53,6 +53,8 @@ export async function scrapeSeriesAction(seriesId: number): Promise<ActionState>
           // poster download failed
         }
       }
+    } else if (series.thumbnail) {
+      thumbnailPath = series.thumbnail;
     }
 
     const genres = details.genres.map(g => g.name).join(', ') || null;

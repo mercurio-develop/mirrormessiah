@@ -6,6 +6,7 @@ import { ActionState } from '@/lib/action-state';
 import { revalidatePath } from 'next/cache';
 import fs from 'fs';
 import path from 'path';
+import { resyncMovieSubtitles } from '@/lib/movie-subtitles';
 
 const VIDEO_EXTS = ['.mp4', '.mkv', '.avi', '.mov', '.wmv', '.m4v', '.webm'];
 
@@ -97,11 +98,15 @@ export async function scanMovieFilesAction(movieId: number): Promise<ActionState
       }
     }
 
+    const subSync = resyncMovieSubtitles(db, movieId);
+
     revalidatePath(`/admin/movies/${movieId}`);
     
     return {
       status: 'success',
-      message: repaired ? `Repaired and added ${addedCount} files` : `Scan complete: ${addedCount} new files detected`,
+      message: repaired
+        ? `Repaired and added ${addedCount} files; subtitles: ${subSync.added} added, ${subSync.removed} stale removed`
+        : `Scan complete: ${addedCount} new files; subtitles: ${subSync.added} added, ${subSync.removed} stale removed`,
       payload: { added: addedCount, removed: removedCount, repaired }
     };
   } catch (error: any) {

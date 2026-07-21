@@ -1,5 +1,6 @@
 import path from 'path';
 import { b64urlEncode } from '@/lib/b64url';
+import { labelFromSubtitlePath } from '@/lib/subtitle-lang';
 
 export interface SubtitleRow {
   path: string;
@@ -86,15 +87,7 @@ const LANG_MAP: Record<string, { code: string; label: string }> = {
 };
 
 function labelFromPath(filePath: string, lang: string): string {
-  const stem = path.basename(filePath, path.extname(filePath));
-  const namePart = stem.includes('.') ? stem.split('.')[0] : stem;
-  const cleaned = namePart
-    .replace(/\[SDH\]/gi, ' SDH')
-    .replace(/_/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-  if (cleaned) return cleaned;
-  return LANG_MAP[lang]?.label || lang.toUpperCase();
+  return labelFromSubtitlePath(filePath, lang);
 }
 
 function mapLang(lang: string | null | undefined): { code: string; label: string } {
