@@ -142,6 +142,58 @@ export function parseRangeHeader(rangeHeader: string, fileSize: number): { start
 /**
  * Sanitize WebVTT content, ensuring correct header formatting and removing internal empty lines in cue payloads.
  */
+/** Strip HTML tags and drop empty cues for reliable browser text-track playback. */
+export function prepareVttForPlayback(vttContent: string): string {
+  const lines = vttContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+  const out: string[] = [];
+
+  let i = 0;
+  while (i < lines.length && !lines[i].includes('-->')) {
+    const trimmed = lines[i].trim();
+    if (trimmed.startsWith('WEBVTT') || trimmed === '' || trimmed.startsWith('NOTE')) {
+      out.push(lines[i]);
+    }
+    i++;
+  }
+
+  if (!out.some((line) => line.trim().startsWith('WEBVTT'))) {
+    out.unshift('WEBVTT');
+  }
+
+  while (i < lines.length) {
+    while (i < lines.length && lines[i].trim() === '') i++;
+    if (i >= lines.length) break;
+
+    let identifier: string | undefined;
+    if (!lines[i].includes('-->')) {
+      identifier = lines[i];
+      i++;
+    }
+    if (i >= lines.length || !lines[i].includes('-->')) break;
+
+    const timestamp = lines[i].trim();
+    i++;
+
+    const payload: string[] = [];
+    while (i < lines.length) {
+      const trimmed = lines[i].trim();
+      if (trimmed === '' || trimmed.includes('-->')) break;
+      const cleaned = lines[i].replace(/<[^>]+>/g, '').trim();
+      if (cleaned) payload.push(cleaned);
+      i++;
+    }
+
+    if (payload.length === 0) continue;
+
+    out.push('');
+    if (identifier) out.push(identifier);
+    out.push(timestamp);
+    out.push(...payload);
+  }
+
+  return out.join('\n').trim() + '\n';
+}
+
 export function sanitizeVtt(vttContent: string): string {
   // Normalize line endings
   const lines = vttContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');

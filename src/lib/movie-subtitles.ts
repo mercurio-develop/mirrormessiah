@@ -3,6 +3,27 @@ import path from 'path';
 import type Database from 'better-sqlite3';
 import { detectLangFromPath, labelFromSubtitlePath, SUBTITLE_EXTENSIONS } from '@/lib/subtitle-lang';
 
+function backfillSubtitleMetadata(
+  db: Database.Database,
+  movieId: number,
+): void {
+  const rows = db.prepare('SELECT id, path, lang, label FROM subtitles WHERE movie_id = ?').all(movieId) as {
+    id: number;
+    path: string;
+    lang: string | null;
+    label: string | null;
+  }[];
+
+  for (const row of rows) {
+    if (!fs.existsSync(row.path)) continue;
+    const lang = row.lang?.trim() || detectLangFromPath(row.path);
+    const label = row.label?.trim() || labelFromSubtitlePath(row.path, lang);
+    if (lang !== row.lang || label !== row.label) {
+      db.prepare('UPDATE subtitles SET lang = ?, label = ? WHERE id = ?').run(lang, label, row.id);
+    }
+  }
+}
+
 export function getMovieDirectories(db: Database.Database, movieId: number): string[] {
   const files = db.prepare('SELECT path FROM files WHERE movie_id = ?').all(movieId) as { path: string }[];
   const dirs = new Set<string>();
@@ -108,6 +129,8 @@ export function resyncMovieSubtitles(
     `).run(movieId, subPath, lang, label, format);
     added++;
   }
+
+  backfillSubtitleMetadata(db, movieId);
 
   return { found: allFiles.size, added, removed };
 }

@@ -6,7 +6,7 @@ import 'video.js/dist/video-js.css';
 import '@silvermine/videojs-chromecast/dist/silvermine-videojs-chromecast.css';
 import '@silvermine/videojs-airplay/dist/silvermine-videojs-airplay.css';
 import { AlertCircle, RefreshCcw, Volume2, Loader2, Subtitles } from 'lucide-react';
-import { getAudioTracks, setDefaultAudioTrack, AudioTrackInfo } from '../actions/audio-tracks';
+import type { AudioTrackInfo } from '@/lib/audio-remux';
 import { audioPathKey, audioPreferenceKey, rebuildStreamSrc } from '@/lib/audio-path';
 
 interface SubtitleTrack {
@@ -121,7 +121,12 @@ export function MediaPlayer({
   const ctx = useRef({ id, src });
   const subtitlesRef = useRef(subtitles);
   const lastSrcRef = useRef(src);
+  const mimeTypeRef = useRef(mimeType);
   const [effectiveSrc, setEffectiveSrc] = useState(src);
+
+  useEffect(() => {
+    mimeTypeRef.current = mimeType;
+  }, [mimeType]);
 
   useEffect(() => {
     subtitlesRef.current = subtitles;
@@ -136,64 +141,142 @@ export function MediaPlayer({
       setEffectiveSrc(src);
       return;
     }
+
     const currentId = id || src;
     const savedPath = localStorage.getItem(audioPathKey(currentId));
-    setEffectiveSrc(savedPath ? rebuildStreamSrc(src, savedPath) : src);
+    const savedTrack = localStorage.getItem(audioPreferenceKey(currentId));
+
+    let sourcePath: string | null = null;
+    try {
+      sourcePath = new URL(src, window.location.origin).searchParams.get('path');
+    } catch {
+      sourcePath = null;
+    }
+
+    if (!savedPath || !savedTrack || !sourcePath) {
+      setEffectiveSrc(src);
+      return;
+    }
+
+    fetch(
+      `/api/audio/resolve?source=${encodeURIComponent(sourcePath)}&track=${encodeURIComponent(savedTrack)}`,
+      { credentials: 'same-origin' },
+    )
+      .then((res) => (res.ok ? res.json() : { valid: false }))
+      .then((data: { valid?: boolean; encodedPath?: string }) => {
+        if (data.valid && data.encodedPath) {
+          setEffectiveSrc(rebuildStreamSrc(src, data.encodedPath));
+          return;
+        }
+        localStorage.removeItem(audioPathKey(currentId));
+        localStorage.removeItem(audioPreferenceKey(currentId));
+        setEffectiveSrc(src);
+      })
+      .catch(() => setEffectiveSrc(src));
   }, [id, src]);
 
-  // Fetch audio tracks
+  // Fetch audio tracks from API (avoids server-action timeouts on large libraries)
   useEffect(() => {
-    if (effectiveSrc && typeof window !== 'undefined') {
-      try {
-        const urlObj = new URL(effectiveSrc, window.location.origin);
-        const encodedPath = urlObj.searchParams.get('path');
-        if (encodedPath) {
-          getAudioTracks(encodedPath).then(tracks => {
-            if (tracks && tracks.length > 1) {
-              setAudioTracks(tracks);
-            } else {
-              setAudioTracks([]);
-            }
-          }).catch(e => console.error("Error fetching audio tracks", e));
-        }
-      } catch (e) {
-        console.error("Could not parse src URL for audio tracks", e);
-      }
+    if (!effectiveSrc || typeof window === 'undefined') return;
+
+    try {
+      const urlObj = new URL(effectiveSrc, window.location.origin);
+      const encodedPath = urlObj.searchParams.get('path');
+      if (!encodedPath) return;
+
+      fetch(`/api/audio/tracks?path=${encodeURIComponent(encodedPath)}`, {
+        credentials: 'same-origin',
+      })
+        .then((res) => (res.ok ? res.json() : { tracks: [] }))
+        .then((data: { tracks?: AudioTrackInfo[] }) => {
+          const tracks = data.tracks || [];
+          setAudioTracks(tracks.length > 1 ? tracks : []);
+        })
+        .catch((e) => console.error('Error fetching audio tracks', e));
+    } catch (e) {
+      console.error('Could not parse src URL for audio tracks', e);
     }
   }, [effectiveSrc]);
 
+  const swapStreamSource = (newSrc: string, resumeAt: number) => {
+    lastSrcRef.current = newSrc;
+    setEffectiveSrc(newSrc);
+
+    const player = playerRef.current;
+    if (!player || player.isDisposed()) return;
+
+    const wasPaused = player.paused();
+    player.src({ src: newSrc, type: mimeTypeRef.current });
+    player.load();
+
+    const onReady = () => {
+      if (resumeAt > 0) {
+        player.currentTime(resumeAt);
+      }
+      if (!wasPaused) {
+        player.play()?.catch(() => {});
+      }
+      player.off('loadedmetadata', onReady);
+    };
+    player.on('loadedmetadata', onReady);
+  };
+
   const handleTrackSelect = async (trackIndex: number) => {
     if (isSwappingAudio) return;
-    
-    let encodedPath = null;
+
+    let encodedPath: string | null = null;
     try {
       const urlObj = new URL(src, window.location.origin);
       encodedPath = urlObj.searchParams.get('path');
-    } catch (e) {}
+    } catch {
+      // ignore parse errors
+    }
 
     if (!encodedPath) return;
 
     setShowAudioMenu(false);
     setIsSwappingAudio(true);
-    
-    const ct = playerRef.current?.currentTime() || 0;
+
+    const resumeAt = playerRef.current?.currentTime() || 0;
     const currentId = id || src;
     const storageKey = `mm_playback_time_${currentId}`;
-    if (ct > 0) {
-      localStorage.setItem(storageKey, ct.toString());
+    if (resumeAt > 0) {
+      localStorage.setItem(storageKey, resumeAt.toString());
     }
 
-    const result = await setDefaultAudioTrack(encodedPath, trackIndex);
-    
-    setIsSwappingAudio(false);
-    
-    if (result.success && result.encodedPath) {
-      const currentId = id || src;
-      localStorage.setItem(audioPathKey(currentId), result.encodedPath);
-      localStorage.setItem(audioPreferenceKey(currentId), String(trackIndex));
-      window.location.reload();
-    } else {
-      alert('Failed to switch audio track.');
+    try {
+      const response = await fetch('/api/audio/switch', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: encodedPath, trackIndex }),
+      });
+
+      const result = (await response.json()) as {
+        success?: boolean;
+        encodedPath?: string;
+        error?: string;
+      };
+
+      if (response.ok && result.success && result.encodedPath) {
+        localStorage.setItem(audioPathKey(currentId), result.encodedPath);
+        localStorage.setItem(audioPreferenceKey(currentId), String(trackIndex));
+        const newSrc = rebuildStreamSrc(src, result.encodedPath, true);
+        swapStreamSource(newSrc, resumeAt);
+        setAudioTracks((tracks) =>
+          tracks.map((track) => ({
+            ...track,
+            isDefault: track.index === trackIndex,
+          })),
+        );
+      } else {
+        alert(result.error || 'Failed to switch audio track.');
+      }
+    } catch (err) {
+      console.error('[MediaPlayer] Audio track switch failed:', err);
+      alert('Failed to switch audio track. The remux may have timed out on a large file.');
+    } finally {
+      setIsSwappingAudio(false);
     }
   };
 
@@ -410,7 +493,7 @@ export function MediaPlayer({
             // Automatically flag for repair if we have an ID
             const currentCtx = ctx.current;
             if (currentCtx.id && !isFlagged) {
-              fetch(`/api/movies/${currentCtx.id}/repair`, { method: 'POST' })
+              fetch(`/api/movies/${currentCtx.id}/repair`, { method: 'POST', credentials: 'same-origin' })
                 .then(() => setIsFlagged(true))
                 .catch(err => console.error('[MediaPlayer] Failed to flag for repair:', err));
             }
@@ -424,7 +507,7 @@ export function MediaPlayer({
       player.on('playing', () => {
         const currentCtx = ctx.current;
         if (currentCtx.id) {
-          fetch(`/api/movies/${currentCtx.id}/repair`, { method: 'DELETE' })
+          fetch(`/api/movies/${currentCtx.id}/repair`, { method: 'DELETE', credentials: 'same-origin' })
             .catch(err => console.error('[MediaPlayer] Failed to clear repair flag:', err));
         }
       });
@@ -502,7 +585,7 @@ export function MediaPlayer({
             className="flex items-center gap-2 px-3 py-1.5 bg-black/70 hover:bg-black/90 border border-white/20 text-white text-xs font-bold uppercase tracking-wider rounded-md backdrop-blur-sm transition-all shadow-lg"
           >
             {isSwappingAudio ? <Loader2 className="h-4 w-4 animate-spin" /> : <Volume2 className="h-4 w-4" />}
-            {isSwappingAudio ? 'Switching...' : 'Audio'}
+            {isSwappingAudio ? 'Remuxing...' : 'Audio'}
           </button>
           
           {showAudioMenu && (
@@ -525,7 +608,7 @@ export function MediaPlayer({
                 ))}
               </div>
               <div className="px-3 py-2 bg-destructive/10 border-t border-white/10 text-[10px] text-destructive leading-tight italic">
-                Switching tracks creates a cached copy — your original file is not modified.
+                First switch may take 1–2 minutes while a cached copy is built. Playback resumes automatically.
               </div>
             </div>
           )}
