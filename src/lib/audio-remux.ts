@@ -183,27 +183,46 @@ export async function remuxAudioTrack(
     const sidecarPath = sidecarAudioPath(filePath, trackIndex);
     let cmd: string;
 
-    try {
-      await fs.access(sidecarPath);
-      const sidecarStats = await fs.stat(sidecarPath);
-      if (sidecarStats.size > 1024) {
-        console.log('[remuxAudioTrack] Using pre-extracted sidecar:', sidecarPath);
-        cmd = [
-          'ffmpeg -y',
-          `-i "${filePath}"`,
-          `-i "${sidecarPath}"`,
-          '-map 0:v:0',
-          '-map 1:a:0',
-          '-dn',
-          '-c copy',
-          '-disposition:a:0 default',
-          '-movflags +faststart',
-          `"${outputPath}"`,
-        ].join(' ');
-      } else {
-        throw new Error('Sidecar too small');
+    const sidecarMatchesTrack = async (): Promise<boolean> => {
+      try {
+        await fs.access(sidecarPath);
+        const sidecarStats = await fs.stat(sidecarPath);
+        if (sidecarStats.size <= 1024) return false;
+
+        const sourceTrack = sourceStreams.find(
+          (s) => s.codec_type === 'audio' && s.index === trackIndex,
+        );
+        const expectedLang = sourceTrack?.tags?.language || 'und';
+        const sidecarStreams = await probeStreams(sidecarPath);
+        const sidecarAudio = sidecarStreams.find((s) => s.codec_type === 'audio');
+        if (!sidecarAudio) return false;
+        return (sidecarAudio.tags?.language || 'und') === expectedLang;
+      } catch {
+        return false;
       }
-    } catch {
+    };
+
+    if (await sidecarMatchesTrack()) {
+      console.log('[remuxAudioTrack] Using pre-extracted sidecar:', sidecarPath);
+      cmd = [
+        'ffmpeg -y',
+        `-i "${filePath}"`,
+        `-i "${sidecarPath}"`,
+        '-map 0:v:0',
+        '-map 1:a:0',
+        '-dn',
+        '-c copy',
+        '-disposition:a:0 default',
+        '-movflags +faststart',
+        `"${outputPath}"`,
+      ].join(' ');
+    } else {
+      try {
+        await fs.access(sidecarPath);
+        console.log('[remuxAudioTrack] Ignoring mismatched sidecar, mapping from source:', sidecarPath);
+      } catch {
+        // no sidecar
+      }
       cmd = [
         'ffmpeg -y',
         `-i "${filePath}"`,

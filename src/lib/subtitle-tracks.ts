@@ -95,7 +95,40 @@ function mapLang(lang: string | null | undefined): { code: string; label: string
   return LANG_MAP[key] ?? { code: key.slice(0, 2) || 'en', label: key.toUpperCase() };
 }
 
-/** Build Video.js subtitle tracks — one entry per file, no language dedup cap. */
+const MAX_PLAYBACK_SUBTITLE_TRACKS = 16;
+
+function selectPlaybackSubtitleTracks(tracks: SubtitleTrackPayload[]): SubtitleTrackPayload[] {
+  if (tracks.length <= MAX_PLAYBACK_SUBTITLE_TRACKS) {
+    return tracks;
+  }
+
+  const picked: SubtitleTrackPayload[] = [];
+  const pickedSrc = new Set<string>();
+  const pickedLang = new Set<string>();
+
+  const push = (track: SubtitleTrackPayload) => {
+    if (picked.length >= MAX_PLAYBACK_SUBTITLE_TRACKS || pickedSrc.has(track.src)) return;
+    picked.push(track);
+    pickedSrc.add(track.src);
+    pickedLang.add(track.srclang);
+  };
+
+  const firstEnglish = tracks.find((t) => t.srclang === 'en');
+  if (firstEnglish) push(firstEnglish);
+
+  for (const track of tracks) {
+    if (pickedSrc.has(track.src)) continue;
+    if (pickedLang.has(track.srclang)) continue;
+    push(track);
+  }
+  for (const track of tracks) {
+    push(track);
+  }
+
+  return picked.slice(0, MAX_PLAYBACK_SUBTITLE_TRACKS);
+}
+
+/** Build Video.js subtitle tracks for playback (capped to avoid overloading the player). */
 export function buildSubtitleTracks(subtitles: SubtitleRow[]): SubtitleTrackPayload[] {
   const seenPaths = new Set<string>();
   const tracks: SubtitleTrackPayload[] = [];
@@ -115,9 +148,10 @@ export function buildSubtitleTracks(subtitles: SubtitleRow[]): SubtitleTrackPayl
     });
   }
 
-  const defaultIdx = tracks.findIndex((t) => t.srclang === 'en');
+  const playbackTracks = selectPlaybackSubtitleTracks(tracks);
+  const defaultIdx = playbackTracks.findIndex((t) => t.srclang === 'en');
   const idx = defaultIdx >= 0 ? defaultIdx : 0;
-  if (tracks[idx]) tracks[idx].default = true;
+  if (playbackTracks[idx]) playbackTracks[idx].default = true;
 
-  return tracks;
+  return playbackTracks;
 }

@@ -1,0 +1,12 @@
+# MirrorMessiah: fill missing movie subtitles until OpenSubtitles daily quota is used.
+# Install: crontab -e and paste one line below (adjust paths).
+#
+# Runs at 03:15 every day; logs append to logs/fetch-subs.log in the repo.
+#
+# 15 3 * * * /home/tushita/dev/mirrormessiah/scripts/fetch-subs-daily.sh
+#
+# Optional env (add before the command or in the script):
+#   MM_FETCH_SUBS_LANG=es
+#   MM_FETCH_SUBS_LOG=/var/log/mirrormessiah-fetch-subs.log
+#
+# Requires in .env: OPENSUBS_USERNAME, OPENSUBS_PASSWORD

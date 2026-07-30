@@ -110,6 +110,20 @@ MirrorMessiah is managed locally using the Python CLI. All absolute directories 
     ```bash
     python3 scripts/mm.py organize
     ```
+*   **Full pipeline**: Sync, cleanup, organize, scrape metadata, then **download missing Spanish subtitles** (OpenSubtitles; uses daily API quota until exhausted).
+    ```bash
+    python3 scripts/mm.py full --root "/path/to/movies"
+    ```
+    Skip subtitles: `--no-fetch-subs`. Other language: `--fetch-subs-lang fr`.
+*   **Subtitles only** (OpenSubtitles; resumes where quota left off):
+    ```bash
+    python3 scripts/mm.py fetch-subs --no-backup
+    ```
+    Set `OPENSUBS_USERNAME` and `OPENSUBS_PASSWORD` in `.env`. For a large library, run daily via cron:
+    ```bash
+    # See scripts/cron/fetch-subs.crontab.example
+    15 3 * * * /home/tushita/dev/mirrormessiah/scripts/fetch-subs-daily.sh
+    ```
 *   **System Reset**: Wipe the SQLite registry database permanently.
     ```bash
     python3 scripts/mm.py reset

@@ -169,3 +169,11 @@
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .custom-scrollbar::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 10px; }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: hsl(var(--primary) / 0.5); }
+
+/* Native WebVTT cues (CC overlay uses html5 native text tracks) */
+.video-js video::cue {
+  background-color: rgba(0, 0, 0, 0.82);
+  color: #fff;
+  font-size: clamp(0.85rem, 2.2vw, 1.15rem);
+  line-height: 1.35;
+}

@@ -12,7 +12,7 @@ Commands:
   verify                    Check media integrity and mark unplayable titles for repair
   cleanup                   Identify and merge duplicate movie entries
   sync-assets               Link posters and verify 1080p MP4 compliance
-  full                      Run ingest, cleanup, organize, sync-assets, and scrape
+  full                      Run ingest, cleanup, organize, sync-assets, scrape, fetch-subs
   stage  <src> [--dest DIR] Prepare new movies: clean noise, check duplicates, and move to dest
   reset                     Permanently delete the database
   clean-files               Remove duplicate file rows, 4K links, missing paths
@@ -31,11 +31,13 @@ Requires: pip install requests python-dotenv beautifulsoup4
 """
 
 import argparse
+import gzip
 import mimetypes
 import os
 import re
 import shutil
 import sqlite3
+import struct
 import sys
 import time
 import subprocess
@@ -59,6 +61,11 @@ MEDIA_DIR = os.getenv('MEDIA_DIR') or '/media'
 TMDB_BASE = 'https://api.themoviedb.org/3'
 IMG_BASE  = 'https://image.tmdb.org/t/p/w500'
 DELAY     = 0.25
+
+OPENSUBS_API_KEY = os.getenv('OPENSUBS_API_KEY', 'REDACTED_OPENSUBS_API_KEY')
+OPENSUBS_BASE = 'https://api.opensubtitles.com/api/v1'
+OPENSUBS_UA = 'MirrorMessiah-mm/1.0'
+OPENSUBS_RATE_LIMIT_S = 0.35
 
 VIDEO_EXT = {'.mp4'}
 SUB_EXT   = {'.srt', '.vtt', '.ass', '.ssa'}
@@ -92,7 +99,7 @@ def open_db() -> sqlite3.Connection:
     if not Path(DB_PATH).exists():
         print(f'ERROR: DB not found: {DB_PATH}')
         sys.exit(1)
-    db = sqlite3.connect(DB_PATH)
+    db = sqlite3.connect(DB_PATH, timeout=30)
     db.row_factory = sqlite3.Row
     db.execute('PRAGMA foreign_keys = ON')
     db.execute('PRAGMA journal_mode = WAL')
@@ -525,6 +532,295 @@ def resync_movie_subtitles(db: sqlite3.Connection, movie_id: int, folder: Path) 
     return found, added, removed
 
 # ---------------------------------------------------------------------------
+# OpenSubtitles.com
+# ---------------------------------------------------------------------------
+def calculate_movie_hash(file_path: Path) -> str:
+    chunk_size = 65536
+    size = file_path.stat().st_size
+    if size < chunk_size:
+        raise ValueError('file too small to hash')
+    with open(file_path, 'rb') as f:
+        head = f.read(chunk_size)
+        f.seek(size - chunk_size)
+        tail = f.read(chunk_size)
+    data = head + tail
+    hash_val = size
+    for i in range(0, len(data), 8):
+        chunk = data[i : i + 8].ljust(8, b'\0')
+        hash_val = (hash_val + struct.unpack('<Q', chunk)[0]) & 0xFFFFFFFFFFFFFFFF
+    return format(hash_val, '016x')
+
+
+def opensubs_request_headers(token: str | None = None) -> dict[str, str]:
+    headers = {
+        'Api-Key': OPENSUBS_API_KEY,
+        'Content-Type': 'application/json',
+        'Accept': '*/*',
+        'User-Agent': OPENSUBS_UA,
+    }
+    if token:
+        headers['Authorization'] = f'Bearer {token}'
+    return headers
+
+
+def opensubs_login() -> str | None:
+    username = os.getenv('OPENSUBS_USERNAME')
+    password = os.getenv('OPENSUBS_PASSWORD')
+    if not username or not password:
+        return None
+    r = requests.post(
+        f'{OPENSUBS_BASE}/login',
+        headers=opensubs_request_headers(),
+        json={'username': username, 'password': password},
+        timeout=30,
+    )
+    r.raise_for_status()
+    return r.json().get('token')
+
+
+def movie_has_lang_sub(video_path: Path, lang: str) -> bool:
+    if video_path.with_suffix(f'.{lang}.srt').exists():
+        return True
+    for sub_path in find_subtitle_files(video_path.parent):
+        if detect_lang_from_path(sub_path) == lang:
+            return True
+    return False
+
+
+def _opensubs_get(path: str, token: str | None, params: dict[str, str] | None = None, retries: int = 3) -> requests.Response:
+    url = f'{OPENSUBS_BASE}{path}'
+    last_err: Exception | None = None
+    for attempt in range(1, retries + 1):
+        try:
+            r = requests.get(
+                url,
+                headers=opensubs_request_headers(token),
+                params=params,
+                timeout=45,
+            )
+            if r.status_code == 429 and attempt < retries:
+                time.sleep(0.75 * attempt)
+                continue
+            return r
+        except requests.RequestException as e:
+            last_err = e
+            if attempt < retries:
+                time.sleep(0.75 * attempt)
+    raise last_err  # type: ignore[misc]
+
+
+def opensubs_search(video_path: Path, lang: str, token: str | None, imdb_id: str | None) -> list[dict]:
+    lang = lang.lower()
+    imdb = None
+    if imdb_id:
+        imdb = imdb_id[2:] if imdb_id.startswith('tt') else imdb_id
+
+    moviehash: str | None = None
+    try:
+        moviehash = calculate_movie_hash(video_path)
+    except (OSError, ValueError):
+        pass
+
+    attempts: list[dict[str, str]] = []
+    if moviehash and imdb:
+        attempts.append({'languages': lang, 'imdb_id': imdb, 'moviehash': moviehash})
+    if imdb:
+        attempts.append({'languages': lang, 'imdb_id': imdb})
+    if moviehash:
+        attempts.append({'languages': lang, 'moviehash': moviehash})
+    attempts.append({'languages': lang, 'query': video_path.stem.lower()})
+
+    seen: set[tuple[tuple[str, str], ...]] = set()
+    for params in attempts:
+        key = tuple(sorted(params.items()))
+        if key in seen:
+            continue
+        seen.add(key)
+        ordered = dict(sorted(params.items()))
+        r = _opensubs_get('/subtitles', token, ordered)
+        r.raise_for_status()
+        data = r.json().get('data') or []
+        if data:
+            return data
+        time.sleep(OPENSUBS_RATE_LIMIT_S)
+    return []
+
+
+def opensubs_download_file(file_id: int, token: str | None) -> tuple[str, int | None]:
+    last_err: Exception | None = None
+    for attempt in range(1, 4):
+        try:
+            r = requests.post(
+                f'{OPENSUBS_BASE}/download',
+                headers=opensubs_request_headers(token),
+                json={'file_id': file_id},
+                timeout=45,
+            )
+            if r.status_code == 429 and attempt < 3:
+                time.sleep(0.75 * attempt)
+                continue
+            r.raise_for_status()
+            payload = r.json()
+            link = payload.get('link')
+            if not link:
+                raise RuntimeError(payload.get('message') or 'no download link from OpenSubtitles')
+            return link, payload.get('remaining')
+        except requests.RequestException as e:
+            last_err = e
+            if attempt < 3:
+                time.sleep(0.75 * attempt)
+    raise last_err  # type: ignore[misc]
+
+
+def save_opensubs_download(link: str, dest: Path) -> None:
+    r = requests.get(link, headers={'User-Agent': 'TemporaryUserAgent'}, timeout=120)
+    r.raise_for_status()
+    raw = r.content
+    try:
+        raw = gzip.decompress(raw)
+    except OSError:
+        pass
+    dest.write_bytes(raw)
+
+
+def fetch_spanish_sub_for_video(
+    video_path: Path,
+    lang: str,
+    token: str | None,
+    imdb_id: str | None,
+) -> tuple[bool, str, int | None]:
+    dest = video_path.with_suffix(f'.{lang}.srt')
+    subs = opensubs_search(video_path, lang, token, imdb_id)
+    if not subs:
+        return False, 'no subtitles found', None
+    file_id = subs[0]['attributes']['files'][0]['file_id']
+    link, remaining = opensubs_download_file(file_id, token)
+    save_opensubs_download(link, dest)
+    return True, str(dest.name), remaining
+
+
+def movies_missing_subtitle_lang(db: sqlite3.Connection, lang: str, movie_id: int | None = None) -> list[sqlite3.Row]:
+    lang = lang.lower()
+    lang_codes = [lang]
+    if lang == 'es':
+        lang_codes.append('spa')
+    placeholders = ','.join('?' for _ in lang_codes)
+    query = f"""
+        SELECT DISTINCT m.id, m.title, m.imdb_id, f.path AS video_path
+        FROM movies m
+        JOIN files f ON f.movie_id = m.id
+        WHERE NOT EXISTS (
+            SELECT 1 FROM subtitles s
+            WHERE s.movie_id = m.id AND LOWER(s.lang) IN ({placeholders})
+        )
+    """
+    params: list[object] = list(lang_codes)
+    if movie_id is not None:
+        query += ' AND m.id = ?'
+        params.append(movie_id)
+    query += ' ORDER BY m.title COLLATE NOCASE'
+    rows = db.execute(query, params).fetchall()
+    # One row per movie (prefer first file path); dedupe by movie id
+    by_id: dict[int, sqlite3.Row] = {}
+    for row in rows:
+        if row['id'] not in by_id:
+            by_id[row['id']] = row
+    return list(by_id.values())
+
+
+def add_fetch_subs_cli_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument('--lang', default='es', help='Language code (default: es)')
+    parser.add_argument('--movie-id', type=int, help='Only fetch for one movie id')
+    parser.add_argument('--limit', type=int, help='Max titles to process')
+    parser.add_argument('--dry-run', action='store_true')
+    parser.add_argument('--no-backup', action='store_true')
+
+
+def cmd_fetch_subs(args) -> None:
+    lang = (args.lang or 'es').lower()
+    backup_db(args)
+    db = open_db()
+    token = opensubs_login()
+    if token:
+        print('OpenSubtitles: logged in (account quota).')
+    else:
+        print('OpenSubtitles: anonymous mode (~5 downloads/day). Set OPENSUBS_USERNAME/PASSWORD in .env for bulk.')
+
+    targets = movies_missing_subtitle_lang(db, lang, args.movie_id)
+    if args.limit:
+        targets = targets[: args.limit]
+
+    print(f"\n--- PHASE: Fetch Subtitles [{lang}] ({len(targets)} titles missing in DB) ---")
+    ok, skipped, failed = 0, 0, 0
+    remaining_quota: int | None = None
+    quota_exhausted = False
+
+    for i, row in enumerate(targets, 1):
+        video_path = Path(row['video_path'])
+        title = row['title']
+        if not video_path.is_file():
+            print(f"  [{i}/{len(targets)}] [!] Missing file: {title}")
+            failed += 1
+            continue
+        if movie_has_lang_sub(video_path, lang):
+            folder = video_path.parent
+            resync_movie_subtitles(db, row['id'], folder)
+            skipped += 1
+            continue
+
+        if args.dry_run:
+            print(f"  [{i}/{len(targets)}] [dry-run] Would fetch: {title}")
+            continue
+
+        print(f"  [{i}/{len(targets)}] … {title}")
+        try:
+            time.sleep(OPENSUBS_RATE_LIMIT_S)
+            success, detail, remaining_quota = fetch_spanish_sub_for_video(
+                video_path, lang, token, row['imdb_id'],
+            )
+            if success:
+                resync_movie_subtitles(db, row['id'], video_path.parent)
+                db.commit()
+                ok += 1
+                print(f"           + {detail}")
+                if remaining_quota is not None and remaining_quota == 0:
+                    quota_exhausted = True
+                    if token:
+                        print('\n  OpenSubtitles daily download quota exhausted. Re-run tomorrow (e.g. cron).')
+                    else:
+                        print('\n  Anonymous OpenSubtitles quota exhausted. Add OPENSUBS_USERNAME/PASSWORD to .env and re-run.')
+                    break
+            else:
+                failed += 1
+                print(f"           - {detail}")
+        except requests.HTTPError as e:
+            failed += 1
+            body = ''
+            if e.response is not None:
+                body = e.response.text[:200]
+            print(f"           - HTTP {e.response.status_code if e.response else '?'}: {body or e}")
+            if e.response is not None and e.response.status_code in (401, 403):
+                break
+            if body and 'quota' in body.lower():
+                quota_exhausted = True
+                print('\n  OpenSubtitles download quota exhausted. Re-run tomorrow (e.g. cron).')
+                break
+        except Exception as e:
+            failed += 1
+            print(f"           - {e}")
+
+        time.sleep(OPENSUBS_RATE_LIMIT_S)
+
+    db.commit()
+    db.close()
+    still_missing = max(0, len(targets) - ok - skipped - failed)
+    print(f"\nFETCH_SUBS_COMPLETE: {ok} downloaded, {skipped} already on disk, {failed} failed/skipped.")
+    if quota_exhausted and still_missing > 0:
+        print(f"  {still_missing} title(s) still to fetch — schedule daily: scripts/fetch-subs-daily.sh")
+    if remaining_quota is not None and remaining_quota >= 0:
+        print(f"  OpenSubtitles remaining downloads (API): {remaining_quota}")
+
+# ---------------------------------------------------------------------------
 # TMDB helpers
 # ---------------------------------------------------------------------------
 def tmdb_get(endpoint: str, **params) -> dict:
@@ -709,7 +1005,19 @@ def ingest_path(db: sqlite3.Connection, path: Path, library_id: int, auto_scrape
             if not any(f.suffix.lower() == '.mp4' for f in video_files): return False
         else: return False
 
-    meta = parse_folder_name(folder.name)
+    # Probe files before opening a write transaction (ffprobe is slow and would block other writers).
+    detected_quality = None
+    file_records: list[tuple[Path, int, str]] = []
+    for vf in video_files:
+        ff_meta = get_video_metadata(vf)
+        if ff_meta and ff_meta.get('quality'):
+            detected_quality = ff_meta['quality']
+        file_records.append((vf, vf.stat().st_size, vf.suffix.lstrip('.')))
+
+    subtitle_records: list[tuple[Path, str, str]] = []
+    for sf in find_subtitle_files(folder):
+        subtitle_records.append((sf, detect_lang_from_path(sf), sf.suffix.lstrip('.')))
+
     existing = db.execute(
         'SELECT id FROM movies WHERE LOWER(title)=LOWER(?) AND COALESCE(year,0)=COALESCE(?,0) AND library_id = ?',
         (meta['title'], meta['year'], library_id),
@@ -734,22 +1042,18 @@ def ingest_path(db: sqlite3.Connection, path: Path, library_id: int, auto_scrape
         if category.lower() == 'family':
             db.execute("UPDATE movies SET audience = 'family' WHERE id = ?", (movie_id,))
 
+    if detected_quality:
+        db.execute('UPDATE movies SET quality = ? WHERE id = ?', (detected_quality, movie_id))
+
     files_added = 0
-    for vf in video_files:
-        size = vf.stat().st_size
-        ff_meta = get_video_metadata(vf)
-        if ff_meta and ff_meta.get('quality'):
-            db.execute('UPDATE movies SET quality = ? WHERE id = ?', (ff_meta['quality'], movie_id))
-        container = vf.suffix.lstrip('.')
+    for vf, size, container in file_records:
         cur = db.execute(
             "INSERT OR IGNORE INTO files (library_id, movie_id, path, size_bytes, container) VALUES (?,?,?,?,?)",
             (library_id, movie_id, str(vf), size, container),
         )
         if cur.rowcount > 0: files_added += 1
 
-    for sf in find_subtitle_files(folder):
-        lang = detect_lang_from_path(sf)
-        fmt  = sf.suffix.lstrip('.')
+    for sf, lang, fmt in subtitle_records:
         db.execute("INSERT OR IGNORE INTO subtitles (movie_id, path, lang, format) VALUES (?,?,?,?)", (movie_id, str(sf), lang, fmt))
 
     resync_movie_subtitles(db, movie_id, folder)
@@ -1253,6 +1557,9 @@ def cmd_full(args):
     if not hasattr(args, 'force'): args.force = False
     if not hasattr(args, 'dry_run'): args.dry_run = False
     if not hasattr(args, 'category'): args.category = None
+    if not hasattr(args, 'no_fetch_subs'): args.no_fetch_subs = False
+    if not hasattr(args, 'fetch_subs_lang'): args.fetch_subs_lang = 'es'
+    if not hasattr(args, 'fetch_subs_limit'): args.fetch_subs_limit = None
     
     cmd_sync(args)
     
@@ -1269,6 +1576,16 @@ def cmd_full(args):
         # Second organize pass: if scraping found missing years, apply them to the filesystem
         print(f"\n--- PHASE: Final Folder Alignment ---")
         cmd_organize(args)
+    
+    if not args.no_fetch_subs:
+        fetch_args = argparse.Namespace(
+            lang=args.fetch_subs_lang,
+            movie_id=None,
+            limit=args.fetch_subs_limit,
+            dry_run=False,
+            no_backup=True,
+        )
+        cmd_fetch_subs(fetch_args)
     
     print(f"\n==========================================")
     print(f"   INTEGRATION COMPLETE")
@@ -1311,9 +1628,22 @@ def main():
     sub.add_parser('status', help='Display collection and database statistics')
     sub.add_parser('sync-assets', help='Link posters and purge broken artwork paths')
     
-    p_full = sub.add_parser('full', help='Complete pipeline: Sync -> Cleanup -> Organize -> Scrape')
+    p_full = sub.add_parser('full', help='Complete pipeline: Sync -> Cleanup -> Organize -> Scrape -> Fetch subs')
     p_full.add_argument('--root', dest='dir', default=MEDIA_DIR)
     p_full.add_argument('--category', help='Default category for this run')
+    p_full.add_argument('--no-scrape', action='store_true')
+    p_full.add_argument('--no-backup', action='store_true')
+    p_full.add_argument('--no-fetch-subs', action='store_true', help='Skip OpenSubtitles Spanish/missing subs pass')
+    p_full.add_argument(
+        '--fetch-subs-lang',
+        default='es',
+        help='Subtitle language to download when missing (default: es)',
+    )
+    p_full.add_argument(
+        '--fetch-subs-limit',
+        type=int,
+        help='Max subtitle downloads during full (for testing)',
+    )
     
     p_reset = sub.add_parser('reset', help='Factory reset: permanently delete the database')
     p_reset.add_argument('--force', action='store_true')
@@ -1341,6 +1671,9 @@ def main():
         help='Pre-build instant audio-switch caches for existing multi-track MP4 files',
     )
     p_prebuild.add_argument('dir', nargs='?', default=MEDIA_DIR, help='Movie library root to scan recursively')
+
+    p_fetch = sub.add_parser('fetch-subs', help='Download missing subtitles from OpenSubtitles.com')
+    add_fetch_subs_cli_args(p_fetch)
     
     args = parser.parse_args()
     dispatch = {
@@ -1348,7 +1681,7 @@ def main():
         'status': cmd_status, 'organize': cmd_organize, 'cleanup': cmd_cleanup,
         'sync-assets': cmd_sync_assets, 'full': cmd_full, 'reset': cmd_reset,
         'stage': cmd_stage, 'verify': cmd_verify, 'convert': cmd_convert,
-        'prebuild-audio': cmd_prebuild_audio,
+        'prebuild-audio': cmd_prebuild_audio, 'fetch-subs': cmd_fetch_subs,
     }
     dispatch[args.command](args)
 

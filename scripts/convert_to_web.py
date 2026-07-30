@@ -28,14 +28,23 @@ CONVERT_SOURCE_EXT = {'.mkv', '.avi', '.webm', '.mov'}
 
 def is_convert_source(file_path: Path) -> bool:
     name = file_path.name.lower()
-    if name.endswith('.mkv.bak'):
-        return True
+    if name.endswith('.bak'):
+        stem_path = Path(file_path.stem)
+        if stem_path.suffix.lower() in CONVERT_SOURCE_EXT:
+            return True
     return file_path.suffix.lower() in CONVERT_SOURCE_EXT
+
+def needs_stereo_downmix(file_path: Path) -> bool:
+    streams = get_streams(file_path)
+    audio_streams = [s for s in streams if s.get('codec_type') == 'audio']
+    return any((s.get('channels') or 0) > 2 for s in audio_streams)
 
 def output_mp4_path(source: Path) -> Path:
     name = source.name
-    if name.lower().endswith('.mkv.bak'):
-        base = name[:-8]
+    if name.lower().endswith('.bak'):
+        # Strip both .bak and the original extension (e.g. .mkv.bak -> .mkv -> base)
+        base = Path(name).stem
+        base = Path(base).stem
     else:
         base = source.stem
     return source.parent / f"{base}.mp4"
@@ -102,19 +111,23 @@ def _audio_cache_paths(mp4_path: Path, track_index: int) -> dict[str, Path]:
         'remux': cache_dir / f'{base}.aud{track_index}.mp4',
     }
 
-def _is_valid_audio_cache(cache_path: Path, source_path: Path, track_index: int) -> bool:
-    if not cache_path.exists() or cache_path.stat().st_size < 1024:
-        return False
-
+def _audio_track_language(source_path: Path, track_index: int) -> str | None:
     src_streams = get_streams(source_path)
     src_track = next(
         (s for s in src_streams if s.get('codec_type') == 'audio' and s.get('index') == track_index),
         None,
     )
     if not src_track:
+        return None
+    return src_track.get('tags', {}).get('language', 'und')
+
+def _is_valid_audio_cache(cache_path: Path, source_path: Path, track_index: int) -> bool:
+    if not cache_path.exists() or cache_path.stat().st_size < 1024:
         return False
 
-    expected_lang = src_track.get('tags', {}).get('language', 'und')
+    expected_lang = _audio_track_language(source_path, track_index)
+    if expected_lang is None:
+        return False
     cache_streams = get_streams(cache_path)
     cache_audio = [s for s in cache_streams if s.get('codec_type') == 'audio']
     if len(cache_audio) != 1:
@@ -131,11 +144,13 @@ def _extract_audio_sidecar(mp4_path: Path, track_index: int, sidecar_path: Path)
         print(f"  [+] Sidecar {sidecar_path.name} already exists.")
         return True
 
-    print(f"  [*] Extracting audio track {track_index} -> {sidecar_path.name}")
+    lang = _audio_track_language(mp4_path, track_index) or 'und'
+    print(f"  [*] Extracting audio track {track_index} ({lang}) -> {sidecar_path.name}")
     cmd = [
         'ffmpeg', '-y', '-i', str(mp4_path),
         '-map', f'0:{track_index}',
         '-dn', '-c:a', 'copy',
+        '-metadata:s:a:0', f'language={lang}',
         str(sidecar_path),
     ]
     try:
@@ -159,6 +174,7 @@ def _build_audio_switch_cache(mp4_path: Path, track_index: int) -> bool:
     if not _extract_audio_sidecar(mp4_path, track_index, paths['sidecar']):
         return False
 
+    lang = _audio_track_language(mp4_path, track_index) or 'und'
     print(f"  [*] Building switch cache {paths['remux'].name} (one-time, enables instant switching)...")
     cmd = [
         'ffmpeg', '-y',
@@ -167,6 +183,7 @@ def _build_audio_switch_cache(mp4_path: Path, track_index: int) -> bool:
         '-map', '0:v:0', '-map', '1:a:0',
         '-dn', '-c', 'copy',
         '-disposition:a:0', 'default',
+        '-metadata:s:a:0', f'language={lang}',
         '-movflags', '+faststart',
         str(paths['remux']),
     ]
@@ -197,6 +214,11 @@ def prebuild_audio_switch_caches(mp4_path: Path) -> None:
         _build_audio_switch_cache(mp4_path, stream['index'])
 
 def convert_file(file_path: Path, prebuild_audio: bool = True):
+    final_out = output_mp4_path(file_path)
+    if final_out.exists():
+        print(f"\nSkipping {file_path.name}: Output file {final_out.name} already exists.")
+        return
+
     print(f"\nProcessing: {file_path.name}")
     streams = get_streams(file_path)
     
@@ -225,15 +247,30 @@ def convert_file(file_path: Path, prebuild_audio: bool = True):
         v_cmd = ['-c:v', 'libx264', '-preset', 'fast', '-crf', '23', '-pix_fmt', 'yuv420p']
         print(f"  [*] Video is {v_codec} ({pix_fmt}). Re-encoding to H.264 (8-bit)...")
 
-    # If the audio is already AAC (or MP3, which is also web compatible), we copy it.
-    needs_audio_encode = any(c not in ('aac', 'mp3') for c in a_codecs) if a_codecs else False
+    # If the audio is already AAC-LC (or MP3, which is also web compatible), we copy it.
+    # HE-AAC streams are re-encoded to standard AAC-LC to guarantee web player support.
+    audio_streams = [s for s in streams if s.get('codec_type') == 'audio']
+    max_channels = max((s.get('channels') or 0) for s in audio_streams) if audio_streams else 0
+    needs_audio_encode = False
+    for s in audio_streams:
+        codec = s.get('codec_name', '')
+        profile = s.get('profile', '') or ''
+        if codec not in ('aac', 'mp3') or 'HE-' in profile:
+            needs_audio_encode = True
+            break
+
+    if max_channels > 2:
+        needs_audio_encode = True
 
     if not needs_audio_encode and a_codecs:
         a_cmd = ['-c:a', 'copy']
         print(f"  [+] All audio streams are web-compatible. Copying streams.")
+    elif max_channels > 2:
+        a_cmd = ['-c:a', 'aac', '-b:a', '192k', '-ac', '2']
+        print(f"  [*] Downmixing {max_channels}-channel audio to stereo AAC for browser playback...")
     else:
         a_cmd = ['-c:a', 'aac', '-b:a', '192k']
-        print(f"  [*] Re-encoding audio to AAC...")
+        print(f"  [*] Re-encoding audio to standard AAC...")
 
     import shutil
     import tempfile
@@ -249,11 +286,13 @@ def convert_file(file_path: Path, prebuild_audio: bool = True):
     os.close(fd)
     temp_out = Path(temp_out_str)
 
+    audio_map = ['-map', '0:a:0'] if max_channels > 2 else ['-map', '0:a?']
+
     # Build the ffmpeg command
     cmd = [
         'ffmpeg', '-y', '-i', str(file_path),
         '-map', '0:v:0', # Map only the first video stream (ignores embedded cover art/images)
-        '-map', '0:a?',  # Map all audio streams
+        *audio_map,
         *v_cmd,
         *a_cmd,
         # Ensure the moov atom is moved to the start of the file for web streaming
@@ -316,6 +355,11 @@ def main():
         action="store_true",
         help="Only pre-build audio switch caches for existing MP4 files (no video conversion)",
     )
+    parser.add_argument(
+        "--downmix-stereo",
+        action="store_true",
+        help="Re-mux MP4/MKV files with >2 audio channels down to stereo (video stream copied when possible)",
+    )
     args = parser.parse_args()
 
     target_path = args.target
@@ -337,7 +381,7 @@ def main():
                 prebuild_file(target)
             else:
                 print(f"Not an MP4 file: {target.name}")
-        elif is_convert_source(target):
+        elif is_convert_source(target) or (args.downmix_stereo and target.suffix.lower() == '.mp4' and needs_stereo_downmix(target)):
             convert_file(target, prebuild_audio=not args.skip_audio_prebuild)
         else:
             print(f"Not a recognized convertible video file: {target.name}")
@@ -367,7 +411,10 @@ def main():
         print(f"Found {len(all_files)} total items. Starting conversion pass...")
         
         for f in all_files:
-            if f.is_file() and is_convert_source(f):
+            convertible = is_convert_source(f) or (
+                args.downmix_stereo and f.suffix.lower() == '.mp4' and needs_stereo_downmix(f)
+            )
+            if f.is_file() and convertible:
                 # Do not process temp files
                 if not f.name.startswith('.mm_tmp_'):
                     # Check if file still exists (might have been renamed by scrape/organize)

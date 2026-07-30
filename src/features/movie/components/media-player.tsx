@@ -37,38 +37,122 @@ function clearRemoteTextTracks(player: VideoJsPlayer) {
   }
 }
 
-function addRemoteTextTracks(player: VideoJsPlayer, tracks: SubtitleTrack[]) {
+function resolveInitialSubtitleIndex(
+  tracks: SubtitleTrack[],
+  activeIndex: number | null | undefined,
+): number | null {
+  if (activeIndex !== undefined) return activeIndex;
+  const defaultIdx = tracks.findIndex((t) => t.default);
+  if (defaultIdx >= 0) return defaultIdx;
+  return tracks.length > 0 ? 0 : null;
+}
+
+function addRemoteTextTracks(
+  player: VideoJsPlayer,
+  tracks: SubtitleTrack[],
+  activeIndex?: number | null,
+) {
   clearRemoteTextTracks(player);
   if (!tracks.length) return;
 
+  const showingIndex = resolveInitialSubtitleIndex(tracks, activeIndex);
+
   tracks.forEach((subtitle, index) => {
-    const isDefault = subtitle.default || index === 0;
+    const shouldShow = showingIndex !== null && index === showingIndex;
     const textTrack = player.addRemoteTextTrack(
       {
         kind: 'subtitles',
         src: subtitle.src,
         srclang: subtitle.srclang || 'en',
         label: subtitle.label || 'Subtitles',
-        default: isDefault,
+        default: shouldShow,
       },
       false,
     );
 
     if (textTrack) {
       const track = (textTrack as { track?: TextTrack }).track;
-      if (track) track.mode = isDefault ? 'showing' : 'disabled';
+      if (track) applyTextTrackMode(track, shouldShow);
     }
   });
 }
 
+function listRemoteTextTracks(player: VideoJsPlayer): TextTrack[] {
+  const raw = player.remoteTextTracks();
+  const out: TextTrack[] = [];
+  for (let i = 0; i < raw.length; i++) {
+    out.push((raw as unknown as TextTrack[])[i]);
+  }
+  return out;
+}
+
+function attachSubtitleTracks(
+  player: VideoJsPlayer,
+  tracks: SubtitleTrack[],
+  activeIndex?: number | null,
+  replace = false,
+) {
+  if (player.isDisposed()) return;
+
+  if (!tracks.length) {
+    clearRemoteTextTracks(player);
+    return;
+  }
+
+  const remote = listRemoteTextTracks(player);
+  if (!replace && remote.length === tracks.length) {
+    setActiveTextTrack(player, resolveInitialSubtitleIndex(tracks, activeIndex));
+    return;
+  }
+
+  addRemoteTextTracks(player, tracks, activeIndex);
+  setActiveTextTrack(player, resolveInitialSubtitleIndex(tracks, activeIndex));
+}
+
+function applyTextTrackMode(track: TextTrack, showing: boolean) {
+  if (!showing) {
+    track.mode = 'disabled';
+    return;
+  }
+
+  const show = () => {
+    track.mode = 'showing';
+  };
+
+  const readyState = (track as TextTrack & { readyState?: number }).readyState;
+  const cues = (track as TextTrack & { cues?: TextTrackCueList | null }).cues;
+  if (readyState === 2 || (cues && cues.length > 0)) {
+    show();
+    return;
+  }
+
+  track.mode = 'hidden';
+  track.addEventListener('load', show, { once: true });
+  track.addEventListener('cuechange', show, { once: true });
+  track.addEventListener('error', () => {
+    track.mode = 'disabled';
+  }, { once: true });
+  window.setTimeout(() => {
+    if (track.mode === 'hidden') show();
+  }, 500);
+}
+
 function setActiveTextTrack(player: VideoJsPlayer, trackIndex: number | null) {
-  const tracks = player.remoteTextTracks() as unknown as TextTrack[];
+  const tracks = listRemoteTextTracks(player);
   for (let i = 0; i < tracks.length; i++) {
-    tracks[i].mode = trackIndex === i ? 'showing' : 'disabled';
+    applyTextTrackMode(tracks[i], trackIndex === i);
   }
 }
 
 const CAST_SENDER_URL = 'https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1';
+
+/** Repair API is movie-only (numeric id). Episodes use ids like `episode_4`. */
+function movieRepairId(id: string | number | undefined): number | null {
+  if (id === undefined) return null;
+  if (typeof id === 'number' && Number.isFinite(id)) return id;
+  if (typeof id === 'string' && /^\d+$/.test(id)) return parseInt(id, 10);
+  return null;
+}
 
 function loadCastSenderScript(): Promise<void> {
   if (typeof window === 'undefined') return Promise.resolve();
@@ -98,7 +182,15 @@ function loadCastSenderScript(): Promise<void> {
   });
 }
 
-export function MediaPlayer({ 
+function originalEncodedPathFromSrc(streamSrc: string): string | null {
+  try {
+    return new URL(streamSrc, 'http://local').searchParams.get('path');
+  } catch {
+    return null;
+  }
+}
+
+export function MediaPlayer({
   id,
   src, 
   mimeType = 'video/mp4', 
@@ -110,7 +202,7 @@ export function MediaPlayer({
   const videoRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<VideoJsPlayer | null>(null);
   const [error, setError] = useState<{ code: number; message: string } | null>(null);
-  const [isFlagged, setIsFlagged] = useState(false);
+  const isFlaggedRef = useRef(false);
   const [audioTracks, setAudioTracks] = useState<AudioTrackInfo[]>([]);
   const [showAudioMenu, setShowAudioMenu] = useState(false);
   const [showSubtitleMenu, setShowSubtitleMenu] = useState(false);
@@ -120,9 +212,21 @@ export function MediaPlayer({
 
   const ctx = useRef({ id, src });
   const subtitlesRef = useRef(subtitles);
-  const lastSrcRef = useRef(src);
+  const activeSubtitleIndexRef = useRef<number | null | undefined>(undefined);
+  const lastSrcRef = useRef<string | null>(null);
+  const pendingStreamLoadRef = useRef<{ resumeAt: number; autoplay: boolean } | null>(null);
   const mimeTypeRef = useRef(mimeType);
-  const [effectiveSrc, setEffectiveSrc] = useState(src);
+  const audioResolveAbortRef = useRef<AbortController | null>(null);
+  const audioSelectionEpochRef = useRef(0);
+  const [effectiveSrc, setEffectiveSrc] = useState(() => {
+    if (typeof window === 'undefined') return src;
+    const currentId = id || src;
+    const hasSavedAudio =
+      localStorage.getItem(audioPathKey(currentId)) &&
+      localStorage.getItem(audioPreferenceKey(currentId));
+    // Avoid streaming the original multi-track file until remux path is resolved.
+    return hasSavedAudio ? '' : src;
+  });
 
   useEffect(() => {
     mimeTypeRef.current = mimeType;
@@ -133,6 +237,19 @@ export function MediaPlayer({
   }, [subtitles]);
 
   useEffect(() => {
+    activeSubtitleIndexRef.current = activeSubtitleIndex;
+  }, [activeSubtitleIndex]);
+
+  const resyncSubtitleTracks = (player: VideoJsPlayer, replaceTracks = false) => {
+    attachSubtitleTracks(
+      player,
+      subtitlesRef.current,
+      activeSubtitleIndexRef.current,
+      replaceTracks,
+    );
+  };
+
+  useEffect(() => {
     ctx.current = { id, src };
   }, [id, src]);
 
@@ -141,6 +258,12 @@ export function MediaPlayer({
       setEffectiveSrc(src);
       return;
     }
+
+    audioResolveAbortRef.current?.abort();
+    const abort = new AbortController();
+    audioResolveAbortRef.current = abort;
+    const epochAtStart = audioSelectionEpochRef.current;
+    lastSrcRef.current = null;
 
     const currentId = id || src;
     const savedPath = localStorage.getItem(audioPathKey(currentId));
@@ -155,15 +278,21 @@ export function MediaPlayer({
 
     if (!savedPath || !savedTrack || !sourcePath) {
       setEffectiveSrc(src);
-      return;
+      return () => abort.abort();
     }
+
+    setEffectiveSrc('');
 
     fetch(
       `/api/audio/resolve?source=${encodeURIComponent(sourcePath)}&track=${encodeURIComponent(savedTrack)}`,
-      { credentials: 'same-origin' },
+      { credentials: 'same-origin', signal: abort.signal },
     )
       .then((res) => (res.ok ? res.json() : { valid: false }))
       .then((data: { valid?: boolean; encodedPath?: string }) => {
+        if (abort.signal.aborted) return;
+        if (audioSelectionEpochRef.current !== epochAtStart) return;
+        if (localStorage.getItem(audioPreferenceKey(currentId)) !== savedTrack) return;
+
         if (data.valid && data.encodedPath) {
           setEffectiveSrc(rebuildStreamSrc(src, data.encodedPath));
           return;
@@ -172,7 +301,12 @@ export function MediaPlayer({
         localStorage.removeItem(audioPreferenceKey(currentId));
         setEffectiveSrc(src);
       })
-      .catch(() => setEffectiveSrc(src));
+      .catch((err) => {
+        if (abort.signal.aborted) return;
+        setEffectiveSrc(src);
+      });
+
+    return () => abort.abort();
   }, [id, src]);
 
   // Fetch audio tracks from API (avoids server-action timeouts on large libraries)
@@ -190,7 +324,22 @@ export function MediaPlayer({
         .then((res) => (res.ok ? res.json() : { tracks: [] }))
         .then((data: { tracks?: AudioTrackInfo[] }) => {
           const tracks = data.tracks || [];
-          setAudioTracks(tracks.length > 1 ? tracks : []);
+          if (tracks.length <= 1) {
+            setAudioTracks([]);
+            return;
+          }
+          const sorted = [...tracks].sort((a, b) => {
+            const rank = (lang: string) => {
+              const key = lang.toLowerCase();
+              if (key === 'eng' || key === 'en') return 0;
+              if (key === 'jpn' || key === 'ja') return 1;
+              return 2;
+            };
+            const byLang = rank(a.language) - rank(b.language);
+            if (byLang !== 0) return byLang;
+            return a.index - b.index;
+          });
+          setAudioTracks(sorted);
         })
         .catch((e) => console.error('Error fetching audio tracks', e));
     } catch (e) {
@@ -199,38 +348,18 @@ export function MediaPlayer({
   }, [effectiveSrc]);
 
   const swapStreamSource = (newSrc: string, resumeAt: number) => {
-    lastSrcRef.current = newSrc;
-    setEffectiveSrc(newSrc);
-
     const player = playerRef.current;
-    if (!player || player.isDisposed()) return;
-
-    const wasPaused = player.paused();
-    player.src({ src: newSrc, type: mimeTypeRef.current });
-    player.load();
-
-    const onReady = () => {
-      if (resumeAt > 0) {
-        player.currentTime(resumeAt);
-      }
-      if (!wasPaused) {
-        player.play()?.catch(() => {});
-      }
-      player.off('loadedmetadata', onReady);
+    pendingStreamLoadRef.current = {
+      resumeAt,
+      autoplay: player ? !player.paused() : true,
     };
-    player.on('loadedmetadata', onReady);
+    setEffectiveSrc(newSrc);
   };
 
   const handleTrackSelect = async (trackIndex: number) => {
     if (isSwappingAudio) return;
 
-    let encodedPath: string | null = null;
-    try {
-      const urlObj = new URL(src, window.location.origin);
-      encodedPath = urlObj.searchParams.get('path');
-    } catch {
-      // ignore parse errors
-    }
+    let encodedPath = originalEncodedPathFromSrc(src);
 
     if (!encodedPath) return;
 
@@ -259,6 +388,9 @@ export function MediaPlayer({
       };
 
       if (response.ok && result.success && result.encodedPath) {
+        audioSelectionEpochRef.current += 1;
+        audioResolveAbortRef.current?.abort();
+
         localStorage.setItem(audioPathKey(currentId), result.encodedPath);
         localStorage.setItem(audioPreferenceKey(currentId), String(trackIndex));
         const newSrc = rebuildStreamSrc(src, result.encodedPath, true);
@@ -282,10 +414,11 @@ export function MediaPlayer({
 
   const handleSubtitleSelect = (trackIndex: number | null) => {
     setShowSubtitleMenu(false);
+    activeSubtitleIndexRef.current = trackIndex;
     setActiveSubtitleIndex(trackIndex);
     const player = playerRef.current;
     if (player && !player.isDisposed()) {
-      setActiveTextTrack(player, trackIndex);
+      attachSubtitleTracks(player, subtitlesRef.current, trackIndex, true);
     }
   };
 
@@ -330,6 +463,9 @@ export function MediaPlayer({
         fill: true,
         poster: poster || undefined,
         techOrder: ['chromecast', 'html5'],
+        html5: {
+          nativeTextTracks: true,
+        },
         plugins: {
           chromecast: {
             addCastLabelToButton: true,
@@ -348,36 +484,19 @@ export function MediaPlayer({
             'durationDisplay',
             'progressControl',
             'playbackRateMenuButton',
-            'subsCapsButton',
-            'audioTrackButton',
             'chromecastButton',
             'airPlayButton',
             'fullscreenToggle',
           ],
         },
         volume: Math.min(savedVolume, 1),
-        sources: effectiveSrc ? [{ src: effectiveSrc, type: mimeType }] : undefined
       });
 
       playerRef.current = player;
 
-      const syncTracks = () => {
-        if (player.isDisposed()) return;
-        addRemoteTextTracks(player, subtitlesRef.current);
-        const defaultIdx = subtitlesRef.current.findIndex((t) => t.default);
-        const idx = defaultIdx >= 0 ? defaultIdx : subtitlesRef.current.length > 0 ? 0 : null;
-        setActiveSubtitleIndex(idx);
-        if (idx !== null) {
-          setActiveTextTrack(player, idx);
-        }
-      };
-
       player.ready(() => {
         setPlayerReady(true);
-        syncTracks();
       });
-
-      player.on('loadedmetadata', syncTracks);
 
       // Expose to component level so unmount can read it
       (player as any)._mmState = { restoreAttempted: false, targetTime: 0 };
@@ -490,11 +609,14 @@ export function MediaPlayer({
                 message: videoError.message || 'Media stream interference detected'
             });
 
-            // Automatically flag for repair if we have an ID
+            // Automatically flag for repair if we have a movie id (not series episodes)
             const currentCtx = ctx.current;
-            if (currentCtx.id && !isFlagged) {
-              fetch(`/api/movies/${currentCtx.id}/repair`, { method: 'POST', credentials: 'same-origin' })
-                .then(() => setIsFlagged(true))
+            const repairId = movieRepairId(currentCtx.id);
+            if (repairId !== null && !isFlaggedRef.current) {
+              fetch(`/api/movies/${repairId}/repair`, { method: 'POST', credentials: 'same-origin' })
+                .then(() => {
+                  isFlaggedRef.current = true;
+                })
                 .catch(err => console.error('[MediaPlayer] Failed to flag for repair:', err));
             }
         }
@@ -503,13 +625,17 @@ export function MediaPlayer({
       // Clear error on new source
       player.on('loadstart', () => setError(null));
 
-      // NEW: Clear repair flag on successful playback
+      // Clear repair flag after playback recovers from a prior player error (movies only)
       player.on('playing', () => {
         const currentCtx = ctx.current;
-        if (currentCtx.id) {
-          fetch(`/api/movies/${currentCtx.id}/repair`, { method: 'DELETE', credentials: 'same-origin' })
-            .catch(err => console.error('[MediaPlayer] Failed to clear repair flag:', err));
-        }
+        const repairId = movieRepairId(currentCtx.id);
+        if (repairId === null || !isFlaggedRef.current) return;
+
+        fetch(`/api/movies/${repairId}/repair`, { method: 'DELETE', credentials: 'same-origin' })
+          .then(() => {
+            isFlaggedRef.current = false;
+          })
+          .catch(err => console.error('[MediaPlayer] Failed to clear repair flag:', err));
       });
 
       // Do not initialize player.src here, the second useEffect will handle it
@@ -522,30 +648,54 @@ export function MediaPlayer({
     };
   }, []); // Run initialization exactly once on mount
 
-      // Handle source and mimeType changes
+      // Handle source and mimeType changes (single code path for initial load, resolve, and audio swap)
       useEffect(() => {
       const player = playerRef.current;
-      if (player && !player.isDisposed() && effectiveSrc && effectiveSrc !== lastSrcRef.current) {
+      if (!playerReady || !player || player.isDisposed() || !effectiveSrc) return;
+      if (effectiveSrc === lastSrcRef.current) return;
+
       lastSrcRef.current = effectiveSrc;
+      const pending = pendingStreamLoadRef.current;
+
       player.src({
         src: effectiveSrc,
-        type: mimeType
+        type: mimeTypeRef.current,
       });
       player.load();
-      }
-      }, [effectiveSrc, mimeType]);
+
+      const onLoaded = () => {
+        player.off('loadedmetadata', onLoaded);
+        const loadIntent = pendingStreamLoadRef.current ?? pending;
+        pendingStreamLoadRef.current = null;
+
+        if (loadIntent) {
+          if (loadIntent.resumeAt > 0) {
+            player.currentTime(loadIntent.resumeAt);
+          }
+          resyncSubtitleTracks(player, true);
+          if (loadIntent.autoplay) {
+            player.play()?.catch(() => {});
+          }
+          return;
+        }
+
+        resyncSubtitleTracks(player, true);
+      };
+
+      player.on('loadedmetadata', onLoaded);
+      }, [effectiveSrc, mimeType, playerReady]);
 
   useEffect(() => {
     if (!playerReady) return;
     const player = playerRef.current;
     if (!player || player.isDisposed()) return;
 
-    addRemoteTextTracks(player, subtitles);
+    attachSubtitleTracks(player, subtitles, undefined, true);
     const defaultIdx = subtitles.findIndex((t) => t.default);
     const idx = defaultIdx >= 0 ? defaultIdx : subtitles.length > 0 ? 0 : null;
-    setActiveSubtitleIndex(idx);
-    if (idx !== null) {
-      setActiveTextTrack(player, idx);
+    if (activeSubtitleIndexRef.current === undefined) {
+      activeSubtitleIndexRef.current = idx;
+      setActiveSubtitleIndex(idx);
     }
   }, [playerReady, subtitles]);
 
@@ -602,7 +752,7 @@ export function MediaPlayer({
                   >
                     <div className="font-medium">{track.title || track.language}</div>
                     <div className="text-[10px] text-muted-foreground uppercase opacity-70">
-                      Track {track.index} • {track.codec}
+                      {track.language.toLowerCase()} • {track.codec}
                     </div>
                   </button>
                 ))}
