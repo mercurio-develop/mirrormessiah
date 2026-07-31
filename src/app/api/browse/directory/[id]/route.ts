@@ -32,7 +32,35 @@ export async function GET(
     let libraryId: number | undefined;
     let title: string = '';
 
-    if (mediaType === 'series') {
+    if (mediaType === 'course') {
+      const courseFile = db.prepare(`
+        SELECT lf.path, c.library_id, c.title
+        FROM courses c
+        LEFT JOIN course_modules m ON m.course_id = c.id
+        LEFT JOIN lessons l ON l.module_id = m.id
+        LEFT JOIN lesson_files lf ON lf.lesson_id = l.id
+        WHERE c.id = ? AND lf.path IS NOT NULL
+        LIMIT 1
+      `).get(targetId) as { path: string | null; library_id: number; title: string } | undefined;
+
+      if (!courseFile) {
+        const courseData = db.prepare('SELECT library_id, title FROM courses WHERE id = ?').get(targetId) as {
+          library_id: number;
+          title: string;
+        } | undefined;
+        if (!courseData) return NextResponse.json({ error: 'Course record not found' }, { status: 404 });
+        libraryId = courseData.library_id;
+        title = courseData.title;
+      } else {
+        libraryId = courseFile.library_id;
+        title = courseFile.title;
+        if (courseFile.path) {
+          const library = db.prepare('SELECT root_path FROM libraries WHERE id = ?').get(libraryId) as { root_path: string };
+          const rel = path.relative(path.resolve(library.root_path), path.resolve(courseFile.path));
+          targetDir = path.join(path.resolve(library.root_path), rel.split(path.sep)[0]);
+        }
+      }
+    } else if (mediaType === 'series') {
       const seriesFile = db.prepare(`
         SELECT f.path, s.library_id, s.title
         FROM series s
@@ -57,7 +85,7 @@ export async function GET(
           targetDir = path.dirname(path.dirname(seriesFile.path));
         }
       }
-    } else {
+    } else if (mediaType === 'movie') {
       // 1. Try to find an existing file link for movies
       const movieFile = db.prepare(`
         SELECT f.path, m.library_id, m.title
@@ -77,6 +105,8 @@ export async function GET(
       if (movieFile.path) {
           targetDir = path.dirname(movieFile.path);
       }
+    } else {
+      return NextResponse.json({ error: 'Unsupported media type' }, { status: 400 });
     }
 
     if (targetDir && !fs.existsSync(targetDir)) {
@@ -97,7 +127,15 @@ export async function GET(
             if (mediaType === 'series') {
                const sData = db.prepare('SELECT year FROM series WHERE id = ?').get(targetId) as any;
                if (sData && sData.year) predictedDirWithYear = path.join(library.root_path, `${cleanTitle} (${sData.year})`);
-            } else {
+            } else if (mediaType === 'course') {
+               const cData = db.prepare('SELECT platform FROM courses WHERE id = ?').get(targetId) as { platform: string | null } | undefined;
+               if (cData?.platform) {
+                 const platformDir = path.join(library.root_path, `${cData.platform} - ${cleanTitle}`);
+                 if (fs.existsSync(platformDir)) {
+                   targetDir = platformDir;
+                 }
+               }
+            } else if (mediaType === 'movie') {
                const mData = db.prepare('SELECT year FROM movies WHERE id = ?').get(targetId) as any;
                if (mData && mData.year) predictedDirWithYear = path.join(library.root_path, `${cleanTitle} (${mData.year})`);
             }

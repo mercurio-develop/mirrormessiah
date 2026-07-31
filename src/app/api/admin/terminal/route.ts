@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { script, command, args = [] } = body;
 
-    const allowedScripts = ['scripts/mm.py', 'scripts/series_cli.py', 'scripts/convert_to_web.py'];
+    const allowedScripts = ['scripts/mm.py', 'scripts/series_cli.py', 'scripts/courses_cli.py', 'scripts/convert_to_web.py'];
     if (!allowedScripts.includes(script)) {
       return NextResponse.json({ error: 'Invalid script' }, { status: 400 });
     }

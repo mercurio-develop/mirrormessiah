@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { isAdminKeyConfigured } from '@/lib/auth';
-import { Database, Settings, ShieldAlert, Cpu, Film, ChevronRight, Copy, LayoutDashboard, PlusCircle, Tv } from 'lucide-react';
+import { Database, Settings, ShieldAlert, Cpu, Film, ChevronRight, Copy, LayoutDashboard, PlusCircle, Tv, GraduationCap } from 'lucide-react';
 
 export default function AdminPage() {
   const adminKeyConfigured = isAdminKeyConfigured();
@@ -61,6 +61,28 @@ export default function AdminPage() {
                 </h3>
                 <p className="text-sm text-muted-foreground leading-relaxed">
                   Manage your TV shows, update episodes, and organize seasons.
+                </p>
+              </div>
+            </div>
+            <div className="mt-8 pt-6 border-t border-border/50 flex items-center justify-between text-[10px] font-black uppercase tracking-widest opacity-30">
+               <span>Library Manager</span>
+               <PlusCircle className="h-3 w-3" />
+            </div>
+          </div>
+        </Link>
+
+        <Link href="/admin/courses" className="group">
+          <div className="p-8 bg-card border border-border hover:border-amber-500/50 transition-all duration-300 rounded-2xl hover:shadow-2xl hover:shadow-amber-500/5 flex flex-col justify-between h-full">
+            <div className="space-y-6">
+              <div className="p-4 bg-amber-500/10 border border-amber-500/20 text-amber-500 w-fit rounded-2xl group-hover:scale-110 transition-transform">
+                <GraduationCap className="h-6 w-6" />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-xl font-bold text-foreground flex items-center gap-2 group-hover:text-amber-500 transition-colors">
+                  Course Registry <ChevronRight className="h-4 w-4 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
+                </h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  Manage Udemy, Rebelway, and other course libraries with modules and lessons.
                 </p>
               </div>
             </div>

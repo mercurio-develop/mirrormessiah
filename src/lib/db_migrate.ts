@@ -223,6 +223,101 @@ export function runMigrations(): void {
       db.exec(`CREATE INDEX IF NOT EXISTS idx_episode_subtitles_episode ON episode_subtitles(episode_id)`);
       db.exec(`CREATE INDEX IF NOT EXISTS idx_episode_files_episode ON episode_files(episode_id)`);
 
+      // 2b. Courses Tables
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS courses (
+          id           INTEGER PRIMARY KEY,
+          library_id   INTEGER NOT NULL REFERENCES libraries(id) ON DELETE CASCADE,
+          title        TEXT NOT NULL,
+          year         INTEGER,
+          plot         TEXT,
+          rating       REAL,
+          thumbnail    TEXT,
+          platform     TEXT,
+          instructor   TEXT,
+          language     TEXT,
+          needs_repair INTEGER DEFAULT 0,
+          category     TEXT,
+          created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+      `);
+
+      const courseColumns = db.prepare('PRAGMA table_info(courses)').all() as { name: string }[];
+      if (!courseColumns.some((col) => col.name === 'category')) {
+        console.log('Migrating courses table to add category column...');
+        db.exec('ALTER TABLE courses ADD COLUMN category TEXT');
+      }
+
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS course_modules (
+          id            INTEGER PRIMARY KEY,
+          course_id     INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+          module_number INTEGER NOT NULL,
+          module_kind   TEXT NOT NULL DEFAULT 'module',
+          title         TEXT,
+          plot          TEXT,
+          poster        TEXT,
+          created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at    TEXT NOT NULL DEFAULT (datetime('now')),
+          UNIQUE(course_id, module_number)
+        )
+      `);
+
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS lessons (
+          id             INTEGER PRIMARY KEY,
+          module_id      INTEGER NOT NULL REFERENCES course_modules(id) ON DELETE CASCADE,
+          lesson_number  INTEGER NOT NULL,
+          title          TEXT,
+          plot           TEXT,
+          runtime        INTEGER,
+          thumbnail      TEXT,
+          needs_repair   INTEGER DEFAULT 0,
+          created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at     TEXT NOT NULL DEFAULT (datetime('now')),
+          UNIQUE(module_id, lesson_number)
+        )
+      `);
+
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS lesson_files (
+          id           INTEGER PRIMARY KEY,
+          library_id   INTEGER NOT NULL REFERENCES libraries(id) ON DELETE CASCADE,
+          lesson_id    INTEGER NOT NULL REFERENCES lessons(id) ON DELETE CASCADE,
+          path         TEXT NOT NULL UNIQUE,
+          size_bytes   INTEGER,
+          container    TEXT,
+          added_at     TEXT NOT NULL DEFAULT (datetime('now')),
+          mime_type    TEXT,
+          duration_sec INTEGER,
+          width        INTEGER,
+          height       INTEGER,
+          video_codec  TEXT,
+          audio_codec  TEXT,
+          language     TEXT
+        )
+      `);
+
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS lesson_subtitles (
+          id           INTEGER PRIMARY KEY,
+          lesson_id    INTEGER NOT NULL REFERENCES lessons(id) ON DELETE CASCADE,
+          file_id      INTEGER REFERENCES lesson_files(id) ON DELETE CASCADE,
+          path         TEXT NOT NULL UNIQUE,
+          lang         TEXT,
+          label        TEXT,
+          format       TEXT,
+          default_flag INTEGER DEFAULT 0,
+          size_bytes   INTEGER
+        )
+      `);
+
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_course_modules_course ON course_modules(course_id)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_lessons_module ON lessons(module_id)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_lesson_subtitles_lesson ON lesson_subtitles(lesson_id)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_lesson_files_lesson ON lesson_files(lesson_id)`);
+
       // 3. Data Seeding
       const defaultCategories = ['Kids', 'Family', 'Adults'];
       const insertCategory = db.prepare('INSERT OR IGNORE INTO categories (name) VALUES (?)');

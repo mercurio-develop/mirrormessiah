@@ -29,13 +29,15 @@ MirrorMessiah is structured strictly according to the **Feature-Sliced Architect
 │   ├── contexts/             # Admin and Theme context providers
 │   ├── features/             # Core Domain Engine (no default exports, named exports only)
 │   │   ├── movie/            # Movies domain (actions, queries, components)
-│   │   └── series/           # Series domain (actions, queries, components)
+│   │   ├── series/           # Series domain (actions, queries, components)
+│   │   └── course/           # Courses domain (actions, queries, components)
 │   ├── lib/                  # Database connections, authentication rules, schemas
 │   └── middleware.ts         # App Route routing security
 ├── scripts/                  # Production utility scripts
 │   ├── mm.py                 # Primary MirrorMessiah CLI utility
 │   ├── convert_to_web.py     # ffmpeg video/audio transcoding engine
-│   └── series_cli.py         # Episodic series scanner
+│   ├── series_cli.py         # Episodic series scanner
+│   └── courses_cli.py        # Course library scanner (weeks/modules/lessons)
 └── .env.example              # Sample environment template (tracked in git)
 ```
 
@@ -127,6 +129,39 @@ MirrorMessiah is managed locally using the Python CLI. All absolute directories 
 *   **System Reset**: Wipe the SQLite registry database permanently.
     ```bash
     python3 scripts/mm.py reset
+    ```
+
+---
+
+## Courses CLI (`scripts/courses_cli.py`)
+
+Set `COURSES_DIR` in `.env` to your course library root (default: `/media/tushita/TUSHITA_LINUX_DATA/courses`).
+
+During sync, course folders are parsed for **platform** (Udemy, Rebelway, Pikuma, Frontend Masters, FXPHD, etc.) and **category** (VFX & 3D, Development, General). Titles are normalized and organize renames folders to `{Platform} - {Title}`.
+
+*   **Sync courses**: Scan folders, parse weeks/chapters/sections into modules and lessons, link sidecar and separate-tree subtitles.
+    ```bash
+    python3 scripts/courses_cli.py sync
+    ```
+*   **Organize**: Rename course folders to `{Platform} - {Title}` (preview with `--dry-run`).
+    ```bash
+    python3 scripts/courses_cli.py organize --dry-run
+    python3 scripts/courses_cli.py organize
+    python3 scripts/courses_cli.py organize --lessons --course-id 23
+    ```
+    Default mode only renames the top-level course folder and updates DB paths. Pass `--lessons` to also normalize files into `Week 01/L01 - Title.mp4` (best for Rebelway/FXPHD; skips complex 3-level layouts unless you opt in).
+*   **Convert MKV → MP4** (web streaming):
+    ```bash
+    python3 scripts/courses_cli.py convert
+    ```
+*   **Generate lesson thumbnails** (ffmpeg frame extract; no TMDB):
+    ```bash
+    python3 scripts/courses_cli.py thumbs
+    python3 scripts/courses_cli.py thumbs --force --course-id 3
+    ```
+*   **Full pipeline**: sync → cleanup → organize → convert → thumbs
+    ```bash
+    python3 scripts/courses_cli.py full "/path/to/courses"
     ```
 
 ---

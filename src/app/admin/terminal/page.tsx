@@ -4,10 +4,10 @@ import { useState, useRef, useEffect } from 'react';
 import { 
   Terminal as TerminalIcon, Film, Tv, Cpu, Play, SquareSquare, AlertCircle, 
   RefreshCcw, Save, Trash2, FolderSync, PlusCircle, Activity, ArrowRight, ShieldAlert,
-  ChevronRight, CheckSquare, Square
+  ChevronRight, CheckSquare, Square, GraduationCap
 } from 'lucide-react';
 
-type ScriptType = 'scripts/mm.py' | 'scripts/series_cli.py' | 'scripts/convert_to_web.py';
+type ScriptType = 'scripts/mm.py' | 'scripts/series_cli.py' | 'scripts/courses_cli.py' | 'scripts/convert_to_web.py';
 type ArgType = 'string' | 'boolean';
 
 interface CommandArg {
@@ -106,6 +106,20 @@ const COMMANDS: Record<string, CommandOptions[]> = {
         { name: 'dir', label: 'Directory', type: 'string', isPositional: true, placeholder: '/media/series (optional)' },
         { name: '--force', label: 'Force Re-scrape All', type: 'boolean' }
       ]
+    },
+  ],
+  courses: [
+    {
+      id: 'c-sync', script: 'scripts/courses_cli.py', command: 'sync', description: 'Sync Courses', icon: <RefreshCcw className="w-4 h-4" />,
+      argsSchema: [{ name: 'dir', label: 'Target Directory', type: 'string', isPositional: true, placeholder: '/media/tushita/TUSHITA_LINUX_DATA/courses (optional)' }]
+    },
+    { id: 'c-organize', script: 'scripts/courses_cli.py', command: 'organize', description: 'Organize Folders', icon: <FolderSync className="w-4 h-4" /> },
+    { id: 'c-cleanup', script: 'scripts/courses_cli.py', command: 'cleanup', description: 'Cleanup Duplicates', icon: <Trash2 className="w-4 h-4" /> },
+    { id: 'c-convert', script: 'scripts/courses_cli.py', command: 'convert', description: 'Convert MKV to MP4', icon: <Cpu className="w-4 h-4" /> },
+    { id: 'c-thumbs', script: 'scripts/courses_cli.py', command: 'thumbs', description: 'Generate Thumbnails', icon: <Save className="w-4 h-4" /> },
+    {
+      id: 'c-full', script: 'scripts/courses_cli.py', command: 'full', description: 'Run Full Pipeline', icon: <Play className="w-4 h-4" />,
+      argsSchema: [{ name: 'dir', label: 'Directory', type: 'string', isPositional: true, placeholder: '/media/tushita/TUSHITA_LINUX_DATA/courses (optional)' }]
     },
   ],
   utils: [
@@ -291,6 +305,31 @@ export default function TerminalPage() {
                       : 'bg-card border-border hover:border-blue-500/50 text-foreground disabled:opacity-50 disabled:cursor-not-allowed'}`}
                 >
                   <div className={selectedCommand?.id === cmd.id ? 'text-blue-500' : 'text-muted-foreground group-hover:text-blue-500 transition-colors'}>
+                    {cmd.icon}
+                  </div>
+                  {cmd.description}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Courses Section */}
+          <div className="space-y-3 mt-4">
+            <h3 className="text-xs font-black uppercase tracking-widest text-amber-500 flex items-center gap-2 border-b border-border/50 pb-2">
+              <GraduationCap className="w-4 h-4" /> Courses (courses_cli.py)
+            </h3>
+            <div className="grid grid-cols-1 gap-2">
+              {COMMANDS.courses.map((cmd) => (
+                <button
+                  key={cmd.id}
+                  onClick={() => handleSelectCommand(cmd)}
+                  disabled={isRunning}
+                  className={`flex items-center justify-start gap-3 w-full p-3 border rounded-xl text-sm font-bold transition-all text-left group
+                    ${selectedCommand?.id === cmd.id 
+                      ? 'bg-amber-500/10 border-amber-500 text-amber-500 shadow-sm' 
+                      : 'bg-card border-border hover:border-amber-500/50 text-foreground disabled:opacity-50 disabled:cursor-not-allowed'}`}
+                >
+                  <div className={selectedCommand?.id === cmd.id ? 'text-amber-500' : 'text-muted-foreground group-hover:text-amber-500 transition-colors'}>
                     {cmd.icon}
                   </div>
                   {cmd.description}

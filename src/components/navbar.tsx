@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
-import { LogOut, Film, Tv, Shield, Terminal, Sparkles, Menu, X as CloseIcon } from 'lucide-react';
+import { LogOut, Film, Tv, Shield, Terminal, Sparkles, Menu, X as CloseIcon, GraduationCap } from 'lucide-react';
 import { useAdmin } from '@/contexts/admin-context';
 import { ThemeToggle } from './ui/theme-toggle';
 
@@ -86,6 +86,12 @@ export function Navbar() {
             >
               Series
             </Link>
+            <Link
+              href="/courses"
+              className={`text-sm font-semibold transition-colors hover:text-primary ${pathname.startsWith('/courses') || pathname.startsWith('/learn') ? 'text-primary' : 'text-muted-foreground'}`}
+            >
+              Courses
+            </Link>
             <button              onClick={toggleFamilyMode}
               className={`text-sm font-bold transition-all px-5 py-2 rounded-full border flex items-center gap-2.5 active:scale-95 ${
                 isFamilyMode
@@ -157,7 +163,7 @@ export function Navbar() {
       {/* Mobile Menu Overlay */}
       <div className={`lg:hidden fixed inset-x-0 top-20 bg-background/95 backdrop-blur-2xl border-b border-border transition-all duration-500 ease-in-out origin-top overflow-hidden ${isMenuOpen ? 'max-h-[400px] opacity-100' : 'max-h-0 opacity-0'}`}>
         <div className="p-6 space-y-6">
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <Link 
               href="/" 
               className={`flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border transition-all ${pathname === '/' && !isFamilyMode ? 'bg-primary/10 border-primary text-primary' : 'bg-muted/50 border-border text-muted-foreground'}`}
@@ -171,6 +177,13 @@ export function Navbar() {
             >
               <Tv className="w-6 h-6" />
               <span className="text-[10px] font-bold uppercase tracking-widest text-center">Series</span>
+            </Link>
+            <Link 
+              href="/courses" 
+              className={`flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border transition-all ${pathname.startsWith('/courses') || pathname.startsWith('/learn') ? 'bg-primary/10 border-primary text-primary' : 'bg-muted/50 border-border text-muted-foreground'}`}
+            >
+              <GraduationCap className="w-6 h-6" />
+              <span className="text-[10px] font-bold uppercase tracking-widest text-center">Courses</span>
             </Link>
             <button 
               onClick={toggleFamilyMode}

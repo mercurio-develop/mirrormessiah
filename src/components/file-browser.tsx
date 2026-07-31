@@ -17,7 +17,7 @@ interface FileBrowserProps {
   movieId: number;
   isOpen: boolean;
   mode: 'images' | 'videos';
-  mediaType?: 'movie' | 'series';
+  mediaType?: 'movie' | 'series' | 'course';
   onClose: () => void;
   onSelect: (filePath: string) => void;
   onSelectDirectory?: (dirPath: string) => void;
