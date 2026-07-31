@@ -1,6 +1,82 @@
 import { getDb } from '@/lib/db';
 import { getSearchTerms } from '@/lib/search';
 
+export type CourseCategoryCounts = {
+  total: number;
+  byCategory: Record<string, number>;
+};
+
+function appendSearchFilters(q: string, whereConditions: string[], params: unknown[]) {
+  const searchTerms = getSearchTerms(q);
+  searchTerms.forEach((term) => {
+    const likeTerm = `%${term}%`;
+    whereConditions.push(`(
+      LOWER(c.title) LIKE LOWER(?) OR
+      LOWER(c.platform) LIKE LOWER(?) OR
+      LOWER(c.category) LIKE LOWER(?) OR
+      LOWER(c.instructor) LIKE LOWER(?) OR
+      LOWER(c.plot) LIKE LOWER(?)
+    )`);
+    params.push(likeTerm, likeTerm, likeTerm, likeTerm, likeTerm);
+  });
+}
+
+function appendSearchRelevance(q: string, relevanceSql: string, params: unknown[]) {
+  let sql = relevanceSql;
+  const searchTerms = getSearchTerms(q);
+  searchTerms.forEach((term) => {
+    const likeTerm = `%${term}%`;
+    sql += ` + (
+      CASE WHEN LOWER(c.title) LIKE LOWER(?) THEN 10 ELSE 0 END +
+      CASE WHEN LOWER(c.platform) LIKE LOWER(?) THEN 5 ELSE 0 END +
+      CASE WHEN LOWER(c.category) LIKE LOWER(?) THEN 4 ELSE 0 END +
+      CASE WHEN LOWER(c.plot) LIKE LOWER(?) THEN 2 ELSE 0 END
+    )`;
+    params.push(likeTerm, likeTerm, likeTerm, likeTerm);
+  });
+  return sql;
+}
+
+export function getCourseCategoryCounts(options: {
+  q?: string | null;
+  platform?: string | null;
+} = {}): CourseCategoryCounts {
+  const { q, platform } = options;
+  const db = getDb();
+  const params: unknown[] = [];
+  const whereConditions: string[] = [];
+
+  if (q) appendSearchFilters(q, whereConditions, params);
+  if (platform) {
+    whereConditions.push('c.platform = ?');
+    params.push(platform);
+  }
+
+  const where = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+
+  try {
+    const { count: total } = db.prepare(`SELECT COUNT(*) as count FROM courses c ${where}`).get(...params) as { count: number };
+    const rows = db.prepare(`
+      SELECT COALESCE(NULLIF(c.category, ''), 'Uncategorized') as category, COUNT(*) as count
+      FROM courses c
+      ${where}
+      GROUP BY COALESCE(NULLIF(c.category, ''), 'Uncategorized')
+      ORDER BY count DESC, category ASC
+    `).all(...params) as { category: string; count: number }[];
+
+    const byCategory: Record<string, number> = {};
+    for (const row of rows) {
+      byCategory[row.category] = row.count;
+    }
+    return { total, byCategory };
+  } catch (error: unknown) {
+    if (error instanceof Error && error.message.includes('no such table')) {
+      return { total: 0, byCategory: {} };
+    }
+    throw error;
+  }
+}
+
 export function getCoursesList(options: {
   q?: string | null;
   platform?: string | null;
@@ -16,25 +92,8 @@ export function getCoursesList(options: {
   let relevanceSql = '0';
 
   if (q) {
-    const searchTerms = getSearchTerms(q);
-    searchTerms.forEach((term) => {
-      const likeTerm = `%${term}%`;
-      whereConditions.push(`(
-        LOWER(c.title) LIKE LOWER(?) OR
-        LOWER(c.platform) LIKE LOWER(?) OR
-        LOWER(c.category) LIKE LOWER(?) OR
-        LOWER(c.instructor) LIKE LOWER(?) OR
-        LOWER(c.plot) LIKE LOWER(?)
-      )`);
-      params.push(likeTerm, likeTerm, likeTerm, likeTerm, likeTerm);
-      relevanceSql += ` + (
-        CASE WHEN LOWER(c.title) LIKE LOWER(?) THEN 10 ELSE 0 END +
-        CASE WHEN LOWER(c.platform) LIKE LOWER(?) THEN 5 ELSE 0 END +
-        CASE WHEN LOWER(c.category) LIKE LOWER(?) THEN 4 ELSE 0 END +
-        CASE WHEN LOWER(c.plot) LIKE LOWER(?) THEN 2 ELSE 0 END
-      )`;
-      params.push(likeTerm, likeTerm, likeTerm, likeTerm);
-    });
+    appendSearchFilters(q, whereConditions, params);
+    relevanceSql = appendSearchRelevance(q, relevanceSql, params);
   }
 
   let query = `
@@ -50,8 +109,12 @@ export function getCoursesList(options: {
   }
 
   if (category) {
-    whereConditions.push('c.category = ?');
-    params.push(category);
+    if (category === 'Uncategorized') {
+      whereConditions.push("(c.category IS NULL OR c.category = '')");
+    } else {
+      whereConditions.push('c.category = ?');
+      params.push(category);
+    }
   }
 
   if (whereConditions.length > 0) {
@@ -74,10 +137,11 @@ export function getCoursesList(options: {
     query += ' LIMIT ? OFFSET ?';
     params.push(limit, offset);
     const courses = db.prepare(query).all(...params) as Record<string, unknown>[];
-    return { courses, total };
+    const categoryCounts = getCourseCategoryCounts({ q, platform });
+    return { courses, total, categoryCounts };
   } catch (error: unknown) {
     if (error instanceof Error && error.message.includes('no such table')) {
-      return { courses: [], total: 0 };
+      return { courses: [], total: 0, categoryCounts: { total: 0, byCategory: {} } };
     }
     throw error;
   }

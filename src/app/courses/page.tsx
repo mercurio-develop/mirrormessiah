@@ -5,12 +5,17 @@ import { Suspense } from 'react';
 export const dynamic = 'force-dynamic';
 
 export default async function CoursesPage() {
-  const { courses } = getCoursesList({ limit: 24 });
+  const { courses, total, categoryCounts } = getCoursesList({ limit: 24 });
   const { platforms } = getCourseFacets();
   return (
     <div className="min-h-screen bg-background pt-18 pb-12">
       <Suspense fallback={<div className="px-6 text-muted-foreground">Loading courses...</div>}>
-        <PublicCoursesList initialCourses={courses as any[]} initialPlatforms={platforms} />
+        <PublicCoursesList
+          initialCourses={courses as any[]}
+          initialPlatforms={platforms}
+          initialTotal={total}
+          initialCategoryCounts={categoryCounts}
+        />
       </Suspense>
     </div>
   );

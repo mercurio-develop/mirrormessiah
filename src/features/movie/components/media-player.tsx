@@ -138,9 +138,26 @@ function applyTextTrackMode(track: TextTrack, showing: boolean) {
 }
 
 function setActiveTextTrack(player: VideoJsPlayer, trackIndex: number | null) {
-  const tracks = listRemoteTextTracks(player);
-  for (let i = 0; i < tracks.length; i++) {
-    applyTextTrackMode(tracks[i], trackIndex === i);
+  const remote = listRemoteTextTracks(player);
+  const video = player.el()?.querySelector('video');
+
+  if (video?.textTracks) {
+    for (let i = 0; i < video.textTracks.length; i++) {
+      const track = video.textTracks[i];
+      if (track.kind === 'subtitles' || track.kind === 'captions') {
+        track.mode = 'disabled';
+      }
+    }
+  }
+
+  for (let i = 0; i < remote.length; i++) {
+    applyTextTrackMode(remote[i], false);
+  }
+
+  if (trackIndex === null) return;
+
+  if (remote[trackIndex]) {
+    applyTextTrackMode(remote[trackIndex], true);
   }
 }
 
@@ -418,7 +435,7 @@ export function MediaPlayer({
     setActiveSubtitleIndex(trackIndex);
     const player = playerRef.current;
     if (player && !player.isDisposed()) {
-      attachSubtitleTracks(player, subtitlesRef.current, trackIndex, true);
+      setActiveTextTrack(player, trackIndex);
     }
   };
 
@@ -690,13 +707,19 @@ export function MediaPlayer({
     const player = playerRef.current;
     if (!player || player.isDisposed()) return;
 
-    attachSubtitleTracks(player, subtitles, undefined, true);
     const defaultIdx = subtitles.findIndex((t) => t.default);
     const idx = defaultIdx >= 0 ? defaultIdx : subtitles.length > 0 ? 0 : null;
     if (activeSubtitleIndexRef.current === undefined) {
       activeSubtitleIndexRef.current = idx;
       setActiveSubtitleIndex(idx);
     }
+
+    attachSubtitleTracks(
+      player,
+      subtitles,
+      activeSubtitleIndexRef.current ?? null,
+      true,
+    );
   }, [playerReady, subtitles]);
 
   // Cleanup on unmount
