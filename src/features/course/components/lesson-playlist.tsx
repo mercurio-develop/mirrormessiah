@@ -44,7 +44,7 @@ export function LessonPlaylist({ lessons, currentLessonId }: { lessons: Playlist
             >
               <div className="relative w-24 aspect-video rounded bg-zinc-900 overflow-hidden shrink-0">
                 {les.thumbnail && getPosterUrl(les.thumbnail) ? (
-                  <Image src={getPosterUrl(les.thumbnail)!} alt="" fill className="object-cover" unoptimized />
+                  <Image src={getPosterUrl(les.thumbnail)!} alt="" fill className="object-contain" unoptimized />
                 ) : null}
                 {isActive ? (
                   <div className="absolute inset-0 bg-primary/40 flex items-center justify-center">

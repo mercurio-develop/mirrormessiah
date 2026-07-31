@@ -2,17 +2,41 @@ import fs from 'fs';
 import path from 'path';
 import type Database from 'better-sqlite3';
 
-export function resolveCourseDir(db: Database.Database, courseId: number): string | null {
-  const fileRow = db.prepare(`
-    SELECT lf.path FROM lesson_files lf
-    JOIN lessons l ON lf.lesson_id = l.id
-    JOIN course_modules m ON l.module_id = m.id
-    WHERE m.course_id = ? LIMIT 1
-  `).get(courseId) as { path: string } | undefined;
+function resolveCourseRoot(libraryRoot: string, filePath: string): string {
+  const rel = path.relative(path.resolve(libraryRoot), path.resolve(filePath));
+  const top = rel.split(path.sep)[0];
+  return path.join(path.resolve(libraryRoot), top);
+}
 
-  if (fileRow?.path) {
-    return path.dirname(path.dirname(fileRow.path));
+export function resolveCourseDir(db: Database.Database, courseId: number): string | null {
+  const row = db.prepare(`
+    SELECT lib.root_path, lf.path, c.title, c.platform
+    FROM courses c
+    JOIN libraries lib ON c.library_id = lib.id
+    LEFT JOIN course_modules m ON m.course_id = c.id
+    LEFT JOIN lessons l ON l.module_id = m.id
+    LEFT JOIN lesson_files lf ON lf.lesson_id = l.id
+    WHERE c.id = ?
+    LIMIT 1
+  `).get(courseId) as {
+    root_path: string;
+    path: string | null;
+    title: string;
+    platform: string | null;
+  } | undefined;
+
+  if (!row) return null;
+
+  if (row.path) {
+    const root = resolveCourseRoot(row.root_path, row.path);
+    if (fs.existsSync(root)) return root;
   }
+
+  const safeTitle = row.title.replace(/[<>:"/\\|?*]/g, '_').trim();
+  const folderName = row.platform?.trim() ? `${row.platform} - ${safeTitle}` : safeTitle;
+  const candidate = path.join(path.resolve(row.root_path), folderName);
+  if (fs.existsSync(candidate)) return candidate;
+
   return null;
 }
 

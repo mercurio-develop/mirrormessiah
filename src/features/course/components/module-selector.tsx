@@ -77,7 +77,7 @@ export function ModuleSelector({ modules }: { modules: Module[] }) {
                 </span>
                 <div className="relative w-32 sm:w-40 aspect-video bg-zinc-900 rounded-md overflow-hidden shrink-0 border border-white/5">
                   {les.thumbnail && getPosterUrl(les.thumbnail) ? (
-                    <Image src={getPosterUrl(les.thumbnail)!} alt={les.title || ''} fill className="object-cover" unoptimized />
+                    <Image src={getPosterUrl(les.thumbnail)!} alt={les.title || ''} fill className="object-contain" unoptimized />
                   ) : (
                     <div className="absolute inset-0 bg-gradient-to-br from-zinc-800 to-black" />
                   )}

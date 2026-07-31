@@ -116,7 +116,14 @@ const COMMANDS: Record<string, CommandOptions[]> = {
     { id: 'c-organize', script: 'scripts/courses_cli.py', command: 'organize', description: 'Organize Folders', icon: <FolderSync className="w-4 h-4" /> },
     { id: 'c-cleanup', script: 'scripts/courses_cli.py', command: 'cleanup', description: 'Cleanup Duplicates', icon: <Trash2 className="w-4 h-4" /> },
     { id: 'c-convert', script: 'scripts/courses_cli.py', command: 'convert', description: 'Convert MKV to MP4', icon: <Cpu className="w-4 h-4" /> },
-    { id: 'c-thumbs', script: 'scripts/courses_cli.py', command: 'thumbs', description: 'Generate Thumbnails', icon: <Save className="w-4 h-4" /> },
+    {
+      id: 'c-thumbs', script: 'scripts/courses_cli.py', command: 'thumbs', description: 'Generate Thumbnails', icon: <Save className="w-4 h-4" />,
+      argsSchema: [
+        { name: '--force', label: 'Regenerate all (ignore existing)', type: 'boolean' },
+        { name: '--missing-only', label: 'Skip lessons that already have a thumb', type: 'boolean' },
+        { name: '--course-id', label: 'Course ID (optional)', type: 'string' },
+      ],
+    },
     {
       id: 'c-full', script: 'scripts/courses_cli.py', command: 'full', description: 'Run Full Pipeline', icon: <Play className="w-4 h-4" />,
       argsSchema: [{ name: 'dir', label: 'Directory', type: 'string', isPositional: true, placeholder: '/media/tushita/TUSHITA_LINUX_DATA/courses (optional)' }]

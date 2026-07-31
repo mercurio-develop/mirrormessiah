@@ -117,8 +117,8 @@ export function AdminCourseForm({ course }: { course: Course }) {
           </div>
           <div className="lg:col-span-4 space-y-4">
             <div className="p-4 bg-card border border-border rounded-2xl">
-              <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-muted mb-4">
-                <Image src={getPosterUrl(formData.thumbnail)} alt="" fill unoptimized className="object-cover" />
+              <div className="relative aspect-video rounded-xl overflow-hidden bg-muted mb-4">
+                <Image src={getPosterUrl(formData.thumbnail)} alt="" fill unoptimized className="object-contain" />
               </div>
               <input name="thumbnail" value={formData.thumbnail} onChange={handleChange} className="w-full h-10 px-3 text-xs font-mono border border-border rounded-lg bg-muted/30" />
             </div>

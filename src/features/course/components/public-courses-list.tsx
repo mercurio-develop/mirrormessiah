@@ -139,8 +139,8 @@ export function PublicCoursesList({
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-6">
         {courses.map((course) => (
           <Link key={course.id} href={`/courses/${course.id}`} className="group space-y-3">
-            <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-muted border border-border/50 shadow-lg group-hover:scale-[1.02] transition-transform">
-              <Image src={getPosterUrl(course.thumbnail)} alt={course.title} fill unoptimized className="object-cover" />
+            <div className="relative aspect-video rounded-xl overflow-hidden bg-muted border border-border/50 shadow-lg group-hover:scale-[1.02] transition-transform">
+              <Image src={getPosterUrl(course.thumbnail)} alt={course.title} fill unoptimized className="object-contain" />
               {course.category ? (
                 <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/70 text-[9px] font-bold uppercase tracking-wider text-white">
                   {course.category}

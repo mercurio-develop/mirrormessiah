@@ -34,6 +34,7 @@ export interface TmdbSeriesDetails {
   genres: Array<{ id: number; name: string }>;
   original_language: string | null;
   poster_path: string | null;
+  seasons?: Array<{ season_number: number; episode_count: number }>;
   credits?: {
     crew: Array<{ job: string; name: string }>;
   };

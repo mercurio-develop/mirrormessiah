@@ -4,11 +4,11 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { b64urlEncode } from '@/lib/b64url';
-import { Save, Loader2, AlertCircle, Trash2, Globe, Info, Search, Film, Calendar, Star, Sparkles, ChevronDown, Tv } from 'lucide-react';
+import { Save, Loader2, AlertCircle, Trash2, Globe, Info, Search, Film, Calendar, Star, Sparkles, ChevronDown, Tv, ImageIcon } from 'lucide-react';
 import { FileBrowser } from '@/components/file-browser';
 import { DeleteSeriesModal } from './delete-series-modal';
 import { updateSeriesAction } from '../actions/update-series';
-import { scrapeSeriesAction } from '../actions/scrape-series';
+import { scrapeSeriesAction, scrapeSeriesEpisodeThumbnailsAction } from '../actions/scrape-series';
 
 // Minimal type needed for the form
 interface Series {
@@ -46,6 +46,7 @@ export function AdminSeriesForm({ series }: AdminSeriesFormProps) {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [isScraping, setIsScraping] = useState(false);
+  const [isScrapingThumbs, setIsScrapingThumbs] = useState(false);
   
   const [formData, setFormData] = useState({
     title: series.title || '',
@@ -114,13 +115,26 @@ export function AdminSeriesForm({ series }: AdminSeriesFormProps) {
     const result = await scrapeSeriesAction(series.id);
     
     if (result.status === 'success') {
-        // Optimistic refresh - rely on server action revalidation for next load, but let's just trigger a reload or show success
         setStatus({ type: 'success', msg: result.message || 'Metadata synced. Please refresh to see changes.' });
         window.location.reload();
     } else {
         setStatus({ type: 'error', msg: result.message || 'Scrape failed' });
     }
     setIsScraping(false);
+  };
+
+  const handleScrapeEpisodeThumbnails = async () => {
+    setIsScrapingThumbs(true);
+    setStatus({ type: null, msg: '' });
+
+    const result = await scrapeSeriesEpisodeThumbnailsAction(series.id);
+
+    if (result.status === 'success') {
+      setStatus({ type: 'success', msg: result.message || 'Episode thumbnails updated.' });
+    } else {
+      setStatus({ type: 'error', msg: result.message || 'Thumbnail scrape failed' });
+    }
+    setIsScrapingThumbs(false);
   };
 
   const handleDelete = () => {
@@ -317,7 +331,7 @@ export function AdminSeriesForm({ series }: AdminSeriesFormProps) {
             <div className="space-y-4">
               <button
                 type="button"
-                disabled={isScraping || isPending}
+                disabled={isScraping || isScrapingThumbs || isPending}
                 onClick={handleScrape}
                 className="w-full h-14 bg-zinc-900 border border-zinc-800 text-white text-sm font-bold rounded-2xl flex items-center justify-center gap-3 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50"
               >
@@ -325,8 +339,23 @@ export function AdminSeriesForm({ series }: AdminSeriesFormProps) {
               </button>
 
               <button
+                type="button"
+                disabled={isScraping || isScrapingThumbs || isPending}
+                onClick={handleScrapeEpisodeThumbnails}
+                className="w-full h-14 bg-zinc-900/60 border border-zinc-700 text-white text-sm font-bold rounded-2xl flex items-center justify-center gap-3 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50"
+              >
+                {isScrapingThumbs ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <>
+                    <ImageIcon className="h-5 w-5" /> Scrape Episode Thumbnails
+                  </>
+                )}
+              </button>
+
+              <button
                 type="submit"
-                disabled={isPending || isScraping}
+                disabled={isPending || isScraping || isScrapingThumbs}
                 className="hidden lg:flex w-full h-14 bg-blue-600 text-white text-sm font-bold rounded-2xl items-center justify-center gap-3 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-blue-500/20 disabled:opacity-50"
               >
                 {isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <><Save className="h-5 w-5" /> Save Changes</>}
@@ -354,7 +383,7 @@ export function AdminSeriesForm({ series }: AdminSeriesFormProps) {
         <div className="lg:hidden fixed bottom-6 right-6 left-6 z-[60] animate-in slide-in-from-bottom-10 duration-500">
            <button
             type="submit"
-            disabled={isPending || isScraping}
+            disabled={isPending || isScraping || isScrapingThumbs}
             className="w-full h-16 bg-blue-600 text-white font-black uppercase tracking-widest text-sm rounded-2xl flex items-center justify-center gap-3 shadow-[0_20px_50px_rgba(37,99,235,0.3)] active:scale-95 transition-all disabled:opacity-50"
           >
             {isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <><Save className="h-6 w-6" /> Commit Changes</>}

@@ -5,6 +5,7 @@ import { requireAdminKeyAuth, AuthError } from '@/lib/auth';
 import { ActionState } from '@/lib/action-state';
 import { searchSeries, getSeriesDetails, getSeasonDetails, posterUrl, extractDirector } from '@/lib/tmdb';
 import { discoverLocalArtwork, resolveLocalSeriesThumbnail, resolveSeriesDir } from '@/features/series/lib/local-artwork';
+import { scrapeEpisodeThumbnailsForSeries } from '@/features/series/lib/episode-thumbnails';
 import { revalidatePath } from 'next/cache';
 import fs from 'fs';
 import path from 'path';
@@ -205,6 +206,39 @@ export async function scrapeSeriesAction(seriesId: number): Promise<ActionState>
       return { status: 'error', message: error.message };
     }
     return { status: 'error', message: 'Scrape failed: ' + error.message };
+  }
+}
+
+export async function scrapeSeriesEpisodeThumbnailsAction(
+  seriesId: number,
+  options: { force?: boolean } = {},
+): Promise<ActionState> {
+  try {
+    await requireAdminKeyAuth();
+    const db = getDb();
+
+    const result = await scrapeEpisodeThumbnailsForSeries(db, seriesId, options);
+
+    revalidatePath(`/admin/series/${seriesId}`);
+    revalidatePath('/admin/series');
+    revalidatePath('/series');
+    revalidatePath(`/series/${seriesId}`);
+
+    const covered = result.skipped + result.downloaded;
+    const parts = [`${covered}/${result.total} episodes have thumbnails`];
+    if (result.downloaded > 0) parts.unshift(`Downloaded ${result.downloaded}`);
+    if (result.failed > 0) parts.push(`${result.failed} could not be fetched`);
+
+    return {
+      status: 'success',
+      message: parts.join(' · '),
+    };
+  } catch (error: unknown) {
+    if (error instanceof AuthError) {
+      return { status: 'error', message: error.message };
+    }
+    const message = error instanceof Error ? error.message : 'Thumbnail scrape failed';
+    return { status: 'error', message };
   }
 }
 

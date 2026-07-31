@@ -34,6 +34,18 @@ SUB_EXT   = {'.srt', '.vtt', '.ass', '.ssa'}
 # Regex for "S01E05" or "1x05"
 EPISODE_RE = re.compile(r'S(?P<season>\d+)\s*E(?P<episode>\d+)|(?P<season2>\d+)x(?P<episode2>\d+)', re.IGNORECASE)
 
+# Video widths often mistaken for season numbers (e.g. "1080x01" parsed as S1080E01).
+RESOLUTION_WIDTHS = frozenset({480, 576, 720, 1080, 1280, 1920, 2160, 3840})
+KNOWN_RESOLUTIONS = frozenset({
+    (720, 480), (720, 576), (1280, 720), (1920, 1080), (3840, 2160),
+})
+
+def is_bogus_season_episode(season: int, episode: int) -> bool:
+    if (season, episode) in KNOWN_RESOLUTIONS:
+        return True
+    # "1080x01" style: width token + small episode index, not a real season.
+    return season in RESOLUTION_WIDTHS and episode <= 999
+
 def download_poster(poster_path: str, dest: Path) -> bool:
     try:
         r = requests.get(f'{IMG_BASE}{poster_path}', timeout=15, stream=True)
@@ -202,6 +214,7 @@ def clean_name(name: str) -> str:
     name = re.sub(r'[\(\)\[\]]', ' ', name)
     name = re.sub(r'\b(19|20)\d{2}\b', '', name)
     name = name.replace(".", " ").replace("_", " ").replace("-", " ")
+    name = re.sub(r'\s+season\s*$', '', name, flags=re.IGNORECASE)
     return re.sub(r'\s+', ' ', name).strip().title()
 
 def extract_year(name: str) -> int | None:
@@ -209,11 +222,16 @@ def extract_year(name: str) -> int | None:
     return int(match.group()) if match else None
 
 def extract_episode_info(name: str, parent_name: str):
-    # 1. Try standard S01E01 or 1x01
+    # 1. Try standard S01E01 or 1x01 (skip resolution-shaped false positives like 1080x01)
     m = EPISODE_RE.search(name)
     if m:
         season = int(m.group('season') or m.group('season2'))
         ep = int(m.group('episode') or m.group('episode2'))
+        if is_bogus_season_episode(season, ep):
+            sm = re.search(r'Season\s*(\d+)', parent_name, re.I)
+            if sm and int(sm.group(1)) not in RESOLUTION_WIDTHS:
+                return int(sm.group(1)), ep
+            return 1, ep
         return season, ep
 
     # 2. Try to find an episode number with a common prefix: E01, EP01, Episode 01, _ep01, - E01, OVA - E1, Part 1
@@ -257,6 +275,94 @@ def tmdb_get(endpoint: str, **params) -> dict:
     r = requests.get(f'{TMDB_BASE}{endpoint}', params=params, timeout=10)
     if r.ok: return r.json()
     return {}
+
+def compute_absolute_episode(
+    db: sqlite3.Connection, series_id: int, season_num: int, ep_num: int,
+) -> int:
+    """1-based episode index across prior seasons (for TMDB cross-season lookup)."""
+    prior = db.execute("""
+        SELECT COALESCE(SUM(max_ep), 0) AS total
+        FROM (
+            SELECT MAX(e.episode_number) AS max_ep
+            FROM episodes e
+            JOIN seasons s ON e.season_id = s.id
+            WHERE s.series_id = ? AND s.season_number < ?
+            GROUP BY s.season_number
+        )
+    """, (series_id, season_num)).fetchone()
+    return (prior['total'] or 0) + ep_num
+
+def build_tmdb_absolute_index(tmdb_id: int) -> dict[int, dict]:
+    """Map absolute episode number (excluding specials) to TMDB episode payload."""
+    index: dict[int, dict] = {}
+    details = tmdb_get(f'/tv/{tmdb_id}')
+    if not details:
+        return index
+    abs_num = 0
+    seasons = sorted(
+        (s for s in details.get('seasons', []) if s.get('season_number', 0) > 0),
+        key=lambda s: s['season_number'],
+    )
+    for season in seasons:
+        sn = season['season_number']
+        s_details = tmdb_get(f'/tv/{tmdb_id}/season/{sn}')
+        if not s_details:
+            continue
+        for ep_data in s_details.get('episodes', []):
+            abs_num += 1
+            index[abs_num] = ep_data
+        time.sleep(DELAY)
+    return index
+
+def repair_resolution_seasons(db: sqlite3.Connection) -> int:
+    """Reassign seasons created from mis-parsed resolution tokens (e.g. 1080 -> season 1)."""
+    placeholders = ','.join('?' * len(RESOLUTION_WIDTHS))
+    bad_seasons = db.execute(
+        f"SELECT id, series_id, season_number FROM seasons WHERE season_number IN ({placeholders})",
+        tuple(RESOLUTION_WIDTHS),
+    ).fetchall()
+    fixed = 0
+    for row in bad_seasons:
+        series_id = row['series_id']
+        bad_id = row['id']
+        bad_num = row['season_number']
+        target = db.execute(
+            "SELECT id FROM seasons WHERE series_id = ? AND season_number = 1",
+            (series_id,),
+        ).fetchone()
+        if target:
+            target_id = target['id']
+            for ep in db.execute(
+                "SELECT id, episode_number FROM episodes WHERE season_id = ?", (bad_id,),
+            ).fetchall():
+                existing = db.execute(
+                    "SELECT id FROM episodes WHERE season_id = ? AND episode_number = ?",
+                    (target_id, ep['episode_number']),
+                ).fetchone()
+                if existing:
+                    db.execute(
+                        "UPDATE OR IGNORE episode_files SET episode_id = ? WHERE episode_id = ?",
+                        (existing['id'], ep['id']),
+                    )
+                    db.execute(
+                        "UPDATE OR IGNORE episode_subtitles SET episode_id = ? WHERE episode_id = ?",
+                        (existing['id'], ep['id']),
+                    )
+                    db.execute("DELETE FROM episodes WHERE id = ?", (ep['id'],))
+                else:
+                    db.execute(
+                        "UPDATE episodes SET season_id = ? WHERE id = ?",
+                        (target_id, ep['id']),
+                    )
+            db.execute("DELETE FROM seasons WHERE id = ?", (bad_id,))
+        else:
+            db.execute(
+                "UPDATE seasons SET season_number = 1 WHERE id = ?",
+                (bad_id,),
+            )
+        fixed += 1
+        print(f"  [fix] Repaired resolution season S{bad_num:02d} -> S01")
+    return fixed
 
 def detect_lang_from_path(path: Path) -> str:
     name = path.name.lower()
@@ -539,9 +645,11 @@ def cmd_cleanup(args):
         else:
             seen_naming[norm_key] = old_id
 
+    repaired_seasons = repair_resolution_seasons(db)
+
     db.commit()
     db.close()
-    print(f"CLEANUP_COMPLETE: Fixed {fixed_titles} titles. Merged {purged_count} duplicates.")
+    print(f"CLEANUP_COMPLETE: Fixed {fixed_titles} titles. Merged {purged_count} duplicates. Repaired {repaired_seasons} resolution seasons.")
 
 def cmd_organize(args):
     print(f"\n--- INITIATING FILESYSTEM REORGANIZATION (SERIES) ---")
@@ -1057,6 +1165,7 @@ def cmd_scrape(args):
                 """, (plot, rating, genres, director, audience, thumbnail, series_id))
                 
                 # Scrape seasons and episodes
+                abs_index = build_tmdb_absolute_index(tmdb_id)
                 seasons_db = db.execute("SELECT * FROM seasons WHERE series_id = ?", (series_id,)).fetchall()
                 for s_db in seasons_db:
                     season_num = s_db['season_number']
@@ -1096,6 +1205,9 @@ def cmd_scrape(args):
                     for ep_row in db_eps:
                         ep_num = ep_row['episode_number']
                         ep_data = tmdb_eps.get(ep_num, {})
+                        if not ep_data.get('still_path') and abs_index:
+                            abs_num = compute_absolute_episode(db, series_id, season_num, ep_num)
+                            ep_data = abs_index.get(abs_num, ep_data)
                         ep_title = ep_data.get('name')
                         ep_plot = ep_data.get('overview')
                         ep_runtime = ep_data.get('runtime')

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { b64urlEncode } from '@/lib/b64url';
 import { Search, Edit, Loader2, GraduationCap, RefreshCw, Trash2 } from 'lucide-react';
-import { validateCourseThumbnailsAction } from '../actions/scrape-course';
+import { validateCourseThumbnailsAction } from '../actions/validate-course-thumbnails';
 import { deleteCourseAction } from '../actions/delete-course';
 
 interface CourseRow {
@@ -97,8 +97,8 @@ export function AdminCourseList({ initialCourses }: { initialCourses: CourseRow[
               if (next.has(course.id)) next.delete(course.id); else next.add(course.id);
               setSelected(next);
             }} />
-            <div className="relative w-16 h-24 shrink-0 rounded-lg overflow-hidden bg-muted">
-              <Image src={getPosterUrl(course.thumbnail)} alt="" fill unoptimized className="object-cover" />
+            <div className="relative w-24 aspect-video shrink-0 rounded-lg overflow-hidden bg-muted">
+              <Image src={getPosterUrl(course.thumbnail)} alt="" fill unoptimized className="object-contain" />
             </div>
             <div className="flex-1 min-w-0">
               <h3 className="font-bold truncate">{course.title}</h3>

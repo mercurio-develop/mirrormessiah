@@ -38,7 +38,7 @@ export default async function CourseDetailsPage({ params }: { params: Promise<{ 
     <div className="min-h-screen bg-background pb-32">
       <div className="relative h-[50vh] flex items-end">
         {posterUrl ? (
-          <Image src={posterUrl} alt="" fill unoptimized className="object-cover opacity-30 blur-sm" />
+          <Image src={posterUrl} alt="" fill unoptimized className="object-contain opacity-30 blur-sm" />
         ) : null}
         <div className="absolute inset-0 bg-gradient-to-t from-background via-background/80 to-transparent" />
         <div className="relative z-10 max-w-7xl mx-auto w-full px-4 sm:px-6 pb-12">

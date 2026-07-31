@@ -435,7 +435,7 @@ def ingest_course(db: sqlite3.Connection, course_folder: Path, lib_id: int) -> N
 
 def resync_course_subtitles(db: sqlite3.Connection, course_id: int) -> tuple[int, int]:
     course_path = resolve_course_path(db, course_id)
-    if not course_path:
+    if not course_path or not course_path.exists():
         return 0, 0
     sub_index = index_subtitle_tree(course_path)
     added = removed = 0
@@ -506,6 +506,14 @@ def cmd_cleanup(args) -> None:
     for s in db.execute('SELECT id, path FROM lesson_subtitles').fetchall():
         if not Path(s['path']).exists():
             db.execute('DELETE FROM lesson_subtitles WHERE id = ?', (s['id'],))
+    for l in db.execute('SELECT id, thumbnail FROM lessons WHERE thumbnail IS NOT NULL').fetchall():
+        thumb = l['thumbnail']
+        if thumb and not thumb.startswith('http') and not Path(thumb).exists():
+            db.execute('UPDATE lessons SET thumbnail = NULL WHERE id = ?', (l['id'],))
+    for c in db.execute('SELECT id, thumbnail FROM courses WHERE thumbnail IS NOT NULL').fetchall():
+        thumb = c['thumbnail']
+        if thumb and not thumb.startswith('http') and not Path(thumb).exists():
+            db.execute('UPDATE courses SET thumbnail = NULL WHERE id = ?', (c['id'],))
     db.execute('DELETE FROM lessons WHERE id NOT IN (SELECT lesson_id FROM lesson_files)')
     db.execute('DELETE FROM course_modules WHERE id NOT IN (SELECT module_id FROM lessons)')
     db.execute('DELETE FROM courses WHERE id NOT IN (SELECT course_id FROM course_modules)')
@@ -720,7 +728,8 @@ def cmd_convert(args) -> None:
     print('\n--- PHASE: Converting Course Videos ---')
     db = open_db()
     script_path = Path(__file__).parent / 'convert_to_web.py'
-    lib_id = get_library_id(db)
+    courses_root = Path(COURSES_DIR).resolve()
+    courses_prefix = str(courses_root) + '%'
     exts = {'.mkv'}
     if getattr(args, 'all_formats', False):
         exts.update({'.avi', '.webm', '.mov'})
@@ -730,12 +739,17 @@ def cmd_convert(args) -> None:
         FROM lesson_files lf
         JOIN lessons l ON lf.lesson_id = l.id
         JOIN course_modules m ON l.module_id = m.id
-    """).fetchall()
+        WHERE lf.path LIKE ?
+    """, (courses_prefix,)).fetchall()
 
     converted = 0
     for i, f in enumerate(files, 1):
         path = Path(f['path'])
         if path.suffix.lower() not in exts or not path.exists():
+            continue
+        try:
+            path.resolve().relative_to(courses_root)
+        except ValueError:
             continue
         print(f'\n  [{i}] Converting: {path.name}')
         subprocess.run([sys.executable, str(script_path), str(path)], check=False)
@@ -743,7 +757,7 @@ def cmd_convert(args) -> None:
         if mp4.exists():
             db.execute('UPDATE lesson_files SET path = ?, container = ? WHERE id = ?', (str(mp4), 'mp4', f['id']))
             converted += 1
-    db.commit()
+            db.commit()
     db.close()
     print(f'CONVERT_COMPLETE: {converted} files converted')
 
@@ -762,8 +776,10 @@ def extract_thumbnail_ffmpeg(video_path: Path, dest: Path) -> bool:
                 seek = str(max(1.0, duration * 0.1))
             except ValueError:
                 pass
+        # Letterbox to 16:9 so UI thumbnails show the full frame without cropping.
+        vf = 'scale=320:180:force_original_aspect_ratio=decrease,pad=320:180:(ow-iw)/2:(oh-ih)/2:black'
         result = subprocess.run(
-            ['ffmpeg', '-y', '-ss', seek, '-i', str(video_path), '-frames:v', '1', '-q:v', '2', str(dest)],
+            ['ffmpeg', '-y', '-ss', seek, '-i', str(video_path), '-frames:v', '1', '-vf', vf, '-q:v', '2', str(dest)],
             capture_output=True, check=False,
         )
         return result.returncode == 0 and dest.exists()
@@ -775,7 +791,9 @@ def cmd_thumbs(args) -> None:
     print('\n--- PHASE: Generating Lesson Thumbnails ---')
     db = open_db()
     force = getattr(args, 'force', False)
+    missing_only = getattr(args, 'missing_only', False) and not force
     generated = skipped = failed = 0
+    failed_no_file = failed_outside_root = failed_ffmpeg = 0
 
     for course in db.execute('SELECT id, title FROM courses').fetchall():
         if getattr(args, 'course_id', None) and course['id'] != args.course_id:
@@ -792,28 +810,47 @@ def cmd_thumbs(args) -> None:
             WHERE m.course_id = ? AND lf.path LIKE ?
         """, (course['id'], str(courses_root) + '%')).fetchall()
 
+        course_gen = course_skip = course_fail = 0
         for row in rows:
             title = row['title'] or f'Lesson {row["lesson_number"]}'
             dest = lesson_thumb_path(course_path, row['module_number'], row['module_kind'], row['lesson_number'], title)
-            if dest.exists() and not force:
-                if row['thumbnail'] != str(dest):
+            db_thumb = row['thumbnail']
+            has_thumb = dest.exists() or (
+                db_thumb and (db_thumb.startswith('http') or Path(db_thumb).exists())
+            )
+            if missing_only and has_thumb:
+                if db_thumb != str(dest) and dest.exists():
                     db.execute('UPDATE lessons SET thumbnail = ? WHERE id = ?', (str(dest), row['id']))
                 skipped += 1
+                course_skip += 1
+                continue
+            if dest.exists() and not force:
+                if db_thumb != str(dest):
+                    db.execute('UPDATE lessons SET thumbnail = ? WHERE id = ?', (str(dest), row['id']))
+                skipped += 1
+                course_skip += 1
                 continue
             video = Path(row['path'])
             try:
                 video.resolve().relative_to(courses_root)
             except ValueError:
                 failed += 1
+                failed_outside_root += 1
+                course_fail += 1
                 continue
             if not video.exists():
                 failed += 1
+                failed_no_file += 1
+                course_fail += 1
                 continue
             if extract_thumbnail_ffmpeg(video, dest):
                 db.execute('UPDATE lessons SET thumbnail = ? WHERE id = ?', (str(dest), row['id']))
                 generated += 1
+                course_gen += 1
             else:
                 failed += 1
+                failed_ffmpeg += 1
+                course_fail += 1
 
         poster = course_path / 'poster.jpg'
         if not poster.exists():
@@ -830,9 +867,31 @@ def cmd_thumbs(args) -> None:
                 except OSError:
                     pass
 
-    db.commit()
+        db.commit()
+        if course_gen or course_skip or course_fail:
+            print(f'  [{course["id"]}] {course["title"]}: +{course_gen} generated, {course_skip} skipped, {course_fail} failed')
+
     db.close()
     print(f'THUMBS_COMPLETE: generated={generated}, skipped={skipped}, failed={failed}')
+    if failed:
+        print(f'  failures: no_file={failed_no_file}, outside_root={failed_outside_root}, ffmpeg={failed_ffmpeg}')
+
+
+def cmd_resync_subs(args) -> None:
+    print('\n--- PHASE: Resyncing Lesson Subtitles ---')
+    db = open_db()
+    added = 0
+    courses = db.execute('SELECT id, title FROM courses ORDER BY title').fetchall()
+    for course in courses:
+        if getattr(args, 'course_id', None) and course['id'] != args.course_id:
+            continue
+        a, _ = resync_course_subtitles(db, course['id'])
+        added += a
+        if a:
+            print(f'  [{course["id"]}] {course["title"]}: {a} subtitles linked')
+    db.commit()
+    db.close()
+    print(f'RESYNC_SUBS_COMPLETE: {added} subtitles linked')
 
 
 def cmd_audit(args) -> None:
@@ -881,8 +940,8 @@ def cmd_full(args) -> None:
     print('\n==========================================')
     print('   MirrorMessiah Courses: FULL PIPELINE')
     print('==========================================\n')
-    cmd_sync(args)
     cmd_cleanup(args)
+    cmd_sync(args)
     cmd_organize(args)
     cmd_convert(args)
     cmd_thumbs(args)
@@ -914,17 +973,23 @@ def main() -> None:
 
     p_thumbs = sub.add_parser('thumbs', help='Generate lesson thumbnails')
     p_thumbs.add_argument('--force', action='store_true')
+    p_thumbs.add_argument('--missing-only', action='store_true', help='Skip lessons that already have a thumb on disk or in DB')
     p_thumbs.add_argument('--course-id', type=int, default=None, help='Limit to one course')
 
     sub.add_parser('audit', help='Report missing thumbnails')
 
-    p_full = sub.add_parser('full', help='sync -> cleanup -> organize -> convert -> thumbs')
+    p_resync = sub.add_parser('resync-subs', help='Re-link lesson subtitles from disk')
+    p_resync.add_argument('--course-id', type=int, default=None, help='Limit to one course')
+
+    p_full = sub.add_parser('full', help='cleanup -> sync -> organize -> convert -> thumbs')
     p_full.add_argument('dir', nargs='?', default=COURSES_DIR)
     p_full.add_argument('--force', action='store_true')
 
     args = parser.parse_args()
     if not hasattr(args, 'force'):
         args.force = False
+    if not hasattr(args, 'missing_only'):
+        args.missing_only = False
 
     commands = {
         'sync': cmd_sync,
@@ -933,6 +998,7 @@ def main() -> None:
         'convert': cmd_convert,
         'thumbs': cmd_thumbs,
         'audit': cmd_audit,
+        'resync-subs': cmd_resync_subs,
         'full': cmd_full,
     }
     commands[args.command](args)

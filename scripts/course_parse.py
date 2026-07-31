@@ -111,6 +111,9 @@ VFX_PLATFORMS = frozenset({
     'Double Jump Academy', 'Schoolism',
 })
 
+# Reject S1080E01-style resolution false positives (mirrors series_cli).
+RESOLUTION_WIDTHS = frozenset({480, 576, 720, 1080, 1280, 1920, 2160, 3840})
+
 LESSON_NUM_PATTERNS = [
     re.compile(r'^(\d{1,3})\s*[-–—_.]\s*', re.I),
     re.compile(r'^(\d{1,3})\s*\.\s*', re.I),
@@ -120,6 +123,10 @@ LESSON_NUM_PATTERNS = [
     re.compile(r'ftg-(\d{1,3})', re.I),
     re.compile(r'(?:^|[_\-\s])0*(\d{1,3})$', re.I),
 ]
+
+
+def _looks_like_resolution(num: int) -> bool:
+    return num in RESOLUTION_WIDTHS
 
 
 @dataclass
@@ -274,6 +281,8 @@ def parse_lesson_filename(filename: str) -> tuple[int | None, str]:
         match = pattern.search(stem)
         if match:
             num = int(match.group(1))
+            if _looks_like_resolution(num):
+                continue
             title = pattern.sub('', stem, count=1).strip(' .-_–—')
             if not title:
                 title = f'Lesson {num}'
@@ -387,6 +396,8 @@ def detect_lang_from_path(path: Path) -> str:
 
 def index_subtitle_tree(course_root: Path) -> dict[tuple[int, int], list[Path]]:
     index: dict[tuple[int, int], list[Path]] = {}
+    if not course_root.is_dir():
+        return index
     sub_roots = [p for p in course_root.iterdir() if p.is_dir() and 'subtitle' in p.name.lower()]
     for sub_root in sub_roots:
         for sub_file in sub_root.rglob('*'):
