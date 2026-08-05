@@ -12,12 +12,12 @@ Commands:
   verify                    Check media integrity and mark unplayable titles for repair
   cleanup                   Identify and merge duplicate movie entries
   sync-assets               Link posters and verify 1080p MP4 compliance
-  full                      Run ingest, cleanup, organize, sync-assets, scrape, fetch-subs
+  full                      Run convert, ingest, cleanup, organize, sync-assets, scrape, fetch-subs
   stage  <src> [--dest DIR] Prepare new movies: clean noise, check duplicates, and move to dest
   reset                     Permanently delete the database
   clean-files               Remove duplicate file rows, 4K links, missing paths
   status                    Show DB stats
-  convert  [dir]            Convert MKV files to web-optimized MP4 (MP4 and other formats skipped)
+  convert  [dir]            Convert MKV/AVI/WEBM/MOV to web-optimized MP4 (--mkv-only for MKV alone)
   prebuild-audio [dir]      Pre-build instant audio-switch caches for multi-track MP4s
 
 Usage:
@@ -883,6 +883,15 @@ def download_poster(poster_path: str, dest: Path) -> bool:
     except Exception:
         return False
 
+def merge_movie_rows(db: sqlite3.Connection, primary_id: int, duplicate_id: int) -> None:
+    """Move files/subs from duplicate movie row into primary, then delete duplicate."""
+    if primary_id == duplicate_id:
+        return
+    db.execute('UPDATE OR IGNORE files SET movie_id = ? WHERE movie_id = ?', (primary_id, duplicate_id))
+    db.execute('UPDATE OR IGNORE subtitles SET movie_id = ? WHERE movie_id = ?', (primary_id, duplicate_id))
+    db.execute('DELETE FROM movie_categories WHERE movie_id = ?', (duplicate_id,))
+    db.execute('DELETE FROM movies WHERE id = ?', (duplicate_id,))
+
 def scrape_one(db: sqlite3.Connection, movie: dict, dry_run: bool = False) -> str:
     try:
         tmdb_id = movie['tmdb_id']
@@ -951,6 +960,22 @@ def scrape_one(db: sqlite3.Connection, movie: dict, dry_run: bool = False) -> st
                     thumbnail = str(dest)
 
         if not dry_run:
+            assign_tmdb = tmdb_id or movie.get('tmdb_id')
+            movie_id = movie['id']
+            if assign_tmdb:
+                owner = db.execute(
+                    'SELECT id FROM movies WHERE tmdb_id = ? AND id != ?',
+                    (assign_tmdb, movie_id),
+                ).fetchone()
+                if owner:
+                    print(
+                        f'    [!] TMDB {assign_tmdb} already on movie #{owner["id"]}; '
+                        f'merging #{movie_id} into it'
+                    )
+                    merge_movie_rows(db, owner['id'], movie_id)
+                    movie_id = owner['id']
+                    movie = dict(db.execute('SELECT * FROM movies WHERE id = ?', (movie_id,)).fetchone())
+
             db.execute(
                 """UPDATE movies SET
                     tmdb_id=?, imdb_id=?, plot=?, rating=?, genres=?,
@@ -958,10 +983,10 @@ def scrape_one(db: sqlite3.Connection, movie: dict, dry_run: bool = False) -> st
                     audience=?, year=?, updated_at=datetime('now')
                    WHERE id=?""",
                 (
-                    tmdb_id or movie['tmdb_id'], details.get('imdb_id') or movie['imdb_id'],
+                    assign_tmdb or movie.get('tmdb_id'), details.get('imdb_id') or movie.get('imdb_id'),
                     details.get('overview'), details.get('vote_average'),
                     genres, director, details.get('original_language'),
-                    details.get('runtime'), thumbnail, audience, year, movie['id'],
+                    details.get('runtime'), thumbnail, audience, year, movie_id,
                 ),
             )
             
@@ -969,7 +994,7 @@ def scrape_one(db: sqlite3.Connection, movie: dict, dry_run: bool = False) -> st
             if audience == 'family':
                 db.execute("INSERT OR IGNORE INTO categories (name) VALUES ('Family')")
                 cat_id = db.execute("SELECT id FROM categories WHERE name = 'Family'").fetchone()[0]
-                db.execute("INSERT OR IGNORE INTO movie_categories (movie_id, category_id) VALUES (?, ?)", (movie['id'], cat_id))
+                db.execute("INSERT OR IGNORE INTO movie_categories (movie_id, category_id) VALUES (?, ?)", (movie_id, cat_id))
             
             db.commit()
         return 'ok'
@@ -1019,8 +1044,8 @@ def ingest_path(db: sqlite3.Connection, path: Path, library_id: int, auto_scrape
         subtitle_records.append((sf, detect_lang_from_path(sf), sf.suffix.lstrip('.')))
 
     existing = db.execute(
-        'SELECT id FROM movies WHERE LOWER(title)=LOWER(?) AND COALESCE(year,0)=COALESCE(?,0) AND library_id = ?',
-        (meta['title'], meta['year'], library_id),
+        'SELECT id FROM movies WHERE LOWER(title)=LOWER(?) AND COALESCE(year,0)=COALESCE(?,0)',
+        (meta['title'], meta['year']),
     ).fetchone()
     
     newly_added = False
@@ -1560,6 +1585,19 @@ def cmd_full(args):
     if not hasattr(args, 'no_fetch_subs'): args.no_fetch_subs = False
     if not hasattr(args, 'fetch_subs_lang'): args.fetch_subs_lang = 'es'
     if not hasattr(args, 'fetch_subs_limit'): args.fetch_subs_limit = None
+    if not hasattr(args, 'no_convert'): args.no_convert = False
+    if not hasattr(args, 'mkv_only'): args.mkv_only = False
+    if not hasattr(args, 'no_repair'): args.no_repair = False
+    if not hasattr(args, 'skip_audio_prebuild'): args.skip_audio_prebuild = False
+
+    if not args.no_convert:
+        convert_args = argparse.Namespace(
+            dir=args.dir,
+            all_formats=not args.mkv_only,
+            no_repair=args.no_repair,
+            skip_audio_prebuild=args.skip_audio_prebuild,
+        )
+        cmd_convert(convert_args)
     
     cmd_sync(args)
     
@@ -1628,11 +1666,19 @@ def main():
     sub.add_parser('status', help='Display collection and database statistics')
     sub.add_parser('sync-assets', help='Link posters and purge broken artwork paths')
     
-    p_full = sub.add_parser('full', help='Complete pipeline: Sync -> Cleanup -> Organize -> Scrape -> Fetch subs')
+    p_full = sub.add_parser('full', help='Complete pipeline: Convert -> Sync -> Cleanup -> Organize -> Scrape -> Fetch subs')
     p_full.add_argument('--root', dest='dir', default=MEDIA_DIR)
     p_full.add_argument('--category', help='Default category for this run')
     p_full.add_argument('--no-scrape', action='store_true')
     p_full.add_argument('--no-backup', action='store_true')
+    p_full.add_argument('--no-convert', action='store_true', help='Skip MKV/AVI/WEBM/MOV conversion pass')
+    p_full.add_argument('--mkv-only', action='store_true', help='During full, convert MKV only (skip AVI/WEBM/MOV)')
+    p_full.add_argument('--no-repair', action='store_true', help='Skip repair pass after conversion')
+    p_full.add_argument(
+        '--skip-audio-prebuild',
+        action='store_true',
+        help='Skip pre-building per-track audio caches after conversion',
+    )
     p_full.add_argument('--no-fetch-subs', action='store_true', help='Skip OpenSubtitles Spanish/missing subs pass')
     p_full.add_argument(
         '--fetch-subs-lang',
