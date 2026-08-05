@@ -3,7 +3,7 @@
 #
 # Runs at 03:15 every day; logs append to logs/fetch-subs.log in the repo.
 #
-# 15 3 * * * /home/tushita/dev/mirrormessiah/scripts/fetch-subs-daily.sh
+# 15 3 * * * /path/to/mirrormessiah/scripts/fetch-subs-daily.sh
 #
 # Optional env (add before the command or in the script):
 #   MM_FETCH_SUBS_LANG=es

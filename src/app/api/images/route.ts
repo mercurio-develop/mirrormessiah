@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
     const isValid = await validateFilePath(filePath);
     
     if (!isValid) {
-      console.warn(`[ImageProxy] Access Denied: ${filePath}`);
+      console.warn(`[ImageProxy] Access Denied: ${path.basename(filePath)}`);
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 

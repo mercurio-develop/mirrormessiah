@@ -62,7 +62,7 @@ TMDB_BASE = 'https://api.themoviedb.org/3'
 IMG_BASE  = 'https://image.tmdb.org/t/p/w500'
 DELAY     = 0.25
 
-OPENSUBS_API_KEY = os.getenv('OPENSUBS_API_KEY', 'REDACTED_OPENSUBS_API_KEY')
+OPENSUBS_API_KEY = os.getenv('OPENSUBS_API_KEY', '')
 OPENSUBS_BASE = 'https://api.opensubtitles.com/api/v1'
 OPENSUBS_UA = 'MirrorMessiah-mm/1.0'
 OPENSUBS_RATE_LIMIT_S = 0.35
@@ -552,6 +552,8 @@ def calculate_movie_hash(file_path: Path) -> str:
 
 
 def opensubs_request_headers(token: str | None = None) -> dict[str, str]:
+    if not OPENSUBS_API_KEY:
+        raise RuntimeError('OPENSUBS_API_KEY is not set in .env')
     headers = {
         'Api-Key': OPENSUBS_API_KEY,
         'Content-Type': 'application/json',
@@ -737,6 +739,9 @@ def add_fetch_subs_cli_args(parser: argparse.ArgumentParser) -> None:
 
 
 def cmd_fetch_subs(args) -> None:
+    if not OPENSUBS_API_KEY:
+        print('ERROR: OPENSUBS_API_KEY is not set in .env')
+        sys.exit(1)
     lang = (args.lang or 'es').lower()
     backup_db(args)
     db = open_db()

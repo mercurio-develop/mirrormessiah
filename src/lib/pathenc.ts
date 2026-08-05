@@ -28,7 +28,7 @@ export async function validateFilePath(filePath: string): Promise<boolean> {
       }
     }
     
-    console.warn(`Path validation failed: ${filePath} is not within any library root`);
+    console.warn(`Path validation failed: file is not within any library root`);
     return false;
     
   } catch (error) {

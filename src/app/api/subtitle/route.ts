@@ -3,6 +3,7 @@ import { validateFilePath, convertSrtToVtt, sanitizeVtt, prepareVttForPlayback }
 import { b64urlDecode } from '@/lib/b64url';
 import { requireGateKey } from '@/lib/auth';
 import fs from 'fs';
+import nodePath from 'path';
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,12 +14,12 @@ export async function GET(request: NextRequest) {
       return new NextResponse('Authentication required', { status: 401 });
     }
 
-    const path = request.nextUrl.searchParams.get('path');
-    if (!path) return new NextResponse('Missing path', { status: 400 });
+    const pathParam = request.nextUrl.searchParams.get('path');
+    if (!pathParam) return new NextResponse('Missing path', { status: 400 });
 
     let filePath: string;
     try {
-      filePath = b64urlDecode(path);
+      filePath = b64urlDecode(pathParam);
     } catch {
       return new NextResponse('Invalid path', { status: 400 });
     }
@@ -27,7 +28,7 @@ export async function GET(request: NextRequest) {
     if (!isValid) return new NextResponse('Access denied', { status: 403 });
 
     if (!fs.existsSync(filePath)) {
-      console.error(`[SubtitleProxy] File not found: ${filePath}`);
+      console.error(`[SubtitleProxy] File not found: ${nodePath.basename(filePath)}`);
       return new NextResponse('Not found', { status: 404 });
     }
 
@@ -38,7 +39,7 @@ export async function GET(request: NextRequest) {
       raw = raw.slice(1);
     }
 
-    console.log(`[SubtitleProxy] Serving ${filePath} (${raw.length} chars)`);
+    console.log(`[SubtitleProxy] Serving ${nodePath.basename(filePath)} (${raw.length} chars)`);
 
     const isSrt = filePath.toLowerCase().endsWith('.srt');
     let body = isSrt ? convertSrtToVtt(raw) : raw;

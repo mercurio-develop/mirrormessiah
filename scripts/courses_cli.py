@@ -57,7 +57,7 @@ ROOT = Path(__file__).parent.parent
 load_dotenv(ROOT / '.env')
 
 DB_PATH = os.getenv('DB_PATH') or str(ROOT / 'media.db')
-COURSES_DIR = os.getenv('COURSES_DIR') or '/media/tushita/TUSHITA_LINUX_DATA/courses'
+COURSES_DIR = os.getenv('COURSES_DIR', '')
 LEGACY_COURSES_DIRS = os.getenv('LEGACY_COURSES_DIRS', '')
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
 GEMINI_MODEL = os.getenv('GEMINI_MODEL', 'gemini-2.5-flash')
@@ -287,6 +287,9 @@ def rename_course_root_folder(
 
 
 def courses_root() -> Path:
+    if not COURSES_DIR:
+        print('ERROR: COURSES_DIR is not set in .env')
+        sys.exit(1)
     return Path(COURSES_DIR).resolve()
 
 
@@ -297,8 +300,6 @@ def courses_roots() -> list[Path]:
     candidates = [COURSES_DIR]
     if LEGACY_COURSES_DIRS:
         candidates.extend(p.strip() for p in LEGACY_COURSES_DIRS.split(':'))
-    else:
-        candidates.append('/media/tushita/TUSHITA_W11_DATA/Courses')
     for raw in candidates:
         if not raw:
             continue
@@ -1487,10 +1488,7 @@ def _gemini_models_to_try() -> list[str]:
 
 
 def _call_gemini_once(model: str, prompt: str) -> tuple[dict | None, int | None, str | None]:
-    url = (
-        f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent'
-        f'?key={GEMINI_API_KEY}'
-    )
+    url = f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent'
     payload = {
         'contents': [{'parts': [{'text': prompt}]}],
         'generationConfig': {
@@ -1501,7 +1499,10 @@ def _call_gemini_once(model: str, prompt: str) -> tuple[dict | None, int | None,
     req = urllib.request.Request(
         url,
         data=json.dumps(payload).encode('utf-8'),
-        headers={'Content-Type': 'application/json'},
+        headers={
+            'Content-Type': 'application/json',
+            'X-goog-api-key': GEMINI_API_KEY,
+        },
         method='POST',
     )
     try:

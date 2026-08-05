@@ -3,6 +3,7 @@ import { validateFilePath, getMimeType, parseRangeHeader } from '@/lib/pathenc';
 import { b64urlDecode } from '@/lib/b64url';
 import { requireGateKey } from '@/lib/auth';
 import fs from 'fs';
+import path from 'path';
 import { stat } from 'fs/promises';
 
 export const dynamic = 'force-dynamic';
@@ -68,7 +69,7 @@ export async function GET(request: NextRequest) {
     const fileSize = stats.size;
     const mimeType = getMimeType(filePath);
     
-    console.log(`[Streaming] Serving ${filePath} as ${mimeType} (${fileSize} bytes)`);
+    console.log(`[Streaming] Serving ${path.basename(filePath)} as ${mimeType} (${fileSize} bytes)`);
 
     const rangeHeader = request.headers.get('range');
     const range = rangeHeader ? parseRangeHeader(rangeHeader, fileSize) : null;

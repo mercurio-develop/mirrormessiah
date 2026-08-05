@@ -124,7 +124,7 @@ MirrorMessiah is managed locally using the Python CLI. All absolute directories 
     Set `OPENSUBS_USERNAME` and `OPENSUBS_PASSWORD` in `.env`. For a large library, run daily via cron:
     ```bash
     # See scripts/cron/fetch-subs.crontab.example
-    15 3 * * * /home/tushita/dev/mirrormessiah/scripts/fetch-subs-daily.sh
+    15 3 * * * /path/to/mirrormessiah/scripts/fetch-subs-daily.sh
     ```
 *   **System Reset**: Wipe the SQLite registry database permanently.
     ```bash
@@ -135,7 +135,7 @@ MirrorMessiah is managed locally using the Python CLI. All absolute directories 
 
 ## Courses CLI (`scripts/courses_cli.py`)
 
-Set `COURSES_DIR` in `.env` to your course library root (default: `/media/tushita/TUSHITA_LINUX_DATA/courses`).
+Set `COURSES_DIR` in `.env` to your course library root (see `.env.example`).
 
 During sync, course folders are parsed for **platform** (Udemy, Rebelway, Pikuma, Frontend Masters, FXPHD, etc.) and **category** (VFX & 3D, Development, General). Titles are normalized and organize renames folders to `{Platform} - {Title}`.
 

@@ -111,7 +111,7 @@ const COMMANDS: Record<string, CommandOptions[]> = {
   courses: [
     {
       id: 'c-sync', script: 'scripts/courses_cli.py', command: 'sync', description: 'Sync Courses', icon: <RefreshCcw className="w-4 h-4" />,
-      argsSchema: [{ name: 'dir', label: 'Target Directory', type: 'string', isPositional: true, placeholder: '/media/tushita/TUSHITA_LINUX_DATA/courses (optional)' }]
+      argsSchema: [{ name: 'dir', label: 'Target Directory', type: 'string', isPositional: true, placeholder: '/path/to/courses (optional)' }]
     },
     { id: 'c-organize', script: 'scripts/courses_cli.py', command: 'organize', description: 'Organize Folders', icon: <FolderSync className="w-4 h-4" /> },
     { id: 'c-cleanup', script: 'scripts/courses_cli.py', command: 'cleanup', description: 'Cleanup Duplicates', icon: <Trash2 className="w-4 h-4" /> },
@@ -127,7 +127,7 @@ const COMMANDS: Record<string, CommandOptions[]> = {
     },
     {
       id: 'c-full', script: 'scripts/courses_cli.py', command: 'full', description: 'Run Full Pipeline', icon: <Play className="w-4 h-4" />,
-      argsSchema: [{ name: 'dir', label: 'Directory', type: 'string', isPositional: true, placeholder: '/media/tushita/TUSHITA_LINUX_DATA/courses (optional)' }]
+      argsSchema: [{ name: 'dir', label: 'Directory', type: 'string', isPositional: true, placeholder: '/path/to/courses (optional)' }]
     },
   ],
   utils: [
