@@ -46,3 +46,40 @@ export async function scrapeCourseThumbnailsAction(
     return { status: 'error', message: error instanceof Error ? error.message : 'Thumbnail scrape failed' };
   }
 }
+
+export async function scrapeCourseMetadataAction(
+  courseId: number,
+  options: { force?: boolean } = {},
+): Promise<ActionState> {
+  try {
+    await requireAdminKeyAuth();
+    const db = getDb();
+    const course = db.prepare('SELECT id FROM courses WHERE id = ?').get(courseId) as { id: number } | undefined;
+    if (!course) return { status: 'error', message: 'Course not found' };
+
+    const script = path.join(process.cwd(), 'scripts', 'courses_cli.py');
+    const args = [script, 'scrape', '--course-id', String(courseId)];
+    if (options.force) args.push('--force');
+
+    const { stdout, stderr } = await execFileAsync('python3', args, {
+      cwd: process.cwd(),
+      timeout: 120_000,
+      env: { ...process.env },
+    });
+
+    revalidatePath(`/admin/courses/${courseId}`);
+    revalidatePath('/admin/courses');
+    revalidatePath('/courses');
+    revalidatePath(`/courses/${courseId}`);
+
+    const output = `${stdout}\n${stderr}`;
+    if (output.includes('GEMINI_API_KEY is not set')) {
+      return { status: 'error', message: 'GEMINI_API_KEY is not configured' };
+    }
+    const summary = stdout.split('\n').find((l) => l.includes('SCRAPE_COMPLETE')) || 'Metadata scrape finished';
+    return { status: 'success', message: summary.trim() };
+  } catch (error: unknown) {
+    if (error instanceof AuthError) return { status: 'error', message: error.message };
+    return { status: 'error', message: error instanceof Error ? error.message : 'Metadata scrape failed' };
+  }
+}

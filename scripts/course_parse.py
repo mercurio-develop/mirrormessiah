@@ -50,13 +50,14 @@ PLATFORM_PATTERNS = [
     (re.compile(r'\bredefinefx\b', re.I), 'Redefinefx'),
     (re.compile(r'\bdouble jump academy\b', re.I), 'Double Jump Academy'),
     (re.compile(r'\bfreecoursesonline\b', re.I), 'FreeCoursesOnline'),
+    (re.compile(r'\bardanlabs?\b', re.I), 'Ardan Labs'),
 ]
 
 PLATFORM_PREFIX_RE = re.compile(
     r'^(?:\d+\.\s*)?(?:\[[^\]]+\]\s*)?'
     r'(?:udemy|rebelway|frontend\s*masters?|fxphd|cgboost(?:\s*academy)?|gumroad|'
     r'code with mosh|coursera|pikuma|schoolism|linkedin learning|deeplearning\.ai|'
-    r'double jump academy|cgma|freecoursesonline(?:\.me)?|tutsnode|redefinefx)\s*[-–—]\s*',
+    r'double jump academy|cgma|freecoursesonline(?:\.me)?|tutsnode|redefinefx|ardanlabs?)\s*[-–—]\s*',
     re.I,
 )
 
@@ -103,7 +104,7 @@ DEV_KEYWORDS = re.compile(
 
 DEV_PLATFORMS = frozenset({
     'Pikuma', 'Frontend Masters', 'Code With Mosh', 'Coursera', 'DeepLearning.AI',
-    'FreeCoursesOnline', 'TutsNode',
+    'FreeCoursesOnline', 'TutsNode', 'Ardan Labs',
 })
 
 VFX_PLATFORMS = frozenset({
@@ -114,7 +115,48 @@ VFX_PLATFORMS = frozenset({
 # Reject S1080E01-style resolution false positives (mirrors series_cli).
 RESOLUTION_WIDTHS = frozenset({480, 576, 720, 1080, 1280, 1920, 2160, 3840})
 
+# Ardan Labs Ultimate Go: flat lesson1.mp4 … lesson91.mp4 mapped to 14 sections.
+ARDANLABS_ULTIMATE_GO_SECTIONS: list[tuple[int, str]] = [
+    (1, 'Design Guidelines'),
+    (6, 'Memory & Data Semantics'),
+    (14, 'Data Structures'),
+    (24, 'Decoupling'),
+    (32, 'Composition'),
+    (38, 'Error Handling'),
+    (44, 'Packaging'),
+    (46, 'Goroutines'),
+    (49, 'Data Races'),
+    (50, 'Channels'),
+    (59, 'Concurrency Patterns'),
+    (60, 'Testing'),
+    (69, 'Benchmarking'),
+    (77, 'Profiling & Tracing'),
+]
+
+
+def is_ultimate_go_flat_course(course_root: Path) -> bool:
+    name = course_root.name.lower()
+    if 'ultimate go' not in name:
+        return False
+    if any(x in name for x in ('service', 'kubernetes', 'advanced engineering')):
+        return False
+    videos = [p for p in course_root.iterdir() if p.is_file() and p.suffix.lower() in VIDEO_EXT]
+    if len(videos) < 10:
+        return False
+    return sum(1 for p in videos if re.match(r'^lesson\d+\.', p.name, re.I)) >= len(videos) * 0.9
+
+
+def module_for_ardanlabs_go_lesson(lesson_num: int) -> ParsedModule:
+    section_num = 1
+    title = ARDANLABS_ULTIMATE_GO_SECTIONS[0][1]
+    for idx, (start, section_title) in enumerate(ARDANLABS_ULTIMATE_GO_SECTIONS, start=1):
+        if lesson_num >= start:
+            section_num = idx
+            title = section_title
+    return ParsedModule(section_num, 'section', title)
+
 LESSON_NUM_PATTERNS = [
+    re.compile(r'^lesson\s*0*(\d+)\b', re.I),
     re.compile(r'^(\d{1,3})\s*[-–—_.]\s*', re.I),
     re.compile(r'^(\d{1,3})\s*\.\s*', re.I),
     re.compile(r'^(\d{1,3})[_\s]', re.I),
@@ -263,6 +305,11 @@ def format_course_folder_name(title: str, platform: str | None = None, category:
     return safe_title
 
 
+def course_match_key(name: str) -> str:
+    """Normalized key for deduplicating course titles (case/punctuation insensitive)."""
+    return re.sub(r'[^a-z0-9]+', '', clean_course_name(name).lower())
+
+
 def parse_module_folder(folder_name: str) -> ParsedModule | None:
     for pattern, kind in MODULE_PATTERNS:
         match = pattern.match(folder_name.strip())
@@ -332,6 +379,11 @@ def resolve_lesson_path(course_root: Path, file_path: Path) -> ParsedLesson | No
     lesson_num, lesson_title = parse_lesson_filename(file_path.name)
     if lesson_num is None:
         lesson_num = 1
+
+    if module is None and is_ultimate_go_flat_course(course_root) and len(rel_parts) == 1:
+        module = module_for_ardanlabs_go_lesson(lesson_num)
+        if re.match(r'^lesson\s*0*(\d+)\b', file_path.stem, re.I):
+            lesson_title = f'Lesson {lesson_num}'
 
     if module is None:
         module = ParsedModule(1, 'module', 'Module 1')

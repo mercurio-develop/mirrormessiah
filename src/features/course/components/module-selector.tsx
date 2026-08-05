@@ -21,6 +21,7 @@ interface Module {
   module_number: number;
   module_kind: string;
   title: string | null;
+  poster: string | null;
   lessons: Lesson[];
 }
 
@@ -55,12 +56,18 @@ export function ModuleSelector({ modules }: { modules: Module[] }) {
             }`}
           >
             {moduleLabel(mod)}
+            <span className="ml-1.5 text-sm font-normal opacity-60">({mod.lessons.length})</span>
           </button>
         ))}
       </div>
 
       {active && (
         <div className="flex flex-col gap-2 border-t border-border/10 pt-2">
+          {active.poster && getPosterUrl(active.poster) ? (
+            <div className="relative w-full max-w-md aspect-video bg-zinc-900 rounded-lg overflow-hidden mb-4 border border-white/5">
+              <Image src={getPosterUrl(active.poster)!} alt={moduleLabel(active)} fill className="object-contain" unoptimized />
+            </div>
+          ) : null}
           {active.lessons.length === 0 ? (
             <p className="text-muted-foreground italic">No lessons in this module.</p>
           ) : (

@@ -15,6 +15,8 @@ services:
       - DB_PATH=/app/data/media.db
       - MEDIA_DIR=${MEDIA_DIR}
       - SERIES_DIR=${SERIES_DIR}
+      - COURSES_DIR=${COURSES_DIR}
+      - LEGACY_COURSES_DIRS=${LEGACY_COURSES_DIRS:-}
       - TMDB_API_KEY=${TMDB_API_KEY}
     volumes:
       - mm-data:/app/data
@@ -22,6 +24,8 @@ services:
       - "${MEDIA_DIR:?MEDIA_DIR is not set.}:${MEDIA_DIR}"
       # SERIES_DIR: Path to your series collection
       - "${SERIES_DIR:?SERIES_DIR is not set.}:${SERIES_DIR}"
+      # COURSES_DIR: Path to your course library (Udemy, Rebelway, etc.)
+      - "${COURSES_DIR:?COURSES_DIR is not set.}:${COURSES_DIR}"
     networks:
       internal-net:
         aliases:

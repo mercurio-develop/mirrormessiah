@@ -3,13 +3,13 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { b64urlEncode } from '@/lib/b64url';
-import { Save, Loader2, Trash2, GraduationCap, ImageIcon, FolderOpen } from 'lucide-react';
+import { Save, Loader2, Trash2, GraduationCap, ImageIcon, FolderOpen, Sparkles } from 'lucide-react';
 import { updateCourseAction } from '../actions/update-course';
-import { scrapeCourseThumbnailsAction } from '../actions/scrape-course';
+import { scrapeCourseThumbnailsAction, scrapeCourseMetadataAction } from '../actions/scrape-course';
 import { DeleteCourseModal } from './delete-course-modal';
 import { CourseFileExplorer } from './course-file-explorer';
 import { COURSE_CATEGORIES, COURSE_PLATFORMS } from '../lib/course-taxonomy';
+import { getCoursePosterUrl } from '../lib/course-artwork';
 
 interface Course {
   id: number;
@@ -25,19 +25,13 @@ interface Course {
   needs_repair: number;
 }
 
-const getPosterUrl = (thumbnail: string | null | undefined): string => {
-  if (!thumbnail) return '/placeholder.svg';
-  if (thumbnail.startsWith('http')) return thumbnail;
-  const [basePath, query] = thumbnail.split('?');
-  let url = '/api/images?path=' + b64urlEncode(basePath);
-  if (query) url += '&' + query;
-  return url;
-};
+const getPosterUrl = getCoursePosterUrl;
 
 export function AdminCourseForm({ course }: { course: Course }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [isScrapingThumbs, setIsScrapingThumbs] = useState(false);
+  const [isScrapingMetadata, setIsScrapingMetadata] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isFilesOpen, setIsFilesOpen] = useState(false);
   const [status, setStatus] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
@@ -83,6 +77,14 @@ export function AdminCourseForm({ course }: { course: Course }) {
     setIsScrapingThumbs(false);
   };
 
+  const handleScrapeMetadata = async () => {
+    setIsScrapingMetadata(true);
+    const result = await scrapeCourseMetadataAction(course.id);
+    setStatus({ type: result.status === 'success' ? 'success' : 'error', msg: result.message || '' });
+    if (result.status === 'success') router.refresh();
+    setIsScrapingMetadata(false);
+  };
+
   return (
     <>
       <form onSubmit={handleSubmit} className="space-y-8 pb-24">
@@ -124,6 +126,9 @@ export function AdminCourseForm({ course }: { course: Course }) {
             </div>
             <button type="button" onClick={handleScrapeThumbs} disabled={isScrapingThumbs || isPending} className="w-full h-12 bg-zinc-900 border border-zinc-700 rounded-2xl font-bold flex items-center justify-center gap-2">
               {isScrapingThumbs ? <Loader2 className="h-5 w-5 animate-spin" /> : <ImageIcon className="h-5 w-5" />} Scrape Lesson Thumbnails
+            </button>
+            <button type="button" onClick={handleScrapeMetadata} disabled={isScrapingMetadata || isPending} className="w-full h-12 bg-zinc-900 border border-zinc-700 rounded-2xl font-bold flex items-center justify-center gap-2">
+              {isScrapingMetadata ? <Loader2 className="h-5 w-5 animate-spin" /> : <Sparkles className="h-5 w-5" />} Scrape Metadata (Gemini)
             </button>
             <button type="submit" disabled={isPending} className="w-full h-12 bg-amber-600 text-white rounded-2xl font-bold flex items-center justify-center gap-2">
               {isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />} Save Changes

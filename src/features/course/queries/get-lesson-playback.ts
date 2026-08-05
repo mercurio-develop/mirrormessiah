@@ -23,7 +23,7 @@ export function getLessonPlayback(id: number) {
   try {
     const lesson = db.prepare(`
       SELECT l.id, l.title, l.lesson_number, l.plot, l.runtime, l.thumbnail,
-             m.module_number, m.module_kind, m.course_id, c.title as course_title
+             m.module_number, m.module_kind, m.course_id, c.title as course_title, c.thumbnail as course_thumbnail
       FROM lessons l
       JOIN course_modules m ON l.module_id = m.id
       JOIN courses c ON m.course_id = c.id
@@ -54,6 +54,7 @@ export function getLessonPlayback(id: number) {
         course_id: lesson.course_id,
         title: lesson.title,
         course_title: lesson.course_title,
+        course_thumbnail: lesson.course_thumbnail,
         module_number: lesson.module_number,
         module_kind: lesson.module_kind,
         lesson_number: lesson.lesson_number,
