@@ -115,6 +115,7 @@ const COMMANDS: Record<string, CommandOptions[]> = {
     },
     { id: 'c-organize', script: 'scripts/courses_cli.py', command: 'organize', description: 'Organize Folders', icon: <FolderSync className="w-4 h-4" /> },
     { id: 'c-cleanup', script: 'scripts/courses_cli.py', command: 'cleanup', description: 'Cleanup Duplicates', icon: <Trash2 className="w-4 h-4" /> },
+    { id: 'c-relink', script: 'scripts/courses_cli.py', command: 'relink', description: 'Relink Stale Paths', icon: <FolderSync className="w-4 h-4" /> },
     { id: 'c-convert', script: 'scripts/courses_cli.py', command: 'convert', description: 'Convert MKV to MP4', icon: <Cpu className="w-4 h-4" /> },
     {
       id: 'c-thumbs', script: 'scripts/courses_cli.py', command: 'thumbs', description: 'Generate Thumbnails', icon: <Save className="w-4 h-4" />,

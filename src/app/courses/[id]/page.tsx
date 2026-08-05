@@ -1,21 +1,14 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ChevronLeft, Play, GraduationCap } from 'lucide-react';
+import { ChevronLeft, GraduationCap } from 'lucide-react';
 import { getCourseDetails } from '@/features/course/queries/get-course-details';
-import { ModuleSelector } from '@/features/course/components/module-selector';
-import { b64urlEncode } from '@/lib/b64url';
+import { CourseModuleExplorer } from '@/features/course/components/course-module-explorer';
+import { CourseFavoriteButton } from '@/features/course/components/course-favorite-button';
+import { CourseStartOrContinue } from '@/features/course/components/course-start-or-continue';
+import { getCourseImageUrl } from '@/features/course/lib/course-artwork';
 
 export const dynamic = 'force-dynamic';
-
-const getPosterUrl = (thumbnail: string | null | undefined): string | null => {
-  if (!thumbnail) return null;
-  if (thumbnail.startsWith('http')) return thumbnail;
-  const [basePath, query] = thumbnail.split('?');
-  let url = '/api/images?path=' + b64urlEncode(basePath);
-  if (query) url += '&' + query;
-  return url;
-};
 
 export default async function CourseDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -32,7 +25,7 @@ export default async function CourseDetailsPage({ params }: { params: Promise<{ 
     }
   }
 
-  const posterUrl = getPosterUrl(course.thumbnail);
+  const posterUrl = getCourseImageUrl(course.thumbnail);
 
   return (
     <div className="min-h-screen bg-background pb-32">
@@ -52,15 +45,14 @@ export default async function CourseDetailsPage({ params }: { params: Promise<{ 
             <span>{course.modules.length} modules</span>
           </div>
           {course.plot ? <p className="mt-4 max-w-2xl text-muted-foreground leading-relaxed">{course.plot}</p> : null}
-          {firstLessonId ? (
-            <Link href={`/learn/${firstLessonId}`} className="inline-flex items-center gap-2 mt-6 h-12 px-8 bg-white text-black font-bold rounded-lg hover:bg-white/90">
-              <Play className="h-5 w-5 fill-current" /> Start Course
-            </Link>
-          ) : null}
+          <div className="flex flex-wrap items-center gap-3 mt-6">
+            <CourseStartOrContinue courseId={course.id} firstLessonId={firstLessonId} />
+            <CourseFavoriteButton courseId={course.id} label />
+          </div>
         </div>
       </div>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 mt-12">
-        <ModuleSelector modules={course.modules} />
+        <CourseModuleExplorer modules={course.modules} />
       </div>
     </div>
   );

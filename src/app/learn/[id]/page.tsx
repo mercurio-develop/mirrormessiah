@@ -5,6 +5,7 @@ import { MediaPlayer } from '@/features/movie/components/media-player';
 import { ChevronLeft, SkipBack, SkipForward, Activity } from 'lucide-react';
 import { getLessonContext } from '@/features/course/queries/get-lesson-context';
 import { LessonWatchLayout } from '@/features/course/components/lesson-watch-layout';
+import { CourseWatchTracker } from '@/features/course/components/course-watch-tracker';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,9 +30,20 @@ export default async function LearnPage({ params }: { params: Promise<{ id: stri
   }
 
   const { lesson, playlist, nextLessonId, prevLessonId } = data;
+  const courseTitle = String(lesson.course_title ?? '');
+  const courseThumbnail = (lesson.course_thumbnail as string | null) ?? (lesson.thumbnail as string | null);
 
   return (
     <div className="min-h-screen bg-black text-foreground flex flex-col h-screen overflow-hidden">
+      <CourseWatchTracker
+        courseId={lesson.course_id as number}
+        lessonId={lesson.id as number}
+        courseTitle={courseTitle}
+        lessonTitle={(lesson.title as string | null) ?? null}
+        moduleNumber={lesson.module_number as number}
+        lessonNumber={lesson.lesson_number as number}
+        thumbnail={courseThumbnail}
+      />
       <div className="z-20 bg-black/80 border-b border-white/5 shrink-0">
         <div className="max-w-[1800px] mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-4 min-w-0">

@@ -40,8 +40,10 @@ function appendSearchRelevance(q: string, relevanceSql: string, params: unknown[
 export function getCourseCategoryCounts(options: {
   q?: string | null;
   platform?: string | null;
+  category?: string | null;
+  year?: string | null;
 } = {}): CourseCategoryCounts {
-  const { q, platform } = options;
+  const { q, platform, category, year } = options;
   const db = getDb();
   const params: unknown[] = [];
   const whereConditions: string[] = [];
@@ -50,6 +52,18 @@ export function getCourseCategoryCounts(options: {
   if (platform) {
     whereConditions.push('c.platform = ?');
     params.push(platform);
+  }
+  if (category) {
+    if (category === 'Uncategorized') {
+      whereConditions.push("(c.category IS NULL OR c.category = '')");
+    } else {
+      whereConditions.push('c.category = ?');
+      params.push(category);
+    }
+  }
+  if (year) {
+    whereConditions.push('c.year = ?');
+    params.push(parseInt(year, 10));
   }
 
   const where = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
@@ -77,15 +91,35 @@ export function getCourseCategoryCounts(options: {
   }
 }
 
+export function getCoursesByIds(ids: number[]) {
+  if (ids.length === 0) return [];
+  const db = getDb();
+  const placeholders = ids.map(() => '?').join(',');
+  try {
+    const rows = db.prepare(`
+      SELECT c.id, c.title, c.year, c.thumbnail, c.platform, c.category, c.instructor, c.language, c.needs_repair,
+             (SELECT COUNT(*) FROM course_modules WHERE course_id = c.id) as module_count
+      FROM courses c
+      WHERE c.id IN (${placeholders})
+    `).all(...ids) as Record<string, unknown>[];
+    const byId = new Map(rows.map((row) => [row.id as number, row]));
+    return ids.map((id) => byId.get(id)).filter(Boolean) as Record<string, unknown>[];
+  } catch (error: unknown) {
+    if (error instanceof Error && error.message.includes('no such table')) return [];
+    throw error;
+  }
+}
+
 export function getCoursesList(options: {
   q?: string | null;
   platform?: string | null;
   category?: string | null;
+  year?: string | null;
   sort?: 'newest' | 'title_asc' | 'title_desc' | 'repair' | null;
   offset?: number;
   limit?: number;
 } = {}) {
-  const { q, platform, category, sort, offset = 0, limit = 24 } = options;
+  const { q, platform, category, year, sort, offset = 0, limit = 24 } = options;
   const db = getDb();
   const params: unknown[] = [];
   const whereConditions: string[] = [];
@@ -117,6 +151,11 @@ export function getCoursesList(options: {
     }
   }
 
+  if (year) {
+    whereConditions.push('c.year = ?');
+    params.push(parseInt(year, 10));
+  }
+
   if (whereConditions.length > 0) {
     query += ` WHERE ${whereConditions.join(' AND ')}`;
   }
@@ -137,11 +176,12 @@ export function getCoursesList(options: {
     query += ' LIMIT ? OFFSET ?';
     params.push(limit, offset);
     const courses = db.prepare(query).all(...params) as Record<string, unknown>[];
-    const categoryCounts = getCourseCategoryCounts({ q, platform });
-    return { courses, total, categoryCounts };
+    const categoryCounts = getCourseCategoryCounts({ q, platform, category, year });
+    const facets = getCourseFacets();
+    return { courses, total, categoryCounts, facets };
   } catch (error: unknown) {
     if (error instanceof Error && error.message.includes('no such table')) {
-      return { courses: [], total: 0, categoryCounts: { total: 0, byCategory: {} } };
+      return { courses: [], total: 0, categoryCounts: { total: 0, byCategory: {} }, facets: { platforms: [], categories: [], years: [] } };
     }
     throw error;
   }
@@ -160,11 +200,17 @@ export function getCourseFacets() {
       WHERE category IS NOT NULL AND category != ''
       ORDER BY category ASC
     `).all() as { category: string }[];
+    const years = db.prepare(`
+      SELECT DISTINCT year FROM courses
+      WHERE year IS NOT NULL
+      ORDER BY year DESC
+    `).all() as { year: number }[];
     return {
       platforms: platforms.map((row) => row.platform),
       categories: categories.map((row) => row.category),
+      years: years.map((row) => String(row.year)),
     };
   } catch {
-    return { platforms: [], categories: [] };
+    return { platforms: [], categories: [], years: [] };
   }
 }
