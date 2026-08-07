@@ -1,11 +1,12 @@
 import { PublicMoviesList } from '@/features/movie/components/public-movies-list'
 import { getMovies } from '@/features/movie/queries/get-movies';
+import { DEFAULT_MOVIE_SORT } from '@/features/movie/search-params';
 import { Suspense } from 'react';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Home() {
-  const { movies: initialMovies } = getMovies({ limit: 24 });
+  const { movies: initialMovies } = getMovies({ limit: 24, sort: DEFAULT_MOVIE_SORT });
 
   return (
     <div className="flex flex-col min-h-screen bg-background font-sans selection:bg-primary selection:text-white pt-18">

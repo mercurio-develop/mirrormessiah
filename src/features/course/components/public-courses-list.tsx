@@ -9,6 +9,7 @@ import { getCoursePosterUrl } from '@/features/course/lib/course-artwork';
 import type { CourseCategoryCounts } from '@/features/course/queries/get-courses';
 import {
   COURSE_SORT_OPTIONS,
+  DEFAULT_COURSE_SORT,
   parseCourseSearchParams,
   type CourseSort,
 } from '@/features/course/search-params';
@@ -65,7 +66,7 @@ export function PublicCoursesList({
   const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedPlatform, setSelectedPlatform] = useState('');
   const [selectedYear, setSelectedYear] = useState('');
-  const [sort, setSort] = useState<CourseSort>('title_asc');
+  const [sort, setSort] = useState<CourseSort>(DEFAULT_COURSE_SORT);
   const [showFilters, setShowFilters] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -143,7 +144,7 @@ export function PublicCoursesList({
       else params.delete('platform');
       if (next.year) params.set('year', next.year);
       else params.delete('year');
-      if (next.sort !== 'title_asc') params.set('sort', next.sort);
+      if (next.sort !== DEFAULT_COURSE_SORT) params.set('sort', next.sort);
       else params.delete('sort');
       if (debouncedSearch) params.set('q', debouncedSearch);
       else params.delete('q');
@@ -158,7 +159,7 @@ export function PublicCoursesList({
     if (selectedCategory) count++;
     if (selectedPlatform) count++;
     if (selectedYear) count++;
-    if (sort !== 'title_asc') count++;
+    if (sort !== DEFAULT_COURSE_SORT) count++;
     return count;
   }, [debouncedSearch, selectedCategory, selectedPlatform, selectedYear, sort]);
 
@@ -240,7 +241,7 @@ export function PublicCoursesList({
         setSelectedCategory(state.selectedCategory || '');
         setSelectedPlatform(state.selectedPlatform || '');
         setSelectedYear(state.selectedYear || '');
-        setSort(state.sort || 'title_asc');
+        setSort(state.sort || DEFAULT_COURSE_SORT);
         setCourses(state.courses || initialCourses);
         offsetRef.current = state.offset || initialCourses.length;
         setHasMore(state.hasMore ?? initialCourses.length >= ITEMS_PER_LOAD);
@@ -269,7 +270,7 @@ export function PublicCoursesList({
     });
 
     const hasActiveFilters =
-      debouncedSearch || selectedCategory || selectedPlatform || selectedYear || sort !== 'title_asc';
+      debouncedSearch || selectedCategory || selectedPlatform || selectedYear || sort !== DEFAULT_COURSE_SORT;
 
     const runResetFetch = (scrollToTop: boolean) => {
       if (scrollToTop) window.scrollTo({ top: 0, behavior: 'instant' });
@@ -307,7 +308,7 @@ export function PublicCoursesList({
     setSelectedCategory('');
     setSelectedPlatform('');
     setSelectedYear('');
-    setSort('title_asc');
+    setSort(DEFAULT_COURSE_SORT);
     router.push(pathname, { scroll: false });
   };
 
@@ -546,7 +547,7 @@ export function PublicCoursesList({
             ))}
           </div>
         ) : (
-          <div className="flex flex-col gap-2 border-t border-border/20 pt-2">
+          <div className="flex flex-col gap-2">
             {courses.map((course) => (
               <Link
                 key={course.id}

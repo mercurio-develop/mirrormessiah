@@ -74,80 +74,23 @@ export function MoviesList({ initialMovies }: MoviesListProps) {
   const [validating, setValidating] = useState(false);
   const [isValidateModalOpen, setIsValidateModalOpen] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState(initialMovies.length >= 24);
+  const [hasMore, setHasMore] = useState(initialMovies.length >= ITEMS_PER_LOAD);
   const [totalCount, setTotalCount] = useState(0);
 
   const loadingRef = useRef(false);
   const offsetRef = useRef(initialMovies.length);
-  const [restored, setRestored] = useState({ done: false, didRestore: false });
+  const [restored, setRestored] = useState(false);
+  const pendingScrollY = useRef<number | null>(null);
   const scrollRestored = useRef(false);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
-  // 1. Restore state on mount
-  useEffect(() => {
-    const saved = sessionStorage.getItem('mm_admin_movies_state');
-    if (saved) {
-      try {
-        const state = JSON.parse(saved);
-        setSearchTerm(state.search || '');
-        setDebouncedSearch(state.search || '');
-        
-        if (state.movies && state.movies.length > 0) {
-            setMovies(state.movies);
-            offsetRef.current = state.offset || state.movies.length;
-            setHasMore(state.hasMore ?? true);
-            setTotalCount(state.totalCount || 0);
-        }
-
-        if (state.sort && state.sort !== currentSort) {
-            updateParams({ sort: state.sort });
-        }
-        
-        setRestored({ done: true, didRestore: true });
-      } catch (e) {
-        setRestored({ done: true, didRestore: false });
-      }
-    } else {
-      setRestored({ done: true, didRestore: false });
-    }
-  }, []);
-
-  // Separate scroll restoration to wait for DOM stability
-  useEffect(() => {
-    if (restored.didRestore && movies.length > 0 && !scrollRestored.current) {
-        const saved = sessionStorage.getItem('mm_admin_movies_state');
-        if (saved) {
-            try {
-                const state = JSON.parse(saved);
-                if (state.scrollY) {
-                    scrollRestored.current = true;
-                    // Short delay to ensure browser layout is ready
-                    const timer = setTimeout(() => {
-                        window.scrollTo({ top: state.scrollY, behavior: 'instant' });
-                        // Clear the specific scroll data so it doesn't jump on next mount
-                        // But keep filters in mind if we want them to persist across fresh visits? 
-                        // Actually, we remove it to keep it fresh for next click.
-                        sessionStorage.removeItem('mm_admin_movies_state');
-                    }, 100);
-                    return () => clearTimeout(timer);
-                }
-            } catch (e) {}
-        }
-    }
-  }, [restored.didRestore, movies.length]);
-
   const saveStateAndScroll = () => {
-    const state = {
-        search: debouncedSearch,
-        sort: currentSort,
-        audience: currentAudience,
-        scrollY: window.scrollY,
-        movies: movies,
-        offset: offsetRef.current,
-        hasMore: hasMore,
-        totalCount: totalCount
-    };
-    sessionStorage.setItem('mm_admin_movies_state', JSON.stringify(state));
+    sessionStorage.setItem('mm_admin_movies_state', JSON.stringify({
+      search: debouncedSearch,
+      sort: currentSort,
+      audience: currentAudience,
+      scrollY: window.scrollY,
+    }));
   };
 
   const updateParams = useCallback((updates: Record<string, string | null>) => {
@@ -158,6 +101,32 @@ export function MoviesList({ initialMovies }: MoviesListProps) {
     });
     router.push(`${pathname}?${params.toString()}`, { scroll: false });
   }, [pathname, router, searchParams]);
+
+  // Restore filter UI + scroll position only (never stale movie rows)
+  useEffect(() => {
+    const saved = sessionStorage.getItem('mm_admin_movies_state');
+    if (saved) {
+      try {
+        const state = JSON.parse(saved);
+        setSearchTerm(state.search || '');
+        setDebouncedSearch(state.search || '');
+
+        if (state.sort && state.sort !== currentSort) {
+          updateParams({ sort: state.sort });
+        }
+        if (state.audience && state.audience !== currentAudience) {
+          updateParams({ audience: state.audience });
+        }
+
+        pendingScrollY.current = typeof state.scrollY === 'number' ? state.scrollY : null;
+      } catch (e) {
+        pendingScrollY.current = null;
+      }
+      sessionStorage.removeItem('mm_admin_movies_state');
+    }
+    setRestored(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount
+  }, []);
 
   const fetchMovies = useCallback(async (search = '', sort = currentSort, audience = currentAudience, reset = false) => {
     if (loadingRef.current) return;
@@ -171,7 +140,7 @@ export function MoviesList({ initialMovies }: MoviesListProps) {
       if (search) url += "&q=" + encodeURIComponent(search);
       if (audience) url += "&audience=" + audience;
       
-      const res = await fetch(url);
+      const res = await fetch(url, { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
         const newMovies = data.movies || [];
@@ -180,6 +149,15 @@ export function MoviesList({ initialMovies }: MoviesListProps) {
         if (reset) {
           setMovies(newMovies);
           offsetRef.current = newMovies.length;
+
+          if (pendingScrollY.current != null && !scrollRestored.current) {
+            scrollRestored.current = true;
+            const scrollY = pendingScrollY.current;
+            pendingScrollY.current = null;
+            requestAnimationFrame(() => {
+              window.scrollTo({ top: scrollY, behavior: 'instant' });
+            });
+          }
         } else {
           setMovies(prev => {
             const existingIds = new Set(prev.map((m: MovieWithFile) => m.id));
@@ -309,23 +287,17 @@ export function MoviesList({ initialMovies }: MoviesListProps) {
     return () => clearTimeout(timer);
   }, [searchTerm, searchParams, updateParams]);
 
-  // Trigger fetch on filter change
+  // Trigger fetch on mount and filter change
   const lastStateKey = useRef('');
   useEffect(() => {
-    if (!restored.done) return;
+    if (!restored) return;
 
     const currentKey = JSON.stringify({ search: debouncedSearch, sort: currentSort, audience: currentAudience });
-    if (lastStateKey.current === '') {
-        lastStateKey.current = currentKey;
-        // If we restored movies, don't fetch immediately
-        if (restored.didRestore) return;
-    }
+    if (lastStateKey.current === currentKey) return;
 
-    if (lastStateKey.current !== currentKey) {
-        lastStateKey.current = currentKey;
-        fetchMovies(debouncedSearch, currentSort, currentAudience, true);
-    }
-  }, [debouncedSearch, currentSort, currentAudience, fetchMovies, restored.done, restored.didRestore]);
+    lastStateKey.current = currentKey;
+    fetchMovies(debouncedSearch, currentSort, currentAudience, true);
+  }, [debouncedSearch, currentSort, currentAudience, fetchMovies, restored]);
 
   // Infinite Scroll using Intersection Observer
   useEffect(() => {

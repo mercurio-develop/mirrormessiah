@@ -1,15 +1,18 @@
 'use client';
 
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { b64urlEncode } from '@/lib/b64url';
 import { Clock, Heart, Play, RotateCcw } from 'lucide-react';
+import { HistoryCarouselRow } from '@/components/history-carousel-row';
+import {
+  formatProgressLabel,
+  getPlaybackProgressSeconds,
+} from '@/lib/playback-progress';
 import {
   COURSE_LIBRARY_EVENT,
-  formatProgressLabel,
   getCourseFavorites,
-  getLessonProgressSeconds,
   getRecentCourses,
   type CourseHistoryEntry,
 } from '@/features/course/lib/course-library';
@@ -24,51 +27,13 @@ const getPosterUrl = (thumbnail: string | null | undefined): string => {
   return url;
 };
 
-function CarouselRow({
-  title,
-  icon,
-  empty,
-  children,
-}: {
-  title: string;
-  icon: ReactNode;
-  empty?: string;
-  children: ReactNode;
-}) {
-  const childCount = Array.isArray(children) ? children.length : children ? 1 : 0;
-  if (childCount === 0 && empty) {
-    return (
-      <section className="space-y-3">
-        <div className="flex items-center gap-2">
-          {icon}
-          <h2 className="text-sm font-black uppercase tracking-[0.2em] text-muted-foreground">{title}</h2>
-        </div>
-        <p className="text-sm text-muted-foreground/70">{empty}</p>
-      </section>
-    );
-  }
-  if (childCount === 0) return null;
-
-  return (
-    <section className="space-y-3">
-      <div className="flex items-center gap-2">
-        {icon}
-        <h2 className="text-sm font-black uppercase tracking-[0.2em] text-muted-foreground">{title}</h2>
-      </div>
-      <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide snap-x snap-mandatory -mx-1 px-1">
-        {children}
-      </div>
-    </section>
-  );
-}
-
 function ContinueCard({ entry, course }: { entry: CourseHistoryEntry; course?: Course }) {
   const thumbnail = course?.thumbnail ?? entry.thumbnail;
   const title = course?.title ?? entry.courseTitle;
   const [progressLabel, setProgressLabel] = useState<string | null>(null);
 
   useEffect(() => {
-    setProgressLabel(formatProgressLabel(getLessonProgressSeconds(entry.lessonId)));
+    setProgressLabel(formatProgressLabel(getPlaybackProgressSeconds(`mm_playback_time_lesson_${entry.lessonId}`)));
   }, [entry.lessonId]);
 
   return (
@@ -169,7 +134,7 @@ export function CourseHistoryCarousel() {
 
   return (
     <div className="space-y-8 pb-2">
-      <CarouselRow
+      <HistoryCarouselRow
         title="Continue Watching"
         icon={<Clock className="h-4 w-4 text-primary" />}
         empty="Start a lesson and it will show up here."
@@ -177,9 +142,9 @@ export function CourseHistoryCarousel() {
         {history.map((entry) => (
           <ContinueCard key={`${entry.courseId}-${entry.lessonId}`} entry={entry} course={courseMap[entry.courseId]} />
         ))}
-      </CarouselRow>
+      </HistoryCarouselRow>
 
-      <CarouselRow
+      <HistoryCarouselRow
         title="Favorites"
         icon={<Heart className="h-4 w-4 text-rose-400 fill-rose-400" />}
         empty="Tap the heart on a course to save it here."
@@ -187,7 +152,7 @@ export function CourseHistoryCarousel() {
         {favoriteCourses.map((course) => (
           <FavoriteCard key={course.id} course={course} />
         ))}
-      </CarouselRow>
+      </HistoryCarouselRow>
     </div>
   );
 }

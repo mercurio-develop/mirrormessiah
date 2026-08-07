@@ -76,7 +76,7 @@ FOLDER_RE = re.compile(
     re.IGNORECASE,
 )
 
-SKIP_QUALITY = re.compile(r'2160p|4K|UHD|BLURAY|BRRIP|BDRIP', re.IGNORECASE)
+SKIP_QUALITY = re.compile(r'2160p|4K|UHD', re.IGNORECASE)
 
 # ---------------------------------------------------------------------------
 # DB helpers
@@ -329,7 +329,7 @@ def repair_flagged_movies(
         else:
             print(f"  [!] {title}: no playable video or convertible source found")
 
-def clean_movie_name(name: str) -> str:
+def clean_movie_name(name: str, strip_years: bool = True) -> str:
     """Surgically strip technical noise and empty shells to find the Pure Title."""
     if not name: return ""
     ext = Path(name).suffix.lower()
@@ -338,25 +338,66 @@ def clean_movie_name(name: str) -> str:
     
     tech_patterns = [
         r"\[.*?\]", r"\(.*?\)", 
-        r"\d{4}p", r"\d{3}p", r"2160p", r"4k", r"bluray", r"web-dl", r"webrip", r"brrip", r"hdtv",
+        r"\d{4}p", r"\d{3}p", r"2160p", r"4k", r"bluray", r"bdrip", r"bd.?rip", r"web-dl", r"webrip",
+        r"brrip", r"brr?ip", r"bdr?ip", r"hdtv", r"hdrip", r"dvdrip",
         r"x264", r"x265", r"hevc", r"aac", r"dts", r"dd5\.1", r"ddp5\.1", r"5\.1", r"5\s1", 
         r"ac3", r"yts", r"yify", r"remastered", r"extended", r"directors\.cut", r"10bit", 
-        r"hdr", r"atmos", r"dv", r"dvdrip", r"v2", r"hdts", r"av1", r"multi", r"dual", 
-        r"latino", r"subs", r"h\.\d{3}", r"h264", r"h265", r"WEB", r"AMZN", r"NF", r"DSNP",
-        r"PROPER", r"REPACK", r"UNRATED", r"LIMITED", r"INTERNAL", r"RERIP", r"REAL", r"READNFO"
+        r"hdr", r"atmos", r"dv", r"v2", r"hdts", r"av1", r"multi", r"dual", 
+        r"latino", r"subesp", r"subfre", r"subrus", r"subbed", r"dubbed", r"\bdub\b",
+        r"\bsubs?\b", r"subtitles?",
+        r"fre", r"fra", r"rus", r"eng", r"ger", r"deu", r"spa", r"esp", r"ita", r"por", r"jpn", r"lat",
+        r"internet\w*",
+        r"proper", r"repack", r"unrated", r"limited", r"internal", r"rerip", r"real", r"readnfo",
+        r"amzn", r"nf", r"dsnp", r"web", r"cam", r"\bts\b", r"\btc\b",
+        r"h\.\d{3}", r"h264", r"h265",
     ]
     for pattern in tech_patterns:
         name = re.sub(rf"\b{pattern}\b", " ", name, flags=re.IGNORECASE)
 
-    name = re.sub(r"\b(18|19|20|21)\d{2}\b", " ", name)
+    # Scene tags glued to title: "Buda2sub"
+    name = re.sub(r"(?<=[A-Za-z])\d+sub\b", " ", name, flags=re.IGNORECASE)
+    # Release group suffix: "... by INTERNETCINE" or trailing "... by"
+    name = re.sub(r"\s+by\s+\w+", " ", name, flags=re.IGNORECASE)
+    name = re.sub(r"\s+by\s*$", "", name, flags=re.IGNORECASE)
+
+    if strip_years:
+        name = re.sub(r"\b(18|19|20)\d{2}\b", " ", name)
     name = name.replace(".", " ").replace("_", " ").replace("-", " ")
     name = re.sub(r"[\(\)\[\]]", " ", name)
     name = re.sub(r"\s+", " ", name)
     return name.strip().title()
 
 
+def normalize_movie_title(title: str, year: int | None = None) -> str:
+    """Clean release noise but keep sequel numbers (e.g. Blade Runner 2049)."""
+    cleaned = clean_movie_name(title, strip_years=False)
+    if year:
+        cleaned = re.sub(rf"\b{year}\b", " ", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    return cleaned.title() if cleaned else cleaned
+
+
 def parse_folder_name(name: str) -> dict:
     """Extract title, year, quality from folder names with extreme prejudice against noise."""
+    # Prefer parenthetical release year — avoids "Blade Runner 2049 (2017)" → year 2049
+    paren = re.match(
+        r'^(?P<title>.+?)\s*\((?P<year>(?:19|20)\d{2})\)\s*(?:\[(?P<quality>[^\]]+)\])?',
+        name,
+        re.IGNORECASE,
+    )
+    if paren:
+        quality = paren.group('quality')
+        if quality:
+            for token in quality.split():
+                if re.match(r'\d{3,4}p|2160p|4K|UHD|1080|720', token, re.I):
+                    quality = token
+                    break
+        return {
+            'title': clean_movie_name(paren.group('title'), strip_years=False),
+            'year': int(paren.group('year')),
+            'quality': quality,
+        }
+
     # Try the standard regex first
     m = FOLDER_RE.match(name)
     if m:
@@ -368,7 +409,7 @@ def parse_folder_name(name: str) -> dict:
                     break
         
         return {
-            'title': clean_movie_name(m.group('title')),
+            'title': clean_movie_name(m.group('title'), strip_years=False),
             'year': int(m.group('year')),
             'quality': quality,
         }
@@ -377,10 +418,8 @@ def parse_folder_name(name: str) -> dict:
     year_match = re.search(r"\b(19|20)\d{2}\b", name)
     year = int(year_match.group()) if year_match else None
     
-    # Clean the title aggressively
-    title = clean_movie_name(name)
+    title = clean_movie_name(name, strip_years=False)
     if year:
-        # Remove the year from the title if it's there
         title = re.sub(rf"\b{year}\b", " ", title, flags=re.IGNORECASE).strip()
     
     # Final quality scan
@@ -840,6 +879,21 @@ def tmdb_get(endpoint: str, **params) -> dict:
 def _clean(title: str) -> str:
     return re.sub(r'[^\w\s]', ' ', title).strip()
 
+def _pick_tmdb_result(results: list, year: int | str | None) -> dict | None:
+    if not results:
+        return None
+    if year and str(year).lower() != 'none':
+        y = int(year)
+        for r in results:
+            release = r.get('release_date') or ''
+            if len(release) >= 4 and int(release[:4]) == y:
+                return r
+        for r in results:
+            release = r.get('release_date') or ''
+            if len(release) >= 4 and abs(int(release[:4]) - y) <= 1:
+                return r
+    return results[0]
+
 def tmdb_search(title: str, year: int | str | None) -> dict | None:
     search_queries = [title, _clean(title)]
     
@@ -866,7 +920,9 @@ def tmdb_search(title: str, year: int | str | None) -> dict | None:
             try:
                 data = tmdb_get('/search/movie', **filtered)
                 if data.get('results'):
-                    return data['results'][0]
+                    picked = _pick_tmdb_result(data['results'], year if 'year' in filtered else None)
+                    if picked:
+                        return picked
             except Exception:
                 pass
             time.sleep(DELAY)
@@ -969,17 +1025,24 @@ def scrape_one(db: sqlite3.Connection, movie: dict, dry_run: bool = False) -> st
             movie_id = movie['id']
             if assign_tmdb:
                 owner = db.execute(
-                    'SELECT id FROM movies WHERE tmdb_id = ? AND id != ?',
+                    'SELECT id, year, title FROM movies WHERE tmdb_id = ? AND id != ?',
                     (assign_tmdb, movie_id),
                 ).fetchone()
                 if owner:
-                    print(
-                        f'    [!] TMDB {assign_tmdb} already on movie #{owner["id"]}; '
-                        f'merging #{movie_id} into it'
-                    )
-                    merge_movie_rows(db, owner['id'], movie_id)
-                    movie_id = owner['id']
-                    movie = dict(db.execute('SELECT * FROM movies WHERE id = ?', (movie_id,)).fetchone())
+                    if movie.get('year') and owner['year'] and movie['year'] != owner['year']:
+                        print(
+                            f'    [!] TMDB {assign_tmdb} year mismatch '
+                            f'(#{owner["id"]} {owner["title"]} {owner["year"]} vs '
+                            f'#{movie_id} {movie["title"]} {movie["year"]}); skipping merge'
+                        )
+                    else:
+                        print(
+                            f'    [!] TMDB {assign_tmdb} already on movie #{owner["id"]}; '
+                            f'merging #{movie_id} into it'
+                        )
+                        merge_movie_rows(db, owner['id'], movie_id)
+                        movie_id = owner['id']
+                        movie = dict(db.execute('SELECT * FROM movies WHERE id = ?', (movie_id,)).fetchone())
 
             db.execute(
                 """UPDATE movies SET
@@ -1031,9 +1094,7 @@ def ingest_path(db: sqlite3.Connection, path: Path, library_id: int, auto_scrape
         return False
 
     if SKIP_QUALITY.search(folder.name):
-        if re.search(r'BLURAY|BRRIP|BDRIP', folder.name, re.IGNORECASE) and re.search(r'1080p', folder.name, re.IGNORECASE):
-            if not any(f.suffix.lower() == '.mp4' for f in video_files): return False
-        else: return False
+        return False
 
     # Probe files before opening a write transaction (ffprobe is slow and would block other writers).
     detected_quality = None
@@ -1349,7 +1410,7 @@ def cmd_cleanup(args) -> None:
     seen_naming = {} # key: (normalized_title, year) -> primary_id
     
     for m in movies:
-        pure_title = clean_movie_name(m['title'])
+        pure_title = normalize_movie_title(m['title'], m['year'])
         norm_key = (pure_title.lower(), m['year'])
         
         if norm_key in seen_naming:
@@ -1400,7 +1461,7 @@ def cmd_stage(args):
 
     db = open_db()
     # Get set of existing movies for duplicate detection
-    existing = { (clean_movie_name(r['title']).lower(), r['year']) for r in db.execute("SELECT title, year FROM movies").fetchall() }
+    existing = { (normalize_movie_title(r['title'], r['year']).lower(), r['year']) for r in db.execute("SELECT title, year FROM movies").fetchall() }
     db.close()
 
     items = sorted(list(src_dir.iterdir()))

@@ -26,6 +26,12 @@ import {
 import { useAdmin } from '@/contexts/admin-context';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import { Dropdown } from '@/components/ui/dropdown';
+import { MovieHistoryCarousel } from '@/features/movie/components/movie-history-carousel';
+import {
+  DEFAULT_MOVIE_SORT,
+  MOVIE_SORT_OPTIONS,
+  type MovieSort,
+} from '@/features/movie/search-params';
 import { normalizeSearchQuery } from '@/lib/search';
 
 interface PublicMoviesListProps {
@@ -41,12 +47,7 @@ const GENRE_OPTIONS = [
   'TV Movie', 'Thriller', 'War', 'Western'
 ];
 
-const SORT_OPTIONS = [
-    { value: 'title_asc', label: 'Title A-Z' },
-    { value: 'title_desc', label: 'Title Z-A' },
-    { value: 'newest', label: 'Latest Added' },
-    { value: 'rating', label: 'Top Rated' }
-];
+const SORT_OPTIONS = MOVIE_SORT_OPTIONS;
 
 const getPosterUrl = (thumbnail: string | null | undefined): string => {
   if (!thumbnail) return '/placeholder.svg';
@@ -70,7 +71,7 @@ export function PublicMoviesList({ initialMovies }: PublicMoviesListProps) {
   const [selectedAudience, setSelectedAudience] = useState<'family' | 'adult' | ''>(
     (searchParams.get('audience') as any) || ''
   );
-  const [sort, setSort] = useState<'title_asc' | 'title_desc' | 'rating' | 'newest'>('title_asc');
+  const [sort, setSort] = useState<MovieSort>(DEFAULT_MOVIE_SORT);
   const [showFilters, setShowFilters] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
 
@@ -109,7 +110,7 @@ export function PublicMoviesList({ initialMovies }: PublicMoviesListProps) {
     if (selectedYear) count++;
     if (selectedGenre) count++;
     if (selectedAudience) count++;
-    if (sort !== 'title_asc') count++;
+    if (sort !== DEFAULT_MOVIE_SORT) count++;
     return count;
   }, [debouncedSearch, selectedQuality, selectedYear, selectedGenre, selectedAudience, sort]);
 
@@ -165,7 +166,7 @@ export function PublicMoviesList({ initialMovies }: PublicMoviesListProps) {
     return list;
   }, []);
 
-  const fetchMovies = useCallback(async (search = '', quality = '', year = '', audience = '', sortOrder: 'title_asc' | 'title_desc' | 'rating' | 'newest' = 'title_asc', genre = '', reset = false): Promise<boolean> => {
+  const fetchMovies = useCallback(async (search = '', quality = '', year = '', audience = '', sortOrder: MovieSort = DEFAULT_MOVIE_SORT, genre = '', reset = false): Promise<boolean> => {
     if (loadingRef.current && !reset) return false;
 
     if (reset && abortRef.current) {
@@ -238,7 +239,7 @@ export function PublicMoviesList({ initialMovies }: PublicMoviesListProps) {
         setSelectedYear(state.selectedYear || '');
         if ('selectedGenre' in state) setSelectedGenre(state.selectedGenre || '');
         if ('selectedAudience' in state) setSelectedAudience(state.selectedAudience || '');
-        setSort(state.sort || 'title_asc');
+        setSort(state.sort || DEFAULT_MOVIE_SORT);
         
         setMovies(state.movies || initialMovies);
         offsetRef.current = state.offset || initialMovies.length;
@@ -269,7 +270,7 @@ export function PublicMoviesList({ initialMovies }: PublicMoviesListProps) {
 
     const hasActiveFilters =
       debouncedSearch || selectedQuality || selectedYear ||
-      selectedGenre || selectedAudience || sort !== 'title_asc';
+      selectedGenre || selectedAudience || sort !== DEFAULT_MOVIE_SORT;
 
     const runResetFetch = (scrollToTop: boolean) => {
       if (scrollToTop) {
@@ -338,11 +339,11 @@ export function PublicMoviesList({ initialMovies }: PublicMoviesListProps) {
     setSelectedYear('');
     setSelectedGenre('');
     setSelectedAudience('');
-    setSort('title_asc');
+    setSort(DEFAULT_MOVIE_SORT);
     router.push(pathname, { scroll: false });
   };
 
-  const isFiltered = searchTerm || selectedQuality || selectedYear || selectedAudience || selectedGenre || sort !== 'title_asc';
+  const isFiltered = searchTerm || selectedQuality || selectedYear || selectedAudience || selectedGenre || sort !== DEFAULT_MOVIE_SORT;
 
   return (
     <div className="space-y-10 pb-24 pt-0">
@@ -491,7 +492,9 @@ export function PublicMoviesList({ initialMovies }: PublicMoviesListProps) {
       </div>
 
       {/* Grid Display Section */}
-      <div className="max-w-7xl mx-auto w-full px-6">
+      <div className="max-w-7xl mx-auto w-full px-6 space-y-8">
+        <MovieHistoryCarousel />
+
         {movies.length > 0 ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-6 gap-y-10">
             {movies.map((movie, idx) => (

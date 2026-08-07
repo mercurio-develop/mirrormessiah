@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import { Dropdown } from '@/components/ui/dropdown';
+import { SeriesHistoryCarousel } from '@/features/series/components/series-history-carousel';
 import { normalizeSearchQuery } from '@/lib/search';
 
 export interface Series {
@@ -448,7 +449,9 @@ export function PublicSeriesList({ initialSeries }: PublicSeriesListProps) {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto w-full px-6">
+      <div className="max-w-7xl mx-auto w-full px-6 space-y-8">
+        <SeriesHistoryCarousel />
+
         {seriesList.length > 0 ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-6 gap-y-10">
             {seriesList.map((series, idx) => (

@@ -8,6 +8,7 @@ import { getMovie } from '@/features/movie/queries/get-movie';
 import { getMoviePlayback } from '@/features/movie/queries/get-movie-playback';
 import { b64urlEncode } from '@/lib/b64url';
 import Image from 'next/image';
+import { MovieWatchTracker } from '@/features/movie/components/movie-watch-tracker';
 import { AdminEditButton } from '@/features/movie/components/admin-edit-button';
 
 interface WatchPageProps {
@@ -93,7 +94,14 @@ export default async function WatchPage({ params }: WatchPageProps) {
                 <p className="text-muted-foreground text-sm mt-2 max-w-xs">The requested media format is not supported or the file is missing.</p>
               </div>
             ) : (
-              <MediaPlayer
+              <>
+                <MovieWatchTracker
+                  movieId={movie.id}
+                  title={movie.title}
+                  thumbnail={movie.thumbnail}
+                  year={movie.year}
+                />
+                <MediaPlayer
                 id={movie.id}
                 src={movieData.source.src}
                 mimeType={movieData.mimeType}
@@ -102,6 +110,7 @@ export default async function WatchPage({ params }: WatchPageProps) {
                 poster={posterUrl}
                 className="w-full h-full"
               />
+              </>
             )}
           </div>
         </section>

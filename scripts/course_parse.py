@@ -16,10 +16,14 @@ SKIP_DIR_NAMES = {
     'assets', 'native', 'materials', 'videos', 'subtitles', 'scene files',
     'scenefiles', 'solaris_scenefiles', 'res', 'cg', 'week01', 'week02',
     'week03', 'week04', 'week05', 'week06', 'week07', 'week08',
+    'tutorialvideos', 'tutorial videos', 'project files', 'projects',
+    'guidance', 'journey inspiration',
     '.mm_cache', '.pad',
 }
 
 MODULE_PATTERNS = [
+    (re.compile(r'^lesson\s*0*(\d+)\b', re.I), 'lesson'),
+    (re.compile(r'^volume\s*0*(\d+)\b', re.I), 'volume'),
     (re.compile(r'^week\s*0*(\d+)\b', re.I), 'week'),
     (re.compile(r'^week(\d+)\b', re.I), 'week'),
     (re.compile(r'^chapter\s*0*(\d+)', re.I), 'chapter'),
@@ -28,6 +32,12 @@ MODULE_PATTERNS = [
     (re.compile(r'^(\d+)\s*[-–—]\s*', re.I), 'section'),
     (re.compile(r'^p\s*0*(\d+)\b', re.I), 'section'),
     (re.compile(r'^part\s*0*(\d+)\b', re.I), 'section'),
+]
+
+
+VOLUME_SUFFIX_PATTERNS = [
+    re.compile(r'(?:learnhoudini_)?vol(?:ume)?\s*0*(\d+)\s*$', re.I),
+    re.compile(r'[_\-\s]vol(?:ume)?\s*0*(\d+)\s*$', re.I),
 ]
 
 # Order matters — first match wins.
@@ -48,6 +58,8 @@ PLATFORM_PATTERNS = [
     (re.compile(r'\bcoursera\b', re.I), 'Coursera'),
     (re.compile(r'\btutsnode\b', re.I), 'TutsNode'),
     (re.compile(r'\bredefinefx\b', re.I), 'Redefinefx'),
+    (re.compile(r'\bhelloluxx\b', re.I), 'Helloluxx'),
+    (re.compile(r'\blearn\s*squared\b', re.I), 'Learn Squared'),
     (re.compile(r'\bdouble jump academy\b', re.I), 'Double Jump Academy'),
     (re.compile(r'\bfreecoursesonline\b', re.I), 'FreeCoursesOnline'),
     (re.compile(r'\bardanlabs?\b', re.I), 'Ardan Labs'),
@@ -109,7 +121,7 @@ DEV_PLATFORMS = frozenset({
 
 VFX_PLATFORMS = frozenset({
     'Rebelway', 'FXPHD', 'CGBoost', 'CGMA', 'Gumroad', 'Redefinefx',
-    'Double Jump Academy', 'Schoolism',
+    'Double Jump Academy', 'Schoolism', 'Helloluxx', 'Learn Squared',
 })
 
 # Reject S1080E01-style resolution false positives (mirrors series_cli).
@@ -156,6 +168,8 @@ def module_for_ardanlabs_go_lesson(lesson_num: int) -> ParsedModule:
     return ParsedModule(section_num, 'section', title)
 
 LESSON_NUM_PATTERNS = [
+    re.compile(r'^(\d+)\.(\d+)\.(\d+)(?:\s|\.|$)', re.I),
+    re.compile(r'^(\d+)\.(\d+)(?:\s|\.|$)', re.I),
     re.compile(r'^lesson\s*0*(\d+)\b', re.I),
     re.compile(r'^(\d{1,3})\s*[-–—_.]\s*', re.I),
     re.compile(r'^(\d{1,3})\s*\.\s*', re.I),
@@ -311,20 +325,45 @@ def course_match_key(name: str) -> str:
 
 
 def parse_module_folder(folder_name: str) -> ParsedModule | None:
+    if should_skip_dir(folder_name):
+        return None
+    name = folder_name.strip()
     for pattern, kind in MODULE_PATTERNS:
-        match = pattern.match(folder_name.strip())
+        match = pattern.match(name)
         if match:
             num = int(match.group(1))
-            title = pattern.sub('', folder_name).strip(' .-_–—')
-            if not title:
+            title = pattern.sub('', name).strip(' .-_–—')
+            if not title or title.lower() in {'tutorialvideos', 'tutorial videos'}:
                 title = f'{kind.title()} {num}'
             return ParsedModule(num, kind, title)
+    for pattern in VOLUME_SUFFIX_PATTERNS:
+        match = pattern.search(name)
+        if match:
+            num = int(match.group(1))
+            title = pattern.sub('', name).strip(' .-_–—')
+            if not title:
+                title = f'Volume {num}'
+            return ParsedModule(num, 'volume', title)
     return None
 
 
 def parse_lesson_filename(filename: str) -> tuple[int | None, str]:
     stem = Path(filename).stem
-    for pattern in LESSON_NUM_PATTERNS:
+    triple = re.match(r'^(\d+)\.(\d+)\.(\d+)(?:\s|\.|$)', stem, re.I)
+    if triple:
+        lesson_num = int(triple.group(2)) * 100 + int(triple.group(3))
+        title = stem[triple.end():].strip(' .-_–—')
+        if not title:
+            title = f'Lesson {triple.group(2)}.{triple.group(3)}'
+        return lesson_num, smart_title(title.replace('_', ' '))
+    double = re.match(r'^(\d+)\.(\d+)(?:\s|\.|$)', stem, re.I)
+    if double:
+        lesson_num = int(double.group(2))
+        title = stem[double.end():].strip(' .-_–—')
+        if not title:
+            title = f'Lesson {lesson_num}'
+        return lesson_num, smart_title(title.replace('_', ' '))
+    for pattern in LESSON_NUM_PATTERNS[2:]:
         match = pattern.search(stem)
         if match:
             num = int(match.group(1))
@@ -371,6 +410,8 @@ def resolve_lesson_path(course_root: Path, file_path: Path) -> ParsedLesson | No
     module: ParsedModule | None = None
     module_idx = -1
     for idx, part in enumerate(rel_parts[:-1]):
+        if should_skip_dir(part):
+            continue
         parsed = parse_module_folder(part)
         if parsed:
             module = parsed
@@ -405,7 +446,7 @@ def resolve_lesson_path(course_root: Path, file_path: Path) -> ParsedLesson | No
 
 
 def module_folder_name(kind: str, number: int, title: str | None = None) -> str:
-    prefix = {'week': 'Week', 'chapter': 'Chapter', 'section': 'Section'}.get(kind, 'Module')
+    prefix = {'week': 'Week', 'chapter': 'Chapter', 'section': 'Section', 'volume': 'Volume', 'lesson': 'Lesson'}.get(kind, 'Module')
     base = f'{prefix} {number:02d}'
     if title and title.lower() not in {f'{kind} {number}', f'{prefix.lower()} {number}'}:
         clean = re.sub(r'[<>:"/\\|?*]', '_', title).strip()
@@ -480,3 +521,39 @@ def find_sidecar_subtitle(video_path: Path) -> Path | None:
             if sub.exists():
                 return sub
     return None
+
+
+def scan_course_videos(course_root: Path) -> list[tuple[Path, ParsedLesson]]:
+    """Walk a course folder and return (video path, parsed lesson) pairs."""
+    found: list[tuple[Path, ParsedLesson]] = []
+    if not course_root.is_dir():
+        return found
+    for video in sorted(course_root.rglob('*')):
+        if not is_lesson_video(video):
+            continue
+        if any(p.startswith('.') for p in video.relative_to(course_root).parts):
+            continue
+        parsed = resolve_lesson_path(course_root, video)
+        if parsed:
+            found.append((video, parsed))
+    return found
+
+
+def summarize_course_layout(course_root: Path) -> dict[str, object]:
+    """Summarize on-disk module/lesson layout without touching the DB."""
+    entries = scan_course_videos(course_root)
+    modules: dict[int, list[int]] = {}
+    for _video, parsed in entries:
+        modules.setdefault(parsed.module_number, []).append(parsed.lesson_number)
+    duplicate_slots = 0
+    for mod_num, lesson_nums in modules.items():
+        per_mod = sum(1 for _v, p in entries if p.module_number == mod_num)
+        if len(lesson_nums) < per_mod:
+            duplicate_slots += per_mod - len(set(lesson_nums))
+    return {
+        'videos': len(entries),
+        'modules': len(modules),
+        'lessons': sum(len(set(v)) for v in modules.values()),
+        'module_map': {k: sorted(set(v)) for k, v in sorted(modules.items())},
+        'duplicate_slots': duplicate_slots,
+    }

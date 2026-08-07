@@ -1,6 +1,7 @@
 import { getDb } from '@/lib/db';
 import { getSearchTerms } from '@/lib/search';
 import { movieHasSubtitles } from '@/lib/movie-subtitles';
+import { DEFAULT_MOVIE_SORT } from '@/features/movie/search-params';
 
 export function getMovies(options: {
   q?: string | null;
@@ -13,7 +14,7 @@ export function getMovies(options: {
   offset?: number;
   limit?: number;
 } = {}) {
-  const { q, genre, quality, year, audience, sort, hasThumbnail, offset = 0, limit = 24 } = options;
+  const { q, genre, quality, year, audience, sort = DEFAULT_MOVIE_SORT, hasThumbnail, offset = 0, limit = 24 } = options;
   const db = getDb();
   
   const params: any[] = [];
@@ -122,6 +123,25 @@ export function getMovies(options: {
     if (error.message.includes('no such table')) {
         return { movies: [], total: 0 };
     }
+    throw error;
+  }
+}
+
+export function getMoviesByIds(ids: number[]) {
+  if (ids.length === 0) return [];
+  const db = getDb();
+  const placeholders = ids.map(() => '?').join(',');
+  try {
+    const rows = db.prepare(`
+      SELECT m.id, m.title, m.year, m.quality, m.thumbnail, m.genres, m.rating, m.audience, m.needs_repair,
+             EXISTS(SELECT 1 FROM subtitles WHERE movie_id = m.id) as has_subtitles
+      FROM movies m
+      WHERE m.id IN (${placeholders})
+    `).all(...ids) as any[];
+    const byId = new Map(rows.map((row) => [row.id as number, row]));
+    return ids.map((id) => byId.get(id)).filter(Boolean);
+  } catch (error: any) {
+    if (error.message?.includes('no such table')) return [];
     throw error;
   }
 }

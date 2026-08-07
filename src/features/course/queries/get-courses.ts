@@ -1,5 +1,6 @@
 import { getDb } from '@/lib/db';
 import { getSearchTerms } from '@/lib/search';
+import { DEFAULT_COURSE_SORT } from '@/features/course/search-params';
 
 export type CourseCategoryCounts = {
   total: number;
@@ -119,7 +120,7 @@ export function getCoursesList(options: {
   offset?: number;
   limit?: number;
 } = {}) {
-  const { q, platform, category, year, sort, offset = 0, limit = 24 } = options;
+  const { q, platform, category, year, sort = DEFAULT_COURSE_SORT, offset = 0, limit = 24 } = options;
   const db = getDb();
   const params: unknown[] = [];
   const whereConditions: string[] = [];

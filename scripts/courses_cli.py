@@ -11,8 +11,12 @@ Commands:
   thumbs            Generate lesson & module thumbnails via ffmpeg
   scrape            Fill course metadata (plot, instructor, year, category) via Gemini
   audit             Report missing thumbnails
+  analyze           Report folder layout vs DB (collapsed modules, stale paths)
+  verify            Test lesson files with ffprobe and flag needs_repair
   full      [dir]   sync -> cleanup -> organize -> relink -> convert -> thumbs
   reingest  <path>  Clear and re-ingest one course folder (fixes collapsed flat layouts)
+  reingest-all      Re-ingest every course flagged by analyze
+  safe-shore        Full stabilization: cleanup -> sync -> relink -> reingest-all -> verify
 """
 
 from __future__ import annotations
@@ -51,6 +55,8 @@ from course_parse import (
     parse_course_metadata,
     resolve_lesson_path,
     is_ultimate_go_flat_course,
+    scan_course_videos,
+    summarize_course_layout,
 )
 
 ROOT = Path(__file__).parent.parent
@@ -833,6 +839,110 @@ def cmd_reingest(args) -> None:
     print('REINGEST_COMPLETE')
 
 
+def course_needs_reingest(db: sqlite3.Connection, course_id: int, course_path: Path) -> bool:
+    disk = summarize_course_layout(course_path)
+    if disk['videos'] == 0:
+        return False
+    db_stats = db_course_stats(db, course_id)
+    collapsed = (
+        (db_stats['modules'] == 1 and disk['modules'] > 1)
+        or db_stats['modules'] < disk['modules']
+        or db_stats['multi_file_lessons'] > 0
+    )
+    sparse = db_stats['lessons'] < disk['videos'] * 0.8
+    return collapsed or sparse
+
+
+def cmd_reingest_all(args) -> None:
+    dry_run = getattr(args, 'dry_run', False)
+    folder_filter = getattr(args, 'folder', None)
+    print('\n--- PHASE: Batch Re-ingesting Flagged Courses ---')
+    db = open_db()
+    fixed = skipped = 0
+
+    query = 'SELECT id, title FROM courses ORDER BY title'
+    params: list[object] = []
+    if folder_filter:
+        query = 'SELECT id, title FROM courses WHERE title LIKE ? ORDER BY title'
+        params = [f'%{folder_filter}%']
+
+    for course in db.execute(query, params).fetchall():
+        course_path = resolve_course_path(db, course['id'])
+        if not course_path or not course_path.exists():
+            continue
+        if not course_needs_reingest(db, course['id'], course_path):
+            skipped += 1
+            continue
+        print(f'\n  -> {course["title"]}')
+        if dry_run:
+            print(f'     would reingest: {course_path}')
+            fixed += 1
+            continue
+        row = find_course_by_key(db, parse_course_metadata(course_path.name).title)
+        if row:
+            clear_course_lesson_data(db, row['id'])
+        lib_id = get_library_id(db, str(course_path.parent))
+        ingest_course(db, course_path, lib_id)
+        db.commit()
+        fixed += 1
+
+    db.close()
+    print(f'\nREINGEST_ALL_COMPLETE: {fixed} re-ingested, {skipped} already healthy')
+
+
+def cmd_safe_shore(args) -> None:
+    print('\n==========================================')
+    print('   MirrorMessiah Courses: SAFE SHORE')
+    print('==========================================\n')
+    media_dir = Path(getattr(args, 'dir', None) or COURSES_DIR)
+    sample = not getattr(args, 'full_verify', False)
+
+    class Args:
+        pass
+
+    cleanup_args = Args()
+    cmd_cleanup(cleanup_args)
+
+    sync_args = Args()
+    sync_args.dir = str(media_dir)
+    cmd_sync(sync_args)
+
+    relink_args = Args()
+    relink_args.dir = str(media_dir)
+    cmd_relink(relink_args)
+
+    reingest_args = Args()
+    reingest_args.dry_run = False
+    reingest_args.folder = None
+    cmd_reingest_all(reingest_args)
+
+    cmd_cleanup(cleanup_args)
+
+    resync_args = Args()
+    resync_args.course_id = None
+    cmd_resync_subs(resync_args)
+
+    verify_args = Args()
+    verify_args.course_id = None
+    verify_args.folder = None
+    verify_args.sample = sample
+    cmd_verify(verify_args)
+
+    print('\n--- Final health check ---')
+    analyze_args = Args()
+    analyze_args.course_id = None
+    analyze_args.folder = None
+    try:
+        cmd_analyze(analyze_args)
+    except SystemExit as exc:
+        if exc.code not in (0, 1):
+            raise
+
+    print('\n==========================================')
+    print('   SAFE SHORE COMPLETE')
+    print('==========================================\n')
+
+
 def cmd_sync(args) -> None:
     media_dir = Path(args.dir)
     print(f'\n--- PHASE: Syncing Courses [{media_dir}] ---')
@@ -905,6 +1015,37 @@ def dedupe_lesson_files(db: sqlite3.Connection) -> int:
     return removed
 
 
+def file_playback_rank(path: Path) -> tuple:
+    lower = str(path).lower()
+    ext = path.suffix.lower()
+    size = path.stat().st_size if path.exists() else 0
+    return (
+        1 if path.exists() else 0,
+        1 if path_under_courses(path) else 0,
+        1 if ext == '.mp4' else 0,
+        0 if any(x in lower for x in ('x265', 'hevc', '10bit')) else 1,
+        size,
+    )
+
+
+def dedupe_multi_file_lessons(db: sqlite3.Connection) -> int:
+    """Keep one playable file per lesson when multiple paths are linked."""
+    removed = 0
+    lesson_ids = db.execute(
+        'SELECT lesson_id FROM lesson_files GROUP BY lesson_id HAVING COUNT(*) > 1',
+    ).fetchall()
+    for row in lesson_ids:
+        group = db.execute(
+            'SELECT id, path FROM lesson_files WHERE lesson_id = ?',
+            (row['lesson_id'],),
+        ).fetchall()
+        ranked = sorted(group, key=lambda r: file_playback_rank(Path(r['path'])), reverse=True)
+        for dup in ranked[1:]:
+            db.execute('DELETE FROM lesson_files WHERE id = ?', (dup['id'],))
+            removed += 1
+    return removed
+
+
 def report_case_variant_folders() -> list[tuple[str, list[str]]]:
     from collections import defaultdict
     variants: list[tuple[str, list[str]]] = []
@@ -943,6 +1084,9 @@ def cmd_cleanup(args) -> None:
     deduped = dedupe_lesson_files(db)
     if deduped:
         print(f'  [+] Removed {deduped} duplicate lesson file rows (same basename)')
+    multi = dedupe_multi_file_lessons(db)
+    if multi:
+        print(f'  [+] Removed {multi} extra files from lessons with multiple videos')
     db.execute('DELETE FROM lessons WHERE id NOT IN (SELECT lesson_id FROM lesson_files)')
     db.execute('DELETE FROM course_modules WHERE id NOT IN (SELECT module_id FROM lessons)')
     db.execute('DELETE FROM courses WHERE id NOT IN (SELECT course_id FROM course_modules)')
@@ -995,7 +1139,7 @@ def cmd_cleanup(args) -> None:
             seen[key] = course['id']
     db.commit()
     db.close()
-    print(f'CLEANUP_COMPLETE: merged {merged} duplicate courses, deduped {deduped} file rows')
+    print(f'CLEANUP_COMPLETE: merged {merged} duplicate courses, deduped {deduped} file rows, trimmed {multi} multi-file lessons')
 
 
 def cmd_organize(args) -> None:
@@ -1669,6 +1813,204 @@ def cmd_resync_subs(args) -> None:
     print(f'RESYNC_SUBS_COMPLETE: {added} subtitles linked')
 
 
+def is_video_playable(file_path: Path) -> bool:
+    try:
+        result = subprocess.run(
+            ['ffprobe', '-v', 'error', '-show_entries', 'stream=codec_type', '-of', 'csv=p=0', str(file_path)],
+            capture_output=True, text=True, check=False,
+        )
+        return result.returncode == 0 and 'video' in result.stdout
+    except OSError:
+        return False
+
+
+def db_course_stats(db: sqlite3.Connection, course_id: int) -> dict[str, int]:
+    modules = db.execute(
+        'SELECT COUNT(*) AS n FROM course_modules WHERE course_id = ?', (course_id,),
+    ).fetchone()['n']
+    lessons = db.execute(
+        'SELECT COUNT(*) AS n FROM lessons l JOIN course_modules m ON l.module_id = m.id WHERE m.course_id = ?',
+        (course_id,),
+    ).fetchone()['n']
+    files = db.execute(
+        'SELECT COUNT(*) AS n FROM lesson_files lf JOIN lessons l ON lf.lesson_id = l.id '
+        'JOIN course_modules m ON l.module_id = m.id WHERE m.course_id = ?',
+        (course_id,),
+    ).fetchone()['n']
+    multi_file_lessons = db.execute(
+        'SELECT COUNT(*) AS n FROM ('
+        '  SELECT l.id FROM lessons l JOIN course_modules m ON l.module_id = m.id '
+        '  JOIN lesson_files lf ON lf.lesson_id = l.id WHERE m.course_id = ? '
+        '  GROUP BY l.id HAVING COUNT(lf.id) > 1'
+        ')',
+        (course_id,),
+    ).fetchone()['n']
+    missing_files = db.execute(
+        'SELECT COUNT(*) AS n FROM lessons l JOIN course_modules m ON l.module_id = m.id '
+        'WHERE m.course_id = ? AND NOT EXISTS (SELECT 1 FROM lesson_files lf WHERE lf.lesson_id = l.id)',
+        (course_id,),
+    ).fetchone()['n']
+    return {
+        'modules': modules,
+        'lessons': lessons,
+        'files': files,
+        'multi_file_lessons': multi_file_lessons,
+        'missing_files': missing_files,
+    }
+
+
+def cmd_analyze(args) -> None:
+    print('\n--- PHASE: Analyzing Course Layout ---')
+    db = open_db()
+    course_id = getattr(args, 'course_id', None)
+    folder_filter = getattr(args, 'folder', None)
+    issues = 0
+
+    query = 'SELECT id, title, platform FROM courses'
+    params: list[object] = []
+    if course_id:
+        query += ' WHERE id = ?'
+        params.append(course_id)
+    elif folder_filter:
+        query += ' WHERE title LIKE ?'
+        params.append(f'%{folder_filter}%')
+    query += ' ORDER BY title'
+
+    for course in db.execute(query, params).fetchall():
+        course_path = resolve_course_path(db, course['id'])
+        if not course_path or not course_path.exists():
+            print(f'  [!] [{course["id"]}] {course["title"]}: course folder not found on disk')
+            issues += 1
+            continue
+
+        disk = summarize_course_layout(course_path)
+        db_stats = db_course_stats(db, course['id'])
+        stale_paths = db.execute("""
+            SELECT COUNT(*) AS n FROM lesson_files lf
+            JOIN lessons l ON lf.lesson_id = l.id
+            JOIN course_modules m ON l.module_id = m.id
+            WHERE m.course_id = ? AND NOT EXISTS (
+              SELECT 1 FROM lesson_files lf2 WHERE lf2.lesson_id = lf.lesson_id AND lf2.id != lf.id
+            ) AND lf.path NOT LIKE ?
+        """, (course['id'], str(course_path) + '%')).fetchone()['n']
+
+        collapsed = db_stats['modules'] == 1 and disk['modules'] > 1
+        multi_file = db_stats['multi_file_lessons'] > 0
+        sparse = disk['videos'] > 0 and db_stats['lessons'] < disk['videos'] * 0.8
+
+        if not collapsed and not sparse and not multi_file and stale_paths == 0 and disk['duplicate_slots'] == 0:
+            continue
+
+        issues += 1
+        print(f'\n  [{course["id"]}] {course["title"]}')
+        print(f'      disk:  {disk["videos"]} videos, {disk["modules"]} modules, {disk["lessons"]} lessons')
+        print(f'      db:    {db_stats["modules"]} modules, {db_stats["lessons"]} lessons, {db_stats["files"]} files')
+        if multi_file:
+            print(f'      issue: {db_stats["multi_file_lessons"]} lessons have multiple video files — run cleanup')
+        if collapsed:
+            print('      issue: volumes/modules collapsed — run reingest on this folder')
+        if sparse and not collapsed:
+            print('      issue: DB has fewer lessons than videos on disk — run reingest')
+        if stale_paths:
+            print(f'      issue: {stale_paths} lesson paths outside current course folder — run relink')
+        if disk['duplicate_slots']:
+            print(f'      issue: {disk["duplicate_slots"]} duplicate lesson slots on disk within a module')
+        if collapsed or sparse:
+            print(f'      fix:   python3 scripts/courses_cli.py reingest "{course_path}"')
+        elif multi_file:
+            print('      fix:   python3 scripts/courses_cli.py cleanup')
+
+    db.close()
+    if issues:
+        print(f'\nANALYZE_COMPLETE: {issues} course(s) need attention')
+        sys.exit(1)
+    print('\nANALYZE_COMPLETE: all courses look healthy')
+
+
+def cmd_verify(args) -> None:
+    print('\n--- PHASE: Verifying Lesson Playback ---')
+    db = open_db()
+    course_id = getattr(args, 'course_id', None)
+    folder_filter = getattr(args, 'folder', None)
+    sample_only = getattr(args, 'sample', False)
+    broken_lessons = 0
+    fixed_courses = 0
+    broken_courses = 0
+
+    query = 'SELECT id, title FROM courses'
+    params: list[object] = []
+    if course_id:
+        query += ' WHERE id = ?'
+        params.append(course_id)
+    elif folder_filter:
+        query += ' WHERE title LIKE ?'
+        params.append(f'%{folder_filter}%')
+    query += ' ORDER BY title'
+
+    for course in db.execute(query, params).fetchall():
+        rows = db.execute("""
+            SELECT l.id, l.lesson_number, l.title, m.module_number, lf.path
+            FROM lessons l
+            JOIN course_modules m ON l.module_id = m.id
+            LEFT JOIN lesson_files lf ON lf.lesson_id = l.id
+            WHERE m.course_id = ?
+            ORDER BY m.module_number, l.lesson_number
+        """, (course['id'],)).fetchall()
+
+        if not rows:
+            print(f'  [!] [{course["id"]}] {course["title"]}: no lessons in DB')
+            broken_courses += 1
+            db.execute('UPDATE courses SET needs_repair = 1 WHERE id = ?', (course['id'],))
+            continue
+
+        course_broken = False
+        checked_modules: set[int] = set()
+        for row in rows:
+            if sample_only and row['module_number'] in checked_modules:
+                continue
+            checked_modules.add(row['module_number'])
+
+            path = row['path']
+            label = f'M{row["module_number"]:02d} L{row["lesson_number"]:02d}'
+            if not path:
+                print(f'  [!] [{course["id"]}] {course["title"]} {label}: no video file linked')
+                db.execute('UPDATE lessons SET needs_repair = 1 WHERE id = ?', (row['id'],))
+                broken_lessons += 1
+                course_broken = True
+                continue
+
+            video = Path(path)
+            if not video.exists():
+                print(f'  [!] [{course["id"]}] {course["title"]} {label}: missing file {video.name}')
+                db.execute('UPDATE lessons SET needs_repair = 1 WHERE id = ?', (row['id'],))
+                broken_lessons += 1
+                course_broken = True
+                continue
+
+            if not is_video_playable(video):
+                print(f'  [!] [{course["id"]}] {course["title"]} {label}: not playable ({video.name})')
+                db.execute('UPDATE lessons SET needs_repair = 1 WHERE id = ?', (row['id'],))
+                broken_lessons += 1
+                course_broken = True
+            else:
+                db.execute('UPDATE lessons SET needs_repair = 0 WHERE id = ?', (row['id'],))
+
+        needs_repair = 1 if course_broken else 0
+        prev = db.execute('SELECT needs_repair FROM courses WHERE id = ?', (course['id'],)).fetchone()['needs_repair']
+        db.execute('UPDATE courses SET needs_repair = ? WHERE id = ?', (needs_repair, course['id']))
+        if course_broken:
+            broken_courses += 1
+        elif prev:
+            fixed_courses += 1
+            print(f'  [✓] [{course["id"]}] {course["title"]}: playback OK')
+
+    db.commit()
+    db.close()
+    print(f'\nVERIFY_COMPLETE: {broken_lessons} broken lessons, {broken_courses} courses flagged, {fixed_courses} repaired')
+    if broken_lessons:
+        sys.exit(1)
+
+
 def cmd_audit(args) -> None:
     db = open_db()
     discover_all = []
@@ -1766,6 +2108,15 @@ def main() -> None:
 
     sub.add_parser('audit', help='Report missing thumbnails')
 
+    p_analyze = sub.add_parser('analyze', help='Report folder layout vs DB issues')
+    p_analyze.add_argument('--course-id', type=int, default=None, help='Limit to one course')
+    p_analyze.add_argument('--folder', type=str, default=None, help='Match course title substring')
+
+    p_verify = sub.add_parser('verify', help='Test lesson files with ffprobe')
+    p_verify.add_argument('--course-id', type=int, default=None, help='Limit to one course')
+    p_verify.add_argument('--folder', type=str, default=None, help='Match course title substring')
+    p_verify.add_argument('--sample', action='store_true', help='Test one lesson per module only')
+
     p_resync = sub.add_parser('resync-subs', help='Re-link lesson subtitles from disk')
     p_resync.add_argument('--course-id', type=int, default=None, help='Limit to one course')
 
@@ -1776,6 +2127,14 @@ def main() -> None:
 
     p_reingest = sub.add_parser('reingest', help='Clear and re-ingest one course folder')
     p_reingest.add_argument('path', help='Path to course folder (e.g. .../Ardanlabs - Ultimate GO)')
+
+    p_reingest_all = sub.add_parser('reingest-all', help='Re-ingest all courses flagged by analyze')
+    p_reingest_all.add_argument('--dry-run', action='store_true', help='Preview without changing DB')
+    p_reingest_all.add_argument('--folder', type=str, default=None, help='Limit to title substring')
+
+    p_safe = sub.add_parser('safe-shore', help='Full library stabilization pipeline')
+    p_safe.add_argument('dir', nargs='?', default=COURSES_DIR)
+    p_safe.add_argument('--full-verify', action='store_true', help='Verify every lesson (slow)')
 
     args = parser.parse_args()
     if not hasattr(args, 'force'):
@@ -1796,9 +2155,13 @@ def main() -> None:
         'thumbs': cmd_thumbs,
         'scrape': cmd_scrape,
         'audit': cmd_audit,
+        'analyze': cmd_analyze,
+        'verify': cmd_verify,
         'resync-subs': cmd_resync_subs,
         'full': cmd_full,
         'reingest': cmd_reingest,
+        'reingest-all': cmd_reingest_all,
+        'safe-shore': cmd_safe_shore,
     }
     commands[args.command](args)
 

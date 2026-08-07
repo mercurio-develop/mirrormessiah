@@ -1,11 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getMovies } from '@/features/movie/queries/get-movies';
+import { getMovies, getMoviesByIds } from '@/features/movie/queries/get-movies';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
+    const idsParam = searchParams.get('ids');
+    if (idsParam) {
+      const ids = idsParam
+        .split(',')
+        .map((value) => parseInt(value.trim(), 10))
+        .filter((id) => !Number.isNaN(id));
+      const movies = getMoviesByIds(ids);
+      return NextResponse.json({ movies }, { headers: { 'Cache-Control': 'no-store' } });
+    }
+
     const q = searchParams.get('q');
     const genre = searchParams.get('genre');
     const quality = searchParams.get('quality');

@@ -1,5 +1,7 @@
 export type CourseSort = 'title_asc' | 'title_desc' | 'newest' | 'repair';
 
+export const DEFAULT_COURSE_SORT: CourseSort = 'newest';
+
 export interface CourseSearchParams {
   q: string;
   category: string;
@@ -19,7 +21,7 @@ export function parseCourseSearchParams(
   searchParams: URLSearchParams | { get: (key: string) => string | null },
 ): CourseSearchParams {
   const sort = searchParams.get('sort') as CourseSort | null;
-  const validSort = COURSE_SORT_OPTIONS.some((o) => o.value === sort) ? sort! : 'title_asc';
+  const validSort = COURSE_SORT_OPTIONS.some((o) => o.value === sort) ? sort! : DEFAULT_COURSE_SORT;
   return {
     q: searchParams.get('q') || '',
     category: searchParams.get('category') || '',
@@ -35,6 +37,6 @@ export function courseFiltersToQueryString(filters: Partial<CourseSearchParams>)
   if (filters.category) params.set('category', filters.category);
   if (filters.platform) params.set('platform', filters.platform);
   if (filters.year) params.set('year', filters.year);
-  if (filters.sort && filters.sort !== 'title_asc') params.set('sort', filters.sort);
+  if (filters.sort && filters.sort !== DEFAULT_COURSE_SORT) params.set('sort', filters.sort);
   return params.toString();
 }

@@ -7,6 +7,7 @@ import { getEpisodeContext } from '@/features/series/queries/get-episode-context
 import { b64urlEncode } from '@/lib/b64url';
 import { EpisodePlaylist } from '@/features/series/components/episode-playlist';
 import { EpisodeWatchLayout } from '@/features/series/components/episode-watch-layout';
+import { EpisodeWatchTracker } from '@/features/series/components/episode-watch-tracker';
 
 interface WatchEpisodePageProps {
   params: Promise<{ id: string }>;
@@ -94,7 +95,17 @@ export default async function WatchEpisodePage({ params }: WatchEpisodePageProps
                 <p className="text-muted-foreground text-xs mt-2 max-w-xs font-bold uppercase tracking-widest opacity-50">Codec mismatch or file extraction failure.</p>
               </div>
             ) : (
-              <MediaPlayer
+              <>
+                <EpisodeWatchTracker
+                  episodeId={episode.id}
+                  seriesId={episode.series_id}
+                  seriesTitle={episode.series_title}
+                  episodeTitle={episode.title}
+                  seasonNumber={episode.season_number}
+                  episodeNumber={episode.episode_number}
+                  thumbnail={episode.thumbnail}
+                />
+                <MediaPlayer
                 id={`episode_${episode.id}`}
                 src={episodeData.source.src}
                 mimeType={episodeData.mimeType}
@@ -102,6 +113,7 @@ export default async function WatchEpisodePage({ params }: WatchEpisodePageProps
                 title={`${episode.series_title} - S${episode.season_number}E${episode.episode_number} ${episode.title && !episode.title.toLowerCase().startsWith('episode ') ? `- ${episode.title}` : ''}`}
                 className="w-full h-full"
               />
+              </>
             )}
           </section>
 

@@ -23,13 +23,23 @@ const getPosterUrl = (thumbnail: string | null | undefined): string | null => {
   return url;
 };
 
-export function LessonPlaylist({ lessons, currentLessonId }: { lessons: PlaylistLesson[]; currentLessonId: number }) {
+export function LessonPlaylist({
+  lessons,
+  currentLessonId,
+  showHeader = true,
+}: {
+  lessons: PlaylistLesson[];
+  currentLessonId: number;
+  showHeader?: boolean;
+}) {
   return (
-    <div className="flex flex-col h-full bg-zinc-950/50 overflow-hidden">
-      <div className="p-4 border-b border-white/5">
-        <h3 className="text-sm font-black uppercase tracking-widest text-white/50">Playlist</h3>
-        <p className="text-xs text-muted-foreground mt-1">{lessons.length} lessons in module</p>
-      </div>
+    <div className="flex flex-col flex-1 min-h-0 bg-zinc-950/50 overflow-hidden">
+      {showHeader ? (
+        <div className="p-4 border-b border-white/5 shrink-0">
+          <h3 className="text-sm font-black uppercase tracking-widest text-white/50">Playlist</h3>
+          <p className="text-xs text-muted-foreground mt-1">{lessons.length} lessons in module</p>
+        </div>
+      ) : null}
       <div className="flex-1 overflow-y-auto p-2 space-y-1">
         {lessons.map((les) => {
           const isActive = les.id === currentLessonId;
