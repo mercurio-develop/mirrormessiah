@@ -548,12 +548,77 @@ def lesson_thumb_path(course_path: Path, module_num: int, module_kind: str, less
     return mod_dir / lesson_thumb_name(lesson_num, title)
 
 
+def course_thumbnail_is_available(thumbnail: str | None, poster: Path) -> bool:
+    if thumbnail:
+        if thumbnail.startswith('http'):
+            return True
+        if Path(thumbnail).exists():
+            return True
+    return poster.exists()
+
+
+def find_first_lesson_thumbnail_source(
+    db: sqlite3.Connection, course_id: int, course_path: Path | None,
+) -> Path | None:
+    rows = db.execute("""
+        SELECT l.thumbnail, l.lesson_number, l.title, m.module_number, m.module_kind
+        FROM lessons l
+        JOIN course_modules m ON l.module_id = m.id
+        WHERE m.course_id = ?
+        ORDER BY m.module_number, l.lesson_number
+    """, (course_id,)).fetchall()
+    for row in rows:
+        thumb = row['thumbnail']
+        if thumb and (thumb.startswith('http') or Path(thumb).exists()):
+            return Path(thumb)
+        if course_path:
+            guess = lesson_thumb_path(
+                course_path, row['module_number'], row['module_kind'],
+                row['lesson_number'], row['title'] or f'Lesson {row["lesson_number"]}',
+            )
+            if guess.exists():
+                return guess
+    return None
+
+
+def ensure_course_poster(
+    db: sqlite3.Connection, course_id: int, course_path: Path | None, force: bool = False,
+) -> bool:
+    """Create poster.jpg and link courses.thumbnail when missing (never overwrites valid art)."""
+    if not course_path or not course_path.exists():
+        return False
+    poster = course_path / 'poster.jpg'
+    row = db.execute('SELECT thumbnail FROM courses WHERE id = ?', (course_id,)).fetchone()
+    db_thumb = row['thumbnail'] if row else None
+
+    if not force and course_thumbnail_is_available(db_thumb, poster):
+        if poster.exists() and db_thumb != str(poster):
+            if not db_thumb or (not db_thumb.startswith('http') and not Path(db_thumb).exists()):
+                db.execute('UPDATE courses SET thumbnail = ? WHERE id = ?', (str(poster), course_id))
+        return False
+
+    src = find_first_lesson_thumbnail_source(db, course_id, course_path)
+    if not src or not src.exists():
+        return False
+    try:
+        poster.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, poster)
+        db.execute('UPDATE courses SET thumbnail = ? WHERE id = ?', (str(poster), course_id))
+        return True
+    except OSError:
+        return False
+
+
 def discover_local_artwork(db: sqlite3.Connection, course_id: int, course_path: Path | None) -> None:
     if not course_path or not course_path.exists():
         return
     poster = course_path / 'poster.jpg'
+    row = db.execute('SELECT thumbnail FROM courses WHERE id = ?', (course_id,)).fetchone()
+    db_thumb = row['thumbnail'] if row else None
     if poster.exists():
         db.execute('UPDATE courses SET thumbnail = ? WHERE id = ?', (str(poster), course_id))
+    elif not course_thumbnail_is_available(db_thumb, poster):
+        ensure_course_poster(db, course_id, course_path)
     for mod in db.execute(
         'SELECT id, module_number, module_kind, poster FROM course_modules WHERE course_id = ?',
         (course_id,),
@@ -1524,22 +1589,7 @@ def cmd_thumbs(args) -> None:
                 failed_ffmpeg += 1
                 course_fail += 1
 
-        poster = course_path / 'poster.jpg'
-        if not poster.exists() or force:
-            first = db.execute("""
-                SELECT l.thumbnail FROM lessons l
-                JOIN course_modules m ON l.module_id = m.id
-                WHERE m.course_id = ? AND l.thumbnail IS NOT NULL
-                ORDER BY m.module_number, l.lesson_number LIMIT 1
-            """, (course['id'],)).fetchone()
-            if first and first['thumbnail'] and Path(first['thumbnail']).exists():
-                try:
-                    shutil.copy2(first['thumbnail'], poster)
-                    db.execute('UPDATE courses SET thumbnail = ? WHERE id = ?', (str(poster), course['id']))
-                except OSError:
-                    pass
-        elif not db.execute('SELECT thumbnail FROM courses WHERE id = ?', (course['id'],)).fetchone()['thumbnail']:
-            db.execute('UPDATE courses SET thumbnail = ? WHERE id = ?', (str(poster), course['id']))
+        course_poster = ensure_course_poster(db, course['id'], course_path, force=force)
 
         mod_posters = 0
         if getattr(args, 'module_posters', False):
@@ -1547,11 +1597,27 @@ def cmd_thumbs(args) -> None:
             module_posters += mod_posters
 
         db.commit()
-        if course_gen or course_skip or course_fail or mod_posters:
-            print(f'  [{course["id"]}] {course["title"]}: +{course_gen} thumbs, {mod_posters} module posters, {course_skip} skipped, {course_fail} failed')
+        if course_gen or course_skip or course_fail or mod_posters or course_poster:
+            poster_note = ', poster set' if course_poster else ''
+            print(f'  [{course["id"]}] {course["title"]}: +{course_gen} thumbs, {mod_posters} module posters, {course_skip} skipped, {course_fail} failed{poster_note}')
+
+    course_posters = 0
+    for course in db.execute('SELECT id, title FROM courses').fetchall():
+        if getattr(args, 'course_id', None) and course['id'] != args.course_id:
+            continue
+        course_path = resolve_course_path(db, course['id'])
+        row = db.execute('SELECT thumbnail FROM courses WHERE id = ?', (course['id'],)).fetchone()
+        poster = (course_path / 'poster.jpg') if course_path else None
+        if not force and course_path and course_thumbnail_is_available(row['thumbnail'], poster):
+            continue
+        if ensure_course_poster(db, course['id'], course_path, force=force):
+            course_posters += 1
+            print(f'  [poster] {course["title"]}')
+    if course_posters:
+        db.commit()
 
     db.close()
-    print(f'THUMBS_COMPLETE: generated={generated}, module_posters={module_posters}, skipped={skipped}, failed={failed}')
+    print(f'THUMBS_COMPLETE: generated={generated}, course_posters={course_posters}, module_posters={module_posters}, skipped={skipped}, failed={failed}')
     if failed:
         print(f'  failures: no_file={failed_no_file}, outside_root={failed_outside_root}, ffmpeg={failed_ffmpeg}')
 
