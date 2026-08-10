@@ -9,7 +9,13 @@ to the beginning of the file, allowing immediate streaming in browsers.
 
 Usage:
   python3 scripts/convert_to_web.py /path/to/media/file.mkv
-  python3 scripts/convert_to_web.py /path/to/series/folder
+  python3 scripts/convert_to_web.py /path/to/series/folder --recursive
+  python3 scripts/convert_to_web.py --movies --recursive
+  python3 scripts/convert_to_web.py --series --recursive
+  python3 scripts/convert_to_web.py --courses --recursive
+
+Library flags use default paths from .env (MEDIA_DIR, SERIES_DIR, COURSES_DIR).
+With --courses --recursive, primary and LEGACY_COURSES_DIRS roots are scanned.
 
 Dependencies:
   - ffmpeg
@@ -23,6 +29,16 @@ import json
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
+
+ROOT = Path(__file__).parent.parent
+load_dotenv(ROOT / '.env')
+
+MEDIA_DIR = os.getenv('MEDIA_DIR', '')
+SERIES_DIR = os.getenv('SERIES_DIR') or MEDIA_DIR or ''
+COURSES_DIR = os.getenv('COURSES_DIR', '')
+LEGACY_COURSES_DIRS = os.getenv('LEGACY_COURSES_DIRS', '')
+
 VIDEO_EXTS = {'.mp4', '.mkv', '.avi', '.webm', '.mov'}
 CONVERT_SOURCE_EXT = {'.mkv', '.avi', '.webm', '.mov'}
 
@@ -31,6 +47,9 @@ def is_convert_source(file_path: Path) -> bool:
     if name.endswith('.bak'):
         stem_path = Path(file_path.stem)
         if stem_path.suffix.lower() in CONVERT_SOURCE_EXT:
+            # Skip backup sources when the converted MP4 already exists
+            if output_mp4_path(file_path).exists():
+                return False
             return True
     return file_path.suffix.lower() in CONVERT_SOURCE_EXT
 
@@ -341,10 +360,118 @@ def prebuild_file(file_path: Path) -> None:
     print(f"\nPre-building audio caches: {file_path.name}")
     prebuild_audio_switch_caches(file_path)
 
+def courses_roots() -> list[Path]:
+    """Primary and legacy course library roots (deduped, existing only)."""
+    seen: set[str] = set()
+    roots: list[Path] = []
+    candidates = [COURSES_DIR]
+    if LEGACY_COURSES_DIRS:
+        candidates.extend(part.strip() for part in LEGACY_COURSES_DIRS.split(':'))
+    for raw in candidates:
+        if not raw:
+            continue
+        resolved = str(Path(raw).resolve())
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        path = Path(resolved)
+        if path.is_dir():
+            roots.append(path)
+    return roots
+
+
+def resolve_targets(args, parser: argparse.ArgumentParser) -> list[Path]:
+    if args.movies:
+        if not MEDIA_DIR:
+            parser.error('MEDIA_DIR is not set in .env')
+        return [Path(MEDIA_DIR)]
+    if args.series:
+        if not SERIES_DIR:
+            parser.error('SERIES_DIR or MEDIA_DIR is not set in .env')
+        return [Path(SERIES_DIR)]
+    if args.courses:
+        if args.recursive:
+            roots = courses_roots()
+            if not roots:
+                parser.error('No course library roots found. Set COURSES_DIR (and optional LEGACY_COURSES_DIRS) in .env')
+            return roots
+        if not COURSES_DIR:
+            parser.error('COURSES_DIR is not set in .env')
+        return [Path(COURSES_DIR)]
+    if args.target:
+        return [Path(args.target)]
+    parser.error('Provide a target path or one of --movies, --series, --courses')
+
+
+def process_target(target: Path, args) -> None:
+    if not target.exists():
+        print(f"Error: The target path '{target}' does not exist.")
+        return
+
+    if target.is_file():
+        if args.prebuild_audio_only:
+            if target.suffix.lower() == '.mp4':
+                prebuild_file(target)
+            else:
+                print(f"Not an MP4 file: {target.name}")
+        elif is_convert_source(target) or (args.downmix_stereo and target.suffix.lower() == '.mp4' and needs_stereo_downmix(target)):
+            convert_file(target, prebuild_audio=not args.skip_audio_prebuild)
+        else:
+            print(f"Not a recognized convertible video file: {target.name}")
+        return
+
+    if args.prebuild_audio_only:
+        print(f"Scanning for MP4 files in: {target}...")
+        mp4_files = [
+            f for f in target.rglob('*.mp4')
+            if f.is_file()
+            and not f.name.startswith('.mm_tmp_')
+            and '.mm_cache' not in f.parts
+        ]
+        print(f"Found {len(mp4_files)} MP4 file(s). Pre-building audio caches...")
+        for f in mp4_files:
+            if f.exists():
+                prebuild_file(f)
+        return
+
+    file_iterator = target.rglob('*') if args.recursive else target.glob('*')
+    all_files = list(file_iterator)
+
+    print(f"Scanning directory: {target}...")
+    print(f"Found {len(all_files)} total items. Starting conversion pass...")
+
+    for f in all_files:
+        convertible = is_convert_source(f) or (
+            args.downmix_stereo and f.suffix.lower() == '.mp4' and needs_stereo_downmix(f)
+        )
+        if f.is_file() and convertible:
+            if not f.name.startswith('.mm_tmp_'):
+                if f.exists():
+                    convert_file(f, prebuild_audio=not args.skip_audio_prebuild)
+                else:
+                    print(f"\nSkipping {f.name}: File no longer exists at this path.")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Convert video files to web-optimized MP4 (H.264/AAC with +faststart).")
     parser.add_argument("target", nargs="?", help="File or directory containing media files to convert")
     parser.add_argument("-r", "--recursive", action="store_true", help="Search recursively in directory")
+    library_group = parser.add_mutually_exclusive_group()
+    library_group.add_argument(
+        "--movies",
+        action="store_true",
+        help=f"Use MEDIA_DIR from .env ({MEDIA_DIR or 'not set'})",
+    )
+    library_group.add_argument(
+        "--series",
+        action="store_true",
+        help=f"Use SERIES_DIR from .env ({SERIES_DIR or 'not set'})",
+    )
+    library_group.add_argument(
+        "--courses",
+        action="store_true",
+        help=f"Use COURSES_DIR from .env ({COURSES_DIR or 'not set'}); with --recursive also scans LEGACY_COURSES_DIRS",
+    )
     parser.add_argument(
         "--skip-audio-prebuild",
         action="store_true",
@@ -362,66 +489,20 @@ def main():
     )
     args = parser.parse_args()
 
-    target_path = args.target
-    if not target_path and args.recursive:
-        # Default to series directory when using recursive mode
-        target_path = os.getenv('MEDIA_DIR', '/media')
-    elif not target_path:
-        parser.error("The following arguments are required: target (unless -r is used to target the default series directory)")
+    if args.target and (args.movies or args.series or args.courses):
+        parser.error('Use either a target path or one of --movies, --series, --courses — not both')
 
-    target = Path(target_path)
-    
-    if not target.exists():
-        print(f"Error: The target path '{target}' does not exist.")
+    targets = resolve_targets(args, parser)
+    missing = [target for target in targets if not target.exists()]
+    if missing:
+        for target in missing:
+            print(f"Error: The target path '{target}' does not exist.")
         sys.exit(1)
-        
-    if target.is_file():
-        if args.prebuild_audio_only:
-            if target.suffix.lower() == '.mp4':
-                prebuild_file(target)
-            else:
-                print(f"Not an MP4 file: {target.name}")
-        elif is_convert_source(target) or (args.downmix_stereo and target.suffix.lower() == '.mp4' and needs_stereo_downmix(target)):
-            convert_file(target, prebuild_audio=not args.skip_audio_prebuild)
-        else:
-            print(f"Not a recognized convertible video file: {target.name}")
-    elif target.is_dir():
-        file_iterator = target.rglob('*') if args.recursive else target.glob('*')
-        all_files = list(file_iterator)
 
-        if args.prebuild_audio_only:
-            print(f"Scanning for MP4 files in: {target}...")
-            mp4_files = [
-                f for f in target.rglob('*.mp4')
-                if f.is_file()
-                and not f.name.startswith('.mm_tmp_')
-                and '.mm_cache' not in f.parts
-            ]
-            print(f"Found {len(mp4_files)} MP4 file(s). Pre-building audio caches...")
-            for f in mp4_files:
-                if f.exists():
-                    prebuild_file(f)
-            return
-
-        # Use rglob if recursive flag is set, otherwise glob
-        # We materialize the list into memory immediately to prevent 
-        # FileNotFoundError if directories are renamed by other processes 
-        # during long-running ffmpeg conversions.
-        print(f"Scanning directory: {target}...")
-        print(f"Found {len(all_files)} total items. Starting conversion pass...")
-        
-        for f in all_files:
-            convertible = is_convert_source(f) or (
-                args.downmix_stereo and f.suffix.lower() == '.mp4' and needs_stereo_downmix(f)
-            )
-            if f.is_file() and convertible:
-                # Do not process temp files
-                if not f.name.startswith('.mm_tmp_'):
-                    # Check if file still exists (might have been renamed by scrape/organize)
-                    if f.exists():
-                        convert_file(f, prebuild_audio=not args.skip_audio_prebuild)
-                    else:
-                        print(f"\nSkipping {f.name}: File no longer exists at this path.")
+    for i, target in enumerate(targets):
+        if len(targets) > 1:
+            print(f"\n=== Library root [{i + 1}/{len(targets)}]: {target} ===")
+        process_target(target, args)
 
 if __name__ == '__main__':
     main()

@@ -134,7 +134,10 @@ const COMMANDS: Record<string, CommandOptions[]> = {
     { 
       id: 'u-convert', script: 'scripts/convert_to_web.py', description: 'Convert Media to Web MP4', icon: <Cpu className="w-4 h-4" />,
       argsSchema: [
-        { name: 'target', label: 'Target File/Folder', type: 'string', isPositional: true, required: true, placeholder: '/path/to/media.mkv or folder' },
+        { name: '--movies', label: 'Movies library (MEDIA_DIR)', type: 'boolean' },
+        { name: '--series', label: 'Series library (SERIES_DIR)', type: 'boolean' },
+        { name: '--courses', label: 'Courses library (COURSES_DIR)', type: 'boolean' },
+        { name: 'target', label: 'Target File/Folder (optional with library flags)', type: 'string', isPositional: true, placeholder: '/path/to/media.mkv or folder' },
         { name: '--recursive', label: 'Recursive Folder Scan', type: 'boolean' }
       ]
     },

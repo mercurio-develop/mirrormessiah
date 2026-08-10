@@ -8,6 +8,7 @@ Commands:
   relink <path>             Re-link files for an existing movie entry
   scrape                    Scrape TMDB metadata for movies missing plot/rating
   fetch-subs                Download subtitles from OpenSubtitles
+  test-opensubs             Verify OpenSubtitles API key, login, and quota mode
   organize                  Restructure file system folders to match database naming
   verify                    Check media integrity and mark unplayable titles for repair
   cleanup                   Identify and merge duplicate movie entries
@@ -66,6 +67,18 @@ OPENSUBS_API_KEY = os.getenv('OPENSUBS_API_KEY', '')
 OPENSUBS_BASE = 'https://api.opensubtitles.com/api/v1'
 OPENSUBS_UA = 'MirrorMessiah-mm/1.0'
 OPENSUBS_RATE_LIMIT_S = 0.35
+
+
+def opensubs_dev_mode_enabled() -> bool:
+    """When true, skip login so the API key's dev_mode quota applies (~100/day on the key)."""
+    return os.getenv('OPENSUBS_DEV_MODE', '').strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+def opensubs_resolve_token(*, force_login: bool = False) -> str | None:
+    """Return a user bearer token, or None to use API-key-only requests."""
+    if opensubs_dev_mode_enabled() and not force_login:
+        return None
+    return opensubs_login()
 
 VIDEO_EXT = {'.mp4'}
 SUB_EXT   = {'.srt', '.vtt', '.ass', '.ssa'}
@@ -615,8 +628,80 @@ def opensubs_login() -> str | None:
         json={'username': username, 'password': password},
         timeout=30,
     )
+    if r.status_code == 401:
+        detail = r.json().get('message') if r.headers.get('content-type', '').startswith('application/json') else r.text
+        raise RuntimeError(f'OpenSubtitles login failed: {detail or "Unauthorized"}')
     r.raise_for_status()
     return r.json().get('token')
+
+
+def opensubs_user_info(token: str) -> dict:
+    r = requests.get(
+        f'{OPENSUBS_BASE}/infos/user',
+        headers=opensubs_request_headers(token),
+        timeout=30,
+    )
+    r.raise_for_status()
+    return r.json().get('data') or {}
+
+
+def opensubs_mode_message(token: str | None) -> str:
+    if token:
+        return 'logged in (uses your OpenSubtitles account quota: ~20/day basic, up to 1000 VIP)'
+    if opensubs_dev_mode_enabled():
+        return 'API key dev_mode (~100 downloads/day on this key; login skipped — set OPENSUBS_DEV_MODE=0 to use account quota)'
+    if os.getenv('OPENSUBS_USERNAME') and os.getenv('OPENSUBS_PASSWORD'):
+        return 'anonymous API key (~5/day unless dev_mode is enabled on your key at opensubtitles.com)'
+    return 'anonymous API key (~5 downloads/day). Set OPENSUBS_USERNAME/PASSWORD or enable dev_mode on your key.'
+
+
+def cmd_test_opensubs(args) -> None:
+    if not OPENSUBS_API_KEY:
+        print('ERROR: OPENSUBS_API_KEY is not set in .env')
+        print('Register a consumer key at https://www.opensubtitles.com/en/consumers')
+        sys.exit(1)
+
+    dev_mode = opensubs_dev_mode_enabled()
+    print('--- OpenSubtitles connectivity test ---')
+    print(f'  API key: configured ({len(OPENSUBS_API_KEY)} chars)')
+    print(f'  OPENSUBS_DEV_MODE: {"on" if dev_mode else "off"}')
+    print(f'  Username: {"set" if os.getenv("OPENSUBS_USERNAME") else "not set"}')
+    print(f'  Password: {"set" if os.getenv("OPENSUBS_PASSWORD") else "not set"}')
+
+    try:
+        r = _opensubs_get('/subtitles', None, {'imdb_id': '0133093', 'languages': 'en'}, retries=1)
+        count = len(r.json().get('data') or [])
+        print(f'  Search test: HTTP {r.status_code} ({count} English subs for The Matrix)')
+    except Exception as e:
+        print(f'  Search test: FAILED — {e}')
+        sys.exit(1)
+
+    token: str | None = None
+    if os.getenv('OPENSUBS_USERNAME') and os.getenv('OPENSUBS_PASSWORD'):
+        try:
+            token = opensubs_login()
+            info = opensubs_user_info(token)
+            allowed = info.get('allowed_downloads')
+            remaining = info.get('remaining_downloads')
+            level = info.get('level')
+            print(f'  Login test: OK (level={level!r}, allowed={allowed}, remaining={remaining})')
+        except Exception as e:
+            print(f'  Login test: FAILED — {e}')
+            if args.require_login:
+                sys.exit(1)
+
+    active_token = opensubs_resolve_token(force_login=args.login)
+    print(f'\n  fetch-subs would use: {opensubs_mode_message(active_token)}')
+
+    if dev_mode and token and not args.login:
+        print('\n  Note: OPENSUBS_DEV_MODE=1 skips login so you can test the key quota (100/day).')
+        print('  After subscribing, assign the plan to this API key on opensubtitles.com,')
+        print('  then set OPENSUBS_DEV_MODE=0 to use your account/VIP quota with login.')
+    elif not dev_mode and not token:
+        print('\n  Tip: enable "dev_mode" on your consumer key at opensubtitles.com,')
+        print('  then set OPENSUBS_DEV_MODE=1 in .env for 100 test downloads/day without login.')
+
+    print('\nTest OK.')
 
 
 def movie_has_lang_sub(video_path: Path, lang: str) -> bool:
@@ -775,6 +860,11 @@ def add_fetch_subs_cli_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument('--limit', type=int, help='Max titles to process')
     parser.add_argument('--dry-run', action='store_true')
     parser.add_argument('--no-backup', action='store_true')
+    parser.add_argument(
+        '--login',
+        action='store_true',
+        help='Force account login even when OPENSUBS_DEV_MODE=1 (uses account quota instead of key dev quota)',
+    )
 
 
 def cmd_fetch_subs(args) -> None:
@@ -784,11 +874,8 @@ def cmd_fetch_subs(args) -> None:
     lang = (args.lang or 'es').lower()
     backup_db(args)
     db = open_db()
-    token = opensubs_login()
-    if token:
-        print('OpenSubtitles: logged in (account quota).')
-    else:
-        print('OpenSubtitles: anonymous mode (~5 downloads/day). Set OPENSUBS_USERNAME/PASSWORD in .env for bulk.')
+    token = opensubs_resolve_token(force_login=getattr(args, 'login', False))
+    print(f'OpenSubtitles: {opensubs_mode_message(token)}')
 
     targets = movies_missing_subtitle_lang(db, lang, args.movie_id)
     if args.limit:
@@ -831,8 +918,10 @@ def cmd_fetch_subs(args) -> None:
                     quota_exhausted = True
                     if token:
                         print('\n  OpenSubtitles daily download quota exhausted. Re-run tomorrow (e.g. cron).')
+                    elif opensubs_dev_mode_enabled():
+                        print('\n  API key dev_mode quota exhausted (100/day). Re-run tomorrow or subscribe on opensubtitles.com.')
                     else:
-                        print('\n  Anonymous OpenSubtitles quota exhausted. Add OPENSUBS_USERNAME/PASSWORD to .env and re-run.')
+                        print('\n  Anonymous OpenSubtitles quota exhausted (~5/day). Enable dev_mode on your key or add login credentials.')
                     break
             else:
                 failed += 1
@@ -1786,6 +1875,18 @@ def main():
 
     p_fetch = sub.add_parser('fetch-subs', help='Download missing subtitles from OpenSubtitles.com')
     add_fetch_subs_cli_args(p_fetch)
+
+    p_test_opensubs = sub.add_parser('test-opensubs', help='Verify OpenSubtitles API key, login, and quota mode')
+    p_test_opensubs.add_argument(
+        '--login',
+        action='store_true',
+        help='Show fetch-subs mode when forced to use account login',
+    )
+    p_test_opensubs.add_argument(
+        '--require-login',
+        action='store_true',
+        help='Exit with error if OPENSUBS_USERNAME/PASSWORD login fails',
+    )
     
     args = parser.parse_args()
     dispatch = {
@@ -1794,6 +1895,7 @@ def main():
         'sync-assets': cmd_sync_assets, 'full': cmd_full, 'reset': cmd_reset,
         'stage': cmd_stage, 'verify': cmd_verify, 'convert': cmd_convert,
         'prebuild-audio': cmd_prebuild_audio, 'fetch-subs': cmd_fetch_subs,
+        'test-opensubs': cmd_test_opensubs,
     }
     dispatch[args.command](args)
 

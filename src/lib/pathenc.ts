@@ -1,36 +1,74 @@
 import { getDb } from './db';
 import path from 'path';
 
+/** True when `target` is the same path as `root` or a direct child (not a sibling prefix match). */
+export function isPathUnderRoot(target: string, root: string): boolean {
+  const resolvedTarget = path.resolve(target);
+  const resolvedRoot = path.resolve(root);
+  if (resolvedTarget === resolvedRoot) return true;
+  const rel = path.relative(resolvedRoot, resolvedTarget);
+  return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
+}
+
+function collectEnvLibraryRoots(): string[] {
+  const roots: string[] = [];
+  for (const value of [
+    process.env.MEDIA_DIR,
+    process.env.SERIES_DIR,
+    process.env.COURSES_DIR,
+    process.env.MEDIA_ROOT,
+  ]) {
+    if (value?.trim()) roots.push(value.trim());
+  }
+  if (process.env.LEGACY_COURSES_DIRS?.trim()) {
+    for (const part of process.env.LEGACY_COURSES_DIRS.split(':')) {
+      if (part.trim()) roots.push(part.trim());
+    }
+  }
+  return roots;
+}
+
+/** Registered library roots from SQLite plus configured media env paths. */
+export function getAllowedLibraryRoots(): string[] {
+  const db = getDb();
+  const fromDb = db
+    .prepare('SELECT root_path FROM libraries')
+    .all() as Array<{ root_path: string }>;
+  const seen = new Set<string>();
+  const roots: string[] = [];
+
+  for (const candidate of [...fromDb.map((row) => row.root_path), ...collectEnvLibraryRoots()]) {
+    if (!candidate?.trim()) continue;
+    const resolved = path.resolve(candidate.trim());
+    if (seen.has(resolved)) continue;
+    seen.add(resolved);
+    roots.push(resolved);
+  }
+
+  return roots;
+}
+
 /**
  * Validate that a file path is within allowed library roots
  * Prevents directory traversal attacks
  */
 export async function validateFilePath(filePath: string): Promise<boolean> {
   try {
-    const db = getDb();
-    
-    // Get all library root paths
-    const libraries = db.prepare('SELECT root_path FROM libraries').all() as Array<{ root_path: string }>;
-    
-    if (libraries.length === 0) {
+    const roots = getAllowedLibraryRoots();
+    if (roots.length === 0) {
       console.warn('No libraries found for path validation');
       return false;
     }
-    
-    // Resolve the absolute path to prevent traversal
+
     const resolvedPath = path.resolve(filePath);
-    
-    // Check if the resolved path starts with any library root
-    for (const library of libraries) {
-      const libraryRoot = path.resolve(library.root_path);
-      if (resolvedPath.startsWith(libraryRoot)) {
+    for (const libraryRoot of roots) {
+      if (isPathUnderRoot(resolvedPath, libraryRoot)) {
         return true;
       }
     }
-    
-    console.warn(`Path validation failed: file is not within any library root`);
+
+    console.warn(`Path validation failed: file is not within any library root (${path.basename(resolvedPath)})`);
     return false;
-    
   } catch (error) {
     console.error('Error validating file path:', error);
     return false;

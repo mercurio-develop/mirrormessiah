@@ -104,6 +104,12 @@ MirrorMessiah is managed locally using the Python CLI. All absolute directories 
     ```bash
     python3 scripts/convert_to_web.py "/path/to/Macross Plus.mp4" --prebuild-audio-only
     ```
+    Convert an entire library using `.env` defaults:
+    ```bash
+    python3 scripts/convert_to_web.py --movies --recursive
+    python3 scripts/convert_to_web.py --series --recursive
+    python3 scripts/convert_to_web.py --courses --recursive
+    ```
 *   **Ingest / Sync Directory**: Scan the media drive, discover new titles, auto-scrape details from TMDB, and link subtitles.
     ```bash
     python3 scripts/mm.py sync "/path/to/movies"
@@ -121,7 +127,13 @@ MirrorMessiah is managed locally using the Python CLI. All absolute directories 
     ```bash
     python3 scripts/mm.py fetch-subs --no-backup
     ```
-    Set `OPENSUBS_USERNAME` and `OPENSUBS_PASSWORD` in `.env`. For a large library, run daily via cron:
+    Register at [opensubtitles.com/consumers](https://www.opensubtitles.com/en/consumers), enable **dev_mode** on your key (100 test downloads/day), then in `.env`:
+    `OPENSUBS_API_KEY`, `OPENSUBS_DEV_MODE=1`. Optional: `OPENSUBS_USERNAME` / `OPENSUBS_PASSWORD` for account quota after subscribing.
+    Verify setup:
+    ```bash
+    python3 scripts/mm.py test-opensubs
+    ```
+    For a large library, run daily via cron:
     ```bash
     # See scripts/cron/fetch-subs.crontab.example
     15 3 * * * /path/to/mirrormessiah/scripts/fetch-subs-daily.sh

@@ -17,9 +17,12 @@ services:
       - SERIES_DIR=${SERIES_DIR}
       - COURSES_DIR=${COURSES_DIR}
       - LEGACY_COURSES_DIRS=${LEGACY_COURSES_DIRS:-}
+      - MEDIA_ROOT=${MEDIA_ROOT:-/media/tushita}
       - TMDB_API_KEY=${TMDB_API_KEY}
     volumes:
       - mm-data:/app/data
+      # Parent mount: movies (W11_DATA) and courses (LINUX_DATA) often live under one parent.
+      - "${MEDIA_ROOT:-/media/tushita}:${MEDIA_ROOT:-/media/tushita}:ro"
       # MEDIA_DIR: Path to your movie collection. Mounted as rw for poster management by mm.py
       - "${MEDIA_DIR:?MEDIA_DIR is not set.}:${MEDIA_DIR}"
       # SERIES_DIR: Path to your series collection

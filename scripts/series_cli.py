@@ -261,6 +261,16 @@ def extract_episode_info(name: str, parent_name: str):
         if trailing_match:
             ep_num = int(trailing_match.group(1))
 
+    # 6. Anime-style numbering: "Slam Dunk 01 Episode Title", "Show Name 101 Finale"
+    if ep_num is None:
+        name_without_ext = os.path.splitext(name)[0]
+        anime_match = re.search(
+            r'(?:^|\s)(?:EP?)?0*(\d{1,3})(?:\s+(?![vV]\d)[A-Za-z]|\s*$|\s*[\-\(])',
+            name_without_ext,
+        )
+        if anime_match:
+            ep_num = int(anime_match.group(1))
+
     if ep_num is not None:
         if sm:
             return int(sm.group(1)), ep_num
@@ -457,6 +467,41 @@ def resync_series_subtitles(db: sqlite3.Connection, series_id: int) -> tuple[int
         removed += r
     return found, added, removed
 
+def relink_episode_file_to_mp4(db: sqlite3.Connection, file_id: int, source_path: Path) -> bool:
+    """Point an episode_files row at its MP4 sibling, or drop stale MKV row if MP4 is already linked."""
+    mp4 = source_path.with_suffix('.mp4')
+    if not mp4.exists():
+        return False
+    mp4_str = str(mp4.resolve())
+
+    owner = db.execute(
+        'SELECT id, episode_id FROM episode_files WHERE path = ?',
+        (mp4_str,),
+    ).fetchone()
+    if owner:
+        if owner['id'] == file_id:
+            return True
+        db.execute('DELETE FROM episode_files WHERE id = ?', (file_id,))
+        return True
+
+    try:
+        db.execute(
+            'UPDATE episode_files SET path = ?, container = ? WHERE id = ?',
+            (mp4_str, 'mp4', file_id),
+        )
+    except sqlite3.IntegrityError:
+        db.execute('DELETE FROM episode_files WHERE id = ?', (file_id,))
+    return True
+
+def relink_converted_episodes(db: sqlite3.Connection) -> int:
+    """Point episode_files at MP4 when MKV was converted but DB still references MKV."""
+    updated = 0
+    for row in db.execute("SELECT id, path FROM episode_files WHERE lower(path) LIKE '%.mkv'").fetchall():
+        mkv = Path(row['path'])
+        if relink_episode_file_to_mp4(db, row['id'], mkv):
+            updated += 1
+    return updated
+
 def ingest_series(db: sqlite3.Connection, series_folder: Path, lib_id: int):
     title = clean_name(series_folder.name)
     year = extract_year(series_folder.name)
@@ -483,35 +528,49 @@ def ingest_series(db: sqlite3.Connection, series_folder: Path, lib_id: int):
     for ep_file in series_folder.rglob('*'):
         if any(part.startswith('.') for part in ep_file.relative_to(series_folder).parts):
             continue
-        if ep_file.is_file() and ep_file.suffix.lower() in VIDEO_EXT:
-            season_num, ep_num = extract_episode_info(ep_file.name, ep_file.parent.name)
-            
-            if season_num is None or ep_num is None:
-                print(f"  [?] Skipping unparsable episode: {ep_file.name}")
-                continue
+        if not ep_file.is_file() or ep_file.suffix.lower() not in VIDEO_EXT:
+            continue
+        if ep_file.name.lower().endswith('.bak'):
+            continue
+        if ep_file.suffix.lower() == '.mkv' and ep_file.with_suffix('.mp4').exists():
+            continue
 
-            # Ensure season
-            season_row = db.execute("SELECT id FROM seasons WHERE series_id=? AND season_number=?", (series_id, season_num)).fetchone()
-            if season_row:
-                season_id = season_row['id']
-            else:
-                cur = db.execute("INSERT INTO seasons (series_id, season_number) VALUES (?,?)", (series_id, season_num))
-                season_id = cur.lastrowid
+        season_num, ep_num = extract_episode_info(ep_file.name, ep_file.parent.name)
 
-            # Ensure episode
-            ep_row = db.execute("SELECT id FROM episodes WHERE season_id=? AND episode_number=?", (season_id, ep_num)).fetchone()
-            if ep_row:
-                ep_id = ep_row['id']
-            else:
-                cur = db.execute("INSERT INTO episodes (season_id, episode_number, title) VALUES (?,?,?)", (season_id, ep_num, f"Episode {ep_num}"))
-                ep_id = cur.lastrowid
+        if season_num is None or ep_num is None:
+            print(f"  [?] Skipping unparsable episode: {ep_file.name}")
+            continue
 
-            # Ensure file
-            file_row = db.execute("SELECT id FROM episode_files WHERE episode_id=? AND path=?", (ep_id, str(ep_file))).fetchone()
-            if not file_row:
-                db.execute("INSERT OR IGNORE INTO episode_files (library_id, episode_id, path, size_bytes, container) VALUES (?,?,?,?,?)",
-                           (lib_id, ep_id, str(ep_file), ep_file.stat().st_size, ep_file.suffix.lstrip('.')))
-                print(f"  [+] Added: S{season_num:02d}E{ep_num:02d} -> {ep_file.name}")
+        # Ensure season
+        season_row = db.execute("SELECT id FROM seasons WHERE series_id=? AND season_number=?", (series_id, season_num)).fetchone()
+        if season_row:
+            season_id = season_row['id']
+        else:
+            cur = db.execute("INSERT INTO seasons (series_id, season_number) VALUES (?,?)", (series_id, season_num))
+            season_id = cur.lastrowid
+
+        # Ensure episode
+        ep_row = db.execute("SELECT id FROM episodes WHERE season_id=? AND episode_number=?", (season_id, ep_num)).fetchone()
+        if ep_row:
+            ep_id = ep_row['id']
+        else:
+            cur = db.execute("INSERT INTO episodes (season_id, episode_number, title) VALUES (?,?,?)", (season_id, ep_num, f"Episode {ep_num}"))
+            ep_id = cur.lastrowid
+
+        # Ensure file — update stale MKV path when MP4 sibling exists
+        file_row = db.execute("SELECT id, path FROM episode_files WHERE episode_id=?", (ep_id,)).fetchone()
+        if file_row:
+            existing = Path(file_row['path'])
+            if not existing.exists() and relink_episode_file_to_mp4(db, file_row['id'], existing):
+                print(f"  [~] Relinked: S{season_num:02d}E{ep_num:02d} -> {existing.with_suffix('.mp4').name}")
+            elif str(existing) != str(ep_file) and ep_file.exists():
+                if existing.suffix.lower() == '.mkv' and ep_file.suffix.lower() == '.mp4':
+                    relink_episode_file_to_mp4(db, file_row['id'], existing)
+                    print(f"  [~] Relinked: S{season_num:02d}E{ep_num:02d} -> {ep_file.name}")
+        elif not db.execute("SELECT id FROM episode_files WHERE episode_id=? AND path=?", (ep_id, str(ep_file))).fetchone():
+            db.execute("INSERT OR IGNORE INTO episode_files (library_id, episode_id, path, size_bytes, container) VALUES (?,?,?,?,?)",
+                       (lib_id, ep_id, str(ep_file), ep_file.stat().st_size, ep_file.suffix.lstrip('.')))
+            print(f"  [+] Added: S{season_num:02d}E{ep_num:02d} -> {ep_file.name}")
 
     # 3. Handle subtitles
     for sub_file in series_folder.rglob('*'):
@@ -545,6 +604,11 @@ def cmd_sync(args):
     if not media_dir.exists():
         print(f"ERROR: Series directory not found: {media_dir}")
         return
+
+    relinked = relink_converted_episodes(db)
+    if relinked:
+        print(f"  [+] Relinked {relinked} converted MKV -> MP4 episode paths")
+        db.commit()
 
     for item in sorted(media_dir.iterdir()):
         if item.is_dir():
