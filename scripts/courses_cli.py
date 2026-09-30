@@ -62,7 +62,7 @@ from course_parse import (
 ROOT = Path(__file__).parent.parent
 load_dotenv(ROOT / '.env')
 
-DB_PATH = os.getenv('DB_PATH') or str(ROOT / 'media.db')
+DB_PATH = os.getenv('DB_PATH') or str(ROOT / 'data' / 'media.db')
 COURSES_DIR = os.getenv('COURSES_DIR', '')
 LEGACY_COURSES_DIRS = os.getenv('LEGACY_COURSES_DIRS', '')
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')

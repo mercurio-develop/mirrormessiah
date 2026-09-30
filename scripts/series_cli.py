@@ -23,7 +23,7 @@ ROOT = Path(__file__).parent.parent
 load_dotenv(ROOT / '.env')
 
 API_KEY   = os.getenv('TMDB_API_KEY')
-DB_PATH   = os.getenv('DB_PATH') or str(ROOT / 'media.db')
+DB_PATH   = os.getenv('DB_PATH') or str(ROOT / 'data' / 'media.db')
 SERIES_DIR = os.getenv('SERIES_DIR') or os.getenv('MEDIA_DIR') or '/media'
 TMDB_BASE = 'https://api.themoviedb.org/3'
 IMG_BASE  = 'https://image.tmdb.org/t/p/w500'

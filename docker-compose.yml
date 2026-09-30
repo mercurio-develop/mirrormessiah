@@ -3,6 +3,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        # Must match the host user that runs scripts/*.py (see `id -u` / `id -g`).
+        APP_UID: ${APP_UID:-1000}
+        APP_GID: ${APP_GID:-1000}
     container_name: mirrormessiah-web
     restart: unless-stopped
     environment:
@@ -18,9 +22,24 @@ services:
       - COURSES_DIR=${COURSES_DIR}
       - LEGACY_COURSES_DIRS=${LEGACY_COURSES_DIRS:-}
       - MEDIA_ROOT=${MEDIA_ROOT:-/media/tushita}
-      - TMDB_API_KEY=${TMDB_API_KEY}
+      - TMDB_API_KEY=${TMDB_API_KEY:-}
+      # CLI-only keys (scripts/mm.py fetch-subs, scripts/courses_cli.py scrape)
+      - OPENSUBS_API_KEY=${OPENSUBS_API_KEY:-}
+      - OPENSUBS_USERNAME=${OPENSUBS_USERNAME:-}
+      - OPENSUBS_PASSWORD=${OPENSUBS_PASSWORD:-}
+      - OPENSUBS_DEV_MODE=${OPENSUBS_DEV_MODE:-1}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
+      # Set to true when served over HTTPS (e.g. the Cloudflare tunnel); plain-HTTP LAN access needs false.
+      - COOKIE_SECURE=${COOKIE_SECURE:-false}
+    ports:
+      # BIND_ADDR=0.0.0.0 serves every LAN interface; use a single LAN IP or 127.0.0.1 to restrict.
+      # APP_PORT and APP_PORT_ALT must differ.
+      - "${BIND_ADDR:-0.0.0.0}:${APP_PORT:-80}:3000"
+      - "${BIND_ADDR:-0.0.0.0}:${APP_PORT_ALT:-3000}:3000"
     volumes:
-      - mm-data:/app/data
+      # Shared with the host CLI (python3 scripts/mm.py uses ./data/media.db by default).
+      - ./data:/app/data
       # Parent mount: movies (W11_DATA) and courses (LINUX_DATA) often live under one parent.
       - "${MEDIA_ROOT:-/media/tushita}:${MEDIA_ROOT:-/media/tushita}:ro"
       # MEDIA_DIR: Path to your movie collection. Mounted as rw for poster management by mm.py
@@ -40,11 +59,13 @@ services:
       retries: 3
       start_period: 40s
 
+  # Internet exposure is opt-in: docker compose --profile tunnel up -d
   tunnel:
     image: cloudflare/cloudflared:latest
     container_name: mirrormessiah-tunnel
     restart: unless-stopped
-    command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN:?TUNNEL_TOKEN is not set. Please create a .env file.}
+    profiles: ["tunnel"]
+    command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN:-}
     depends_on:
       web:
         condition: service_healthy
@@ -54,7 +75,3 @@ services:
 networks:
   internal-net:
     driver: bridge
-
-volumes:
-  mm-data:
-    name: mm-data

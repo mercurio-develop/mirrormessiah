@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { SignJWT, jwtVerify } from 'jose';
 
+// Browsers drop Secure cookies on plain HTTP, so LAN deployments without TLS set COOKIE_SECURE=false.
+const SECURE_COOKIES =
+  process.env.NODE_ENV === 'production' && process.env.COOKIE_SECURE !== 'false';
+
 /**
  * GET /api/auth
  * Specifically checks for administrative authorization.
@@ -66,14 +70,14 @@ export async function POST(request: NextRequest) {
 
       response.cookies.set('mm_admin_token', adminToken, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: SECURE_COOKIES,
         sameSite: 'strict',
         maxAge: 60 * 60 * 24,
       });
 
       response.cookies.set('mm_gate_token', gateToken, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: SECURE_COOKIES,
         sameSite: 'strict',
         maxAge: 60 * 60 * 24 * 30,
       });
@@ -93,7 +97,7 @@ export async function POST(request: NextRequest) {
 
       response.cookies.set('mm_gate_token', gateToken, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: SECURE_COOKIES,
         sameSite: 'strict',
         maxAge: 60 * 60 * 24 * 30,
       });

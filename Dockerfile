@@ -39,10 +39,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && rm -rf /var/lib/apt/lists/*
 
 # Install CLI dependencies
-RUN pip3 install --no-cache-dir --root-user-action=ignore requests python-dotenv beautifulsoup4 --break-system-packages
+COPY requirements.txt ./
+RUN pip3 install --no-cache-dir --root-user-action=ignore -r requirements.txt --break-system-packages
 
-RUN groupadd --gid 1001 nodejs \
-  && useradd --uid 1001 --gid nodejs --shell /bin/bash --create-home nextjs
+# APP_UID/APP_GID should match the host user so the bind-mounted ./data DB is writable from both sides.
+# The base image's "node" user (1000:1000) is removed so those ids are free.
+ARG APP_UID=1001
+ARG APP_GID=1001
+RUN userdel -r node 2>/dev/null || true \
+  && groupdel node 2>/dev/null || true \
+  && groupadd --gid ${APP_GID} nodejs \
+  && useradd --uid ${APP_UID} --gid nodejs --shell /bin/bash --create-home nextjs
 
 # Create data directory and ensure permissions
 RUN mkdir -p /app/data && chown nextjs:nodejs /app/data

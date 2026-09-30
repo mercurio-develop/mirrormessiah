@@ -8,7 +8,7 @@ set -e
 cd "$(dirname "$0")/.."
 
 CONTAINER_NAME="mirrormessiah-web"
-DEV_DB="media.db"
+DEV_DB="data/media.db"
 SQL_DUMP="sync_to_prod.sql"
 PROD_DB_PATH="/app/data/media.db"
 PROD_SQL_PATH="/app/data/sync_to_prod.sql"

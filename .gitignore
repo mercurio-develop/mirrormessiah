@@ -63,7 +63,12 @@ share/python-wheels/
 *.egg
 MANIFEST
 
-# Database
+# Python virtualenv
+.venv/
+
+# Database (shared by the Docker app and the host CLI)
+/data/*
+!/data/.gitkeep
 media.db
 media.db-shm
 media.db-wal

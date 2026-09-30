@@ -11,7 +11,7 @@ export function getDb(): Database.Database {
     const isProd = process.env.NODE_ENV === 'production';
     const isBuild = process.env.NEXT_PHASE === 'phase-production-build';
     
-    const devPath = path.join(process.cwd(), 'media.db');
+    const devPath = path.join(process.cwd(), 'data', 'media.db');
     const prodPath = '/app/data/media.db';
     
     // Prioritize DB_PATH env, then prod path, then dev path

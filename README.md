@@ -68,7 +68,7 @@ cp .env.example .env
 Edit the `.env` parameters:
 *   `GATE_KEY`: General access passcode.
 *   `ADMIN_KEY`: Admin panel passcode.
-*   `TMDB_API_KEY`: API token for movie/series metadata scraping.
+*   `TMDB_API_KEY` (optional): API token for movie/series metadata scraping. Not needed to build or run the app; scraping is unavailable without it.
 *   `MEDIA_DIR`: Path to the directory where your media drives are mounted.
 
 ### 3. Registry Compilation (Database Migration)
@@ -82,6 +82,22 @@ npm run build
 ## 💻 Python CLI Registry Workflows (`scripts/mm.py`)
 
 MirrorMessiah is managed locally using the Python CLI. All absolute directories are loaded dynamically from the environment.
+
+The database lives in `data/media.db`, which is bind-mounted into the Docker app, so the host CLI and the running app share the same library. Install the CLI dependencies on the host once:
+```bash
+# User-managed Python (mise, pyenv, asdf)
+python3 -m pip install -r requirements.txt
+# Distro system Python (pip is blocked by PEP 668): use a virtualenv instead
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt && source .venv/bin/activate
+```
+The CLI can also run inside the container: `docker compose exec web python3 scripts/mm.py status`.
+
+Each library has its own full pipeline:
+```bash
+python3 scripts/mm.py full           # movies
+python3 scripts/series_cli.py full   # series
+python3 scripts/courses_cli.py full  # courses
+```
 
 *   **Status**: Check database metadata statistics (movies, files, subtitles counts).
     ```bash

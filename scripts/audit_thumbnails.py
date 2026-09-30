@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DB_PATH = os.getenv('DB_PATH', 'media.db')
+DB_PATH = os.getenv('DB_PATH', str(Path(__file__).resolve().parent.parent / 'data' / 'media.db'))
 
 
 def env_roots() -> list[Path]:

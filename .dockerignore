@@ -3,6 +3,8 @@ node_modules
 .env
 .env.local
 media.db
+data
+.venv
 media.db-shm
 *.db-wal
 .git
