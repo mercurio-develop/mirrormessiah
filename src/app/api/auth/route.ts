@@ -7,19 +7,19 @@ const SECURE_COOKIES =
 
 /**
  * GET /api/auth
- * Specifically checks for administrative authorization.
- * Restricted to Local Development.
+ * Checks for administrative authorization.
  */
 export async function GET(request: NextRequest) {
-  // 1. Restrict Admin Mode to Development Only
-  if (process.env.NODE_ENV === 'production') {
-    return NextResponse.json({ isAdmin: false });
-  }
-
-  const adminKey = process.env.ADMIN_KEY;
+  const adminKey = (process.env.ADMIN_KEY || '').trim();
   if (!adminKey) return NextResponse.json({ isAdmin: false });
 
-  // Specifically check for the Admin Token
+  // 1. Check header
+  const headerKey = request.headers.get('x-admin-key');
+  if (headerKey && headerKey === adminKey) {
+    return NextResponse.json({ isAdmin: true });
+  }
+
+  // 2. Check for the Admin Token cookie
   const cookie = request.cookies.get('mm_admin_token');
   if (!cookie) return NextResponse.json({ isAdmin: false });
 
@@ -39,12 +39,12 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const { password } = await request.json();
-    const gateKey = (process.env.GATE_KEY || "").trim();
-    const adminKey = (process.env.ADMIN_KEY || "").trim();
+    const gateKey = (process.env.GATE_KEY || '').trim();
+    const adminKey = (process.env.ADMIN_KEY || '').trim();
 
-    if (!gateKey) {
-        console.error('CRITICAL: GATE_KEY not configured in environment.');
-        return NextResponse.json({ error: 'System configuration error' }, { status: 500 });
+    if (!adminKey && !gateKey) {
+      console.error('CRITICAL: Neither ADMIN_KEY nor GATE_KEY configured.');
+      return NextResponse.json({ error: 'System configuration error' }, { status: 500 });
     }
 
     const response = NextResponse.json({ success: true });
@@ -52,7 +52,6 @@ export async function POST(request: NextRequest) {
     // 1. Check for Admin Key
     if (adminKey && password.trim() === adminKey) {
       const ADMIN_SECRET = new TextEncoder().encode(adminKey);
-      const GATE_SECRET = new TextEncoder().encode(gateKey);
 
       // Create Admin Token
       const adminToken = await new SignJWT({ authorized: true, role: 'admin' })
@@ -61,13 +60,6 @@ export async function POST(request: NextRequest) {
         .setExpirationTime('1d')
         .sign(ADMIN_SECRET);
 
-      // Create Gate Token (so they don't have to login twice)
-      const gateToken = await new SignJWT({ authorized: true })
-        .setProtectedHeader({ alg: 'HS256' })
-        .setIssuedAt()
-        .setExpirationTime('30d')
-        .sign(GATE_SECRET);
-
       response.cookies.set('mm_admin_token', adminToken, {
         httpOnly: true,
         secure: SECURE_COOKIES,
@@ -75,18 +67,27 @@ export async function POST(request: NextRequest) {
         maxAge: 60 * 60 * 24,
       });
 
-      response.cookies.set('mm_gate_token', gateToken, {
-        httpOnly: true,
-        secure: SECURE_COOKIES,
-        sameSite: 'strict',
-        maxAge: 60 * 60 * 24 * 30,
-      });
+      if (gateKey) {
+        const GATE_SECRET = new TextEncoder().encode(gateKey);
+        const gateToken = await new SignJWT({ authorized: true })
+          .setProtectedHeader({ alg: 'HS256' })
+          .setIssuedAt()
+          .setExpirationTime('30d')
+          .sign(GATE_SECRET);
+
+        response.cookies.set('mm_gate_token', gateToken, {
+          httpOnly: true,
+          secure: SECURE_COOKIES,
+          sameSite: 'strict',
+          maxAge: 60 * 60 * 24 * 30,
+        });
+      }
 
       return response;
     }
 
     // 2. Check for Gate Key
-    if (password.trim() === gateKey) {
+    if (gateKey && password.trim() === gateKey) {
       const GATE_SECRET = new TextEncoder().encode(gateKey);
       
       const gateToken = await new SignJWT({ authorized: true })

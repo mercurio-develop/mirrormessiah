@@ -103,7 +103,7 @@ export function Navbar() {
               Family Mode
             </button>
             {/* Admin Link - Desktop */}
-            {mounted && isDevelopment && isAdmin && (
+            {mounted && isAdmin && (
                <Link 
                 href="/admin" 
                 className={`text-sm font-semibold transition-colors hover:text-primary ${pathname.startsWith('/admin') ? 'text-primary' : 'text-muted-foreground'}`}
@@ -117,7 +117,7 @@ export function Navbar() {
         <div className="flex items-center gap-1 sm:gap-6">
           <div className="hidden sm:flex items-center gap-2">
             {/* Admin Toggle - Desktop */}
-            {mounted && isDevelopment && (
+            {mounted && (
                <button 
                 onClick={handleAdminToggle}
                 className={`flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider border rounded-full transition-all ${
@@ -137,16 +137,18 @@ export function Navbar() {
           <div className="flex items-center">
             <ThemeToggle />
             
-            <button 
-              onClick={handleLogout}
-              className="flex items-center gap-2 pl-2 pr-1 text-sm font-semibold text-muted-foreground hover:text-destructive transition-all group"
-              aria-label="Logout"
-            >
-              <span className="hidden xl:inline group-hover:translate-x-0.5 transition-transform">Sign Out</span>
-              <div className="p-2 rounded-full group-hover:bg-destructive/10 transition-colors">
-                <LogOut className="w-5 h-5" />
-              </div>
-            </button>
+            {mounted && isAdmin && (
+              <button 
+                onClick={handleLogout}
+                className="flex items-center gap-2 pl-2 pr-1 text-sm font-semibold text-muted-foreground hover:text-destructive transition-all group"
+                aria-label="Logout"
+              >
+                <span className="hidden xl:inline group-hover:translate-x-0.5 transition-transform">Sign Out</span>
+                <div className="p-2 rounded-full group-hover:bg-destructive/10 transition-colors">
+                  <LogOut className="w-5 h-5" />
+                </div>
+              </button>
+            )}
 
             {/* Mobile Menu Toggle */}
             <button 
@@ -199,7 +201,7 @@ export function Navbar() {
           </div>
 
           {/* Admin Actions - Mobile */}
-          {mounted && isDevelopment && (
+          {mounted && (
             <div className="space-y-4">
               <button 
                 onClick={handleAdminToggle}

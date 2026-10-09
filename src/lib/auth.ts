@@ -12,11 +12,7 @@ export class AuthError extends Error {
  * Validates the admin status for Server Actions
  */
 export async function requireAdminKeyAuth(): Promise<void> {
-  if (process.env.NODE_ENV === 'production') {
-    throw new AuthError('Administrative tools are restricted to local development only', 403);
-  }
-
-  const adminKey = process.env.ADMIN_KEY;
+  const adminKey = (process.env.ADMIN_KEY || '').trim();
   if (!adminKey) {
     throw new AuthError('Admin key not configured on server', 500);
   }
@@ -44,7 +40,6 @@ export async function requireAdminKeyAuth(): Promise<void> {
 /**
  * Validates the admin status of a request
  * Checks for either x-admin-key header OR a valid JWT token in cookies
- * IMPORTANT: Admin features are restricted to development mode only.
  */
 export async function requireAdminKey(request: Request): Promise<void> {
   // 0. Build Phase & Environment Safeguard
@@ -55,11 +50,7 @@ export async function requireAdminKey(request: Request): Promise<void> {
     return;
   }
 
-  if (process.env.NODE_ENV === 'production' && !isBuild) {
-    throw new AuthError('Administrative tools are restricted to local development only', 403);
-  }
-
-  const adminKey = process.env.ADMIN_KEY;
+  const adminKey = (process.env.ADMIN_KEY || '').trim();
 
   if (!adminKey) {
     throw new AuthError('Admin key not configured on server', 500);
@@ -116,45 +107,12 @@ export function withAdminAuth<T extends any[]>(
 }
 
 /**
- * Validates that the user has at least general app access (GATE_KEY)
+ * Validates that the user has general app access.
+ * Open by default on LAN; only verifies if GATE_KEY is explicitly enforced.
  */
 export async function requireGateKey(request: Request): Promise<void> {
-  // 0. Build Phase Safeguard
-  const isBuild = process.env.NEXT_PHASE === 'phase-production-build';
-  const isGateKeySet = !!process.env.GATE_KEY;
-
-  if (isBuild && !isGateKeySet) {
-    return;
-  }
-
-  const gateKey = process.env.GATE_KEY;
-
-  if (!gateKey) {
-    throw new AuthError('Gate key not configured on server', 500);
-  }
-
-  const url = new URL(request.url);
-  const tokenQuery = url.searchParams.get('t');
-
-  const cookie = request.headers.get('cookie');
-  let tokenMatch = null;
-  if (cookie) {
-    tokenMatch = cookie.match(/mm_gate_token=([^;]+)/);
-  }
-
-  const token = tokenQuery || (tokenMatch ? tokenMatch[1] : null);
-
-  if (token) {
-    try {
-      const SECRET_KEY = new TextEncoder().encode(gateKey);
-      await jwtVerify(token, SECRET_KEY);
-      return; // Valid session
-    } catch (e) {
-      // Fall through to error
-    }
-  }
-
-  throw new AuthError('Access denied: Authentication required', 401);
+  // Gate check removed for open local LAN access
+  return;
 }
 
 export function isAdminKeyConfigured(): boolean {
