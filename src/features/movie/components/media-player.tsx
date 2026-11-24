@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import videojs from 'video.js';
 import 'video.js/dist/video-js.css';
 import '@silvermine/videojs-chromecast/dist/silvermine-videojs-chromecast.css';
@@ -24,6 +25,23 @@ interface MediaPlayerProps {
   className?: string;
   title?: string;
   poster?: string | null;
+  /** When set, ending the video navigates here with a loading spinner. */
+  nextHref?: string | null;
+}
+
+const SUBTITLE_SIZES = [
+  { id: 'sm', label: 'S' },
+  { id: 'md', label: 'M' },
+  { id: 'lg', label: 'L' },
+  { id: 'xl', label: 'XL' },
+] as const;
+
+type SubtitleSize = (typeof SUBTITLE_SIZES)[number]['id'];
+
+const SUBTITLE_SIZE_KEY = 'mm_subtitle_size';
+
+function isSubtitleSize(value: string | null): value is SubtitleSize {
+  return SUBTITLE_SIZES.some((size) => size.id === value);
 }
 
 // Correctly infer the Player type from the videojs function signature
@@ -214,8 +232,10 @@ export function MediaPlayer({
   subtitles = [], 
   className = '',
   title = 'Video',
-  poster = null
+  poster = null,
+  nextHref = null,
 }: MediaPlayerProps) {
+  const router = useRouter();
   const videoRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<VideoJsPlayer | null>(null);
   const [error, setError] = useState<{ code: number; message: string } | null>(null);
@@ -224,14 +244,18 @@ export function MediaPlayer({
   const [showAudioMenu, setShowAudioMenu] = useState(false);
   const [showSubtitleMenu, setShowSubtitleMenu] = useState(false);
   const [activeSubtitleIndex, setActiveSubtitleIndex] = useState<number | null>(null);
+  const [subtitleSize, setSubtitleSize] = useState<SubtitleSize>('md');
   const [playerReady, setPlayerReady] = useState(false);
   const [isSwappingAudio, setIsSwappingAudio] = useState(false);
+  const [isAdvancing, setIsAdvancing] = useState(false);
 
   const ctx = useRef({ id, src });
   const subtitlesRef = useRef(subtitles);
   const activeSubtitleIndexRef = useRef<number | null | undefined>(undefined);
   const lastSrcRef = useRef<string | null>(null);
   const pendingStreamLoadRef = useRef<{ resumeAt: number; autoplay: boolean } | null>(null);
+  const nextHrefRef = useRef(nextHref);
+  const advancingRef = useRef(false);
   const mimeTypeRef = useRef(mimeType);
   const audioResolveAbortRef = useRef<AbortController | null>(null);
   const audioSelectionEpochRef = useRef(0);
@@ -248,6 +272,16 @@ export function MediaPlayer({
   useEffect(() => {
     mimeTypeRef.current = mimeType;
   }, [mimeType]);
+
+  useEffect(() => {
+    const saved = localStorage.getItem(SUBTITLE_SIZE_KEY);
+    if (isSubtitleSize(saved)) setSubtitleSize(saved);
+  }, []);
+
+  const handleSubtitleSizeSelect = (size: SubtitleSize) => {
+    setSubtitleSize(size);
+    localStorage.setItem(SUBTITLE_SIZE_KEY, size);
+  };
 
   useEffect(() => {
     subtitlesRef.current = subtitles;
@@ -269,6 +303,10 @@ export function MediaPlayer({
   useEffect(() => {
     ctx.current = { id, src };
   }, [id, src]);
+
+  useEffect(() => {
+    nextHrefRef.current = nextHref;
+  }, [nextHref]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -655,6 +693,20 @@ export function MediaPlayer({
           .catch(err => console.error('[MediaPlayer] Failed to clear repair flag:', err));
       });
 
+      player.on('ended', () => {
+        const href = nextHrefRef.current;
+        if (!href || advancingRef.current) return;
+
+        advancingRef.current = true;
+        setIsAdvancing(true);
+
+        const currentCtx = ctx.current;
+        const currentId = currentCtx.id || currentCtx.src;
+        localStorage.removeItem(`mm_playback_time_${currentId}`);
+
+        router.push(href);
+      });
+
       // Do not initialize player.src here, the second useEffect will handle it
     };
 
@@ -746,7 +798,10 @@ export function MediaPlayer({
   }, []);
 
   return (
-    <div className={'relative w-full h-full group bg-black overflow-hidden ' + className}>
+    <div
+      data-subtitle-size={subtitleSize}
+      className={'relative w-full h-full group bg-black overflow-hidden ' + className}
+    >
       <div ref={videoRef} className="absolute inset-0" />
       
       {/* Audio Track Selection Overlay */}
@@ -835,13 +890,42 @@ export function MediaPlayer({
                   </button>
                 ))}
               </div>
+              <div className="px-3 py-2 bg-white/5 border-t border-white/10 text-[10px] text-muted-foreground uppercase font-black tracking-widest">
+                Size
+              </div>
+              <div className="grid grid-cols-4 gap-1 p-2">
+                {SUBTITLE_SIZES.map((size) => (
+                  <button
+                    key={size.id}
+                    type="button"
+                    onClick={() => handleSubtitleSizeSelect(size.id)}
+                    className={`py-1.5 text-xs font-bold rounded transition-colors ${
+                      subtitleSize === size.id
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-white/5 text-foreground hover:bg-white/10'
+                    }`}
+                  >
+                    {size.label}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
         </div>
       )}
 
+      {/* Next-video transition */}
+      {isAdvancing && (
+        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/85 backdrop-blur-sm animate-in fade-in duration-300">
+          <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
+          <p className="text-xs font-black uppercase tracking-[0.25em] text-white/70">
+            Loading next
+          </p>
+        </div>
+      )}
+
       {/* Internal Error Overlay */}
-      {error && (
+      {error && !isAdvancing && (
         <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/90 backdrop-blur-sm p-8 text-center animate-in fade-in duration-500">
            <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-full mb-6">
               <AlertCircle className="h-10 w-10 text-destructive animate-pulse" />

@@ -112,6 +112,7 @@ export default async function WatchEpisodePage({ params }: WatchEpisodePageProps
                 subtitles={episodeData.subtitles}
                 title={`${episode.series_title} - S${episode.season_number}E${episode.episode_number} ${episode.title && !episode.title.toLowerCase().startsWith('episode ') ? `- ${episode.title}` : ''}`}
                 className="w-full h-full"
+                nextHref={nextEpisodeId ? `/watch/episode/${nextEpisodeId}` : null}
               />
               </>
             )}

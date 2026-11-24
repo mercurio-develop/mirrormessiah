@@ -48,6 +48,10 @@ services:
       - "${SERIES_DIR:?SERIES_DIR is not set.}:${SERIES_DIR}"
       # COURSES_DIR: Path to your course library (Udemy, Rebelway, etc.)
       - "${COURSES_DIR:?COURSES_DIR is not set.}:${COURSES_DIR}"
+      # Secondary courses on DATA
+      - "/run/media/tushita/DATA/courses:/run/media/tushita/DATA/courses:ro"
+      # DATA1 mount (2.4 TB drive)
+      - "/run/media/tushita/DATA1:/run/media/tushita/DATA1:ro"
     networks:
       internal-net:
         aliases:

@@ -6,7 +6,11 @@ import { Suspense } from 'react';
 export const dynamic = 'force-dynamic';
 
 export default async function CoursesPage() {
-  const { courses, total, categoryCounts } = getCoursesList({ limit: 24, sort: DEFAULT_COURSE_SORT });
+  const { courses, total, categoryCounts } = getCoursesList({
+    limit: 24,
+    sort: DEFAULT_COURSE_SORT,
+    watchableOnly: true,
+  });
   const { platforms, years } = getCourseFacets();
   return (
     <div className="min-h-screen bg-background pt-18 pb-12">

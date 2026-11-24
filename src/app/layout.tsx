@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import '@/lib/db_migrate'
 import './globals.css'
 import { ThemeProvider } from '@/components/theme-provider'
@@ -9,6 +9,19 @@ import { Suspense } from 'react'
 export const metadata: Metadata = {
   title: 'MirrorMessiah | Premium Media Registry',
   description: 'A private high-fidelity media collection for the ultimate viewing experience.',
+  icons: {
+    icon: '/icons/icon-192.png',
+    apple: '/icons/apple-touch-icon.png',
+  },
+  appleWebApp: {
+    capable: true,
+    title: 'Movies',
+    statusBarStyle: 'black-translucent',
+  },
+}
+
+export const viewport: Viewport = {
+  themeColor: '#020817',
 }
 
 export default function RootLayout({

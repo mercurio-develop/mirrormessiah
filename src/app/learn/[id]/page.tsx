@@ -84,6 +84,7 @@ export default async function LearnPage({ params }: { params: Promise<{ id: stri
               subtitles={data.subtitles}
               title={`${lesson.course_title} - L${lesson.lesson_number} ${lesson.title || ''}`}
               className="w-full h-full"
+              nextHref={nextLessonId ? `/learn/${nextLessonId}` : null}
             />
           )}
         </section>

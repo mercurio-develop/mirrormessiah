@@ -119,8 +119,19 @@ export function getCoursesList(options: {
   sort?: 'newest' | 'title_asc' | 'title_desc' | 'repair' | null;
   offset?: number;
   limit?: number;
+  /** When true, hide catalog stubs that have no modules/lessons yet. */
+  watchableOnly?: boolean;
 } = {}) {
-  const { q, platform, category, year, sort = DEFAULT_COURSE_SORT, offset = 0, limit = 24 } = options;
+  const {
+    q,
+    platform,
+    category,
+    year,
+    sort = DEFAULT_COURSE_SORT,
+    offset = 0,
+    limit = 24,
+    watchableOnly = false,
+  } = options;
   const db = getDb();
   const params: unknown[] = [];
   const whereConditions: string[] = [];
@@ -137,6 +148,12 @@ export function getCoursesList(options: {
            (SELECT COUNT(*) FROM course_modules WHERE course_id = c.id) as module_count
     FROM courses c
   `;
+
+  if (watchableOnly) {
+    whereConditions.push(
+      'EXISTS (SELECT 1 FROM course_modules m WHERE m.course_id = c.id)',
+    );
+  }
 
   if (platform) {
     whereConditions.push('c.platform = ?');

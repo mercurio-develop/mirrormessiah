@@ -10,6 +10,9 @@ const nextConfig = {
       {
         pathname: '/api/images',
       },
+      {
+        pathname: '/placeholder.svg',
+      },
     ],
   },
 }

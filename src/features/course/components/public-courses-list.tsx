@@ -189,7 +189,7 @@ export function PublicCoursesList({
 
       try {
         const offset = reset ? 0 : offsetRef.current;
-        let url = `/api/courses?offset=${offset}&limit=${ITEMS_PER_LOAD}&sort=${sort}`;
+        let url = `/api/courses?offset=${offset}&limit=${ITEMS_PER_LOAD}&sort=${sort}&watchable=1`;
         if (debouncedSearch) url += `&q=${encodeURIComponent(debouncedSearch)}`;
         if (selectedCategory) url += `&category=${encodeURIComponent(selectedCategory)}`;
         if (selectedPlatform) url += `&platform=${encodeURIComponent(selectedPlatform)}`;
@@ -242,10 +242,21 @@ export function PublicCoursesList({
         setSelectedPlatform(state.selectedPlatform || '');
         setSelectedYear(state.selectedYear || '');
         setSort(state.sort || DEFAULT_COURSE_SORT);
-        setCourses(state.courses || initialCourses);
-        offsetRef.current = state.offset || initialCourses.length;
-        setHasMore(state.hasMore ?? initialCourses.length >= ITEMS_PER_LOAD);
-        setTotalCount(state.totalCount || 0);
+
+        // [] is truthy — never let a stale empty restore wipe SSR data.
+        const restoredCourses = Array.isArray(state.courses) ? state.courses : [];
+        if (restoredCourses.length > 0) {
+          setCourses(restoredCourses);
+          offsetRef.current = state.offset || restoredCourses.length;
+          setHasMore(state.hasMore ?? restoredCourses.length >= ITEMS_PER_LOAD);
+          setTotalCount(state.totalCount || restoredCourses.length);
+        } else {
+          setCourses(initialCourses);
+          offsetRef.current = initialCourses.length;
+          setHasMore(initialCourses.length >= ITEMS_PER_LOAD);
+          setTotalCount(initialTotal || initialCourses.length);
+        }
+
         didRestore = true;
         setTimeout(() => {
           window.scrollTo({ top: state.scrollY || 0, behavior: 'instant' });
@@ -256,7 +267,7 @@ export function PublicCoursesList({
       }
     }
     setRestored({ done: true, didRestore });
-  }, [initialCourses]);
+  }, [initialCourses, initialTotal]);
 
   useEffect(() => {
     if (!restored.done) return;
@@ -269,9 +280,6 @@ export function PublicCoursesList({
       sort,
     });
 
-    const hasActiveFilters =
-      debouncedSearch || selectedCategory || selectedPlatform || selectedYear || sort !== DEFAULT_COURSE_SORT;
-
     const runResetFetch = (scrollToTop: boolean) => {
       if (scrollToTop) window.scrollTo({ top: 0, behavior: 'instant' });
       void fetchCourses(true).then((ok) => {
@@ -279,10 +287,10 @@ export function PublicCoursesList({
       });
     };
 
+    // Always revalidate on mount so a prior empty session cannot stick forever.
     if (isInitialMount.current) {
       isInitialMount.current = false;
-      if (!restored.didRestore || hasActiveFilters) runResetFetch(false);
-      else lastStateString.current = currentStateString;
+      runResetFetch(false);
       return;
     }
 

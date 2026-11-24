@@ -23,8 +23,10 @@ export async function GET(request: NextRequest) {
     const sort = searchParams.get('sort') as 'newest' | 'title_asc' | 'title_desc' | 'repair' | null;
     const offset = parseInt(searchParams.get('offset') || '0');
     const limit = parseInt(searchParams.get('limit') || '24');
+    const watchableOnly =
+      searchParams.get('watchable') === '1' || searchParams.get('watchable') === 'true';
 
-    const result = getCoursesList({ q, platform, category, year, sort, offset, limit });
+    const result = getCoursesList({ q, platform, category, year, sort, offset, limit, watchableOnly });
     return NextResponse.json(result, {
       headers: { 'Cache-Control': 'no-store' },
     });
